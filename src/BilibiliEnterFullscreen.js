@@ -17,7 +17,13 @@
 // @tag          b站
 // @tag          b站全屏快捷键
 // @tag          b站网页全屏快捷键
+// @downloadURL  https://github.com/ABackerNINI/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.js
+// @updateURL    https://gitee.com/ABacker/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.js
+// @supportURL   https://github.com/ABackerNINI/TampermonkeyScripts/issues
 // ==/UserScript==
+
+// Slow
+// https://github.com/ABackerNINI/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.js
 
 (function () {
     'use strict';
