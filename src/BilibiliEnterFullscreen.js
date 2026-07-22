@@ -2,21 +2,16 @@
 // @name         Bilibili enter fullscreen
 // @name:zh-CN   B站Enter键全屏
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @author       ABacker
 // @version      2026.07.22.6
 // @description  在B站视频页面自动网页全屏, 按<Enter>键切换全屏/退出全屏, 按<Shift+Enter>键切换网页全屏
-// @icon         https://www.bilibili.com/favicon.ico
+// @author       ABacker
 // @match        *.bilibili.com/video/*
 // @match        *.bilibili.com/bangumi/*
+// @icon         https://www.bilibili.com/favicon.ico
 // @grant        none
 // @run-at       document-body
 // @license      GNU GPL-3.0
 // @tag          utilities
-// @tag          bilibili
-// @tag          哔哩哔哩
-// @tag          b站
-// @tag          b站全屏快捷键
-// @tag          b站网页全屏快捷键
 // @supportURL   https://github.com/ABackerNINI/TampermonkeyScripts/issues
 // ==/UserScript==
 
