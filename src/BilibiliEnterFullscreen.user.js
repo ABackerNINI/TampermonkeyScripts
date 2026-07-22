@@ -16,8 +16,8 @@
 // ==/UserScript==
 
 // Github might be slow in China
-// https://gitee.com/ABacker/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.js
-// https://github.com/ABackerNINI/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.js
+// https://gitee.com/ABacker/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.user.js
+// https://github.com/ABackerNINI/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.user.js
 
 (function () {
     'use strict';
