@@ -3,7 +3,7 @@
 // @name:zh-CN   B站Enter键全屏
 // @namespace    tampermonkey.script.edge
 // @author       ABacker
-// @version      2026.07.22.1
+// @version      2026.07.22.2
 // @description  在B站视频页面自动网页全屏, 按<Enter>键切换全屏/退出全屏, 按<Shift+Enter>键切换网页全屏
 // @icon         https://www.bilibili.com/favicon.ico
 // @match        *.bilibili.com/video/*
@@ -17,7 +17,7 @@
 // @tag          b站
 // @tag          b站全屏快捷键
 // @tag          b站网页全屏快捷键
-// @downloadURL  https://github.com/ABackerNINI/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.js
+// @downloadURL  https://gitee.com/ABacker/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.js
 // @updateURL    https://gitee.com/ABacker/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.js
 // @supportURL   https://github.com/ABackerNINI/TampermonkeyScripts/issues
 // ==/UserScript==
