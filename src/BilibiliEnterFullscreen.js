@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Bilibili enter fullscreen
 // @name:zh-CN   B站Enter键全屏
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
 // @author       ABacker
-// @version      2026.07.22.3
+// @version      2026.07.22.4
 // @description  在B站视频页面自动网页全屏, 按<Enter>键切换全屏/退出全屏, 按<Shift+Enter>键切换网页全屏
 // @icon         https://www.bilibili.com/favicon.ico
 // @match        *.bilibili.com/video/*
@@ -22,7 +22,7 @@
 // @supportURL   https://github.com/ABackerNINI/TampermonkeyScripts/issues
 // ==/UserScript==
 
-// Slow
+// Github might be slow in China
 // https://github.com/ABackerNINI/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.js
 
 (function () {
