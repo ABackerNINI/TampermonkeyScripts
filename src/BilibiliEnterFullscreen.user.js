@@ -33,9 +33,14 @@
      * 自动网页全屏
      */
     window.onload = (function () {
+        var maxTryCount = 10;
+        var tryCount = 0;
         var webFullScreenTimer = setInterval(function () {
-            clickWebFullscreenButton();
-            clearInterval(webFullScreenTimer);
+            tryCount++;
+            console.log(`自动全屏尝试次数: ${tryCount}`);
+            if (clickWebFullscreenButton() || tryCount >= maxTryCount) {
+                clearInterval(webFullScreenTimer);
+            }
         }, 1000);
     }
     )();
