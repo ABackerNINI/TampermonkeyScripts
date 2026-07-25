@@ -3,7 +3,7 @@
 // @name:zh-CN   B站Enter键全屏
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
 // @version      2026.07.22.7
-// @description  在B站视频页面自动网页全屏, 按<Enter>键切换全屏/退出全屏, 按<Shift+Enter>键切换网页全屏
+// @description  在B站视频页面自动网页全屏, 按<Enter>键切换全屏, 按<Shift+Enter>键切换网页全屏
 // @author       ABacker
 // @match        *.bilibili.com/video/*
 // @match        *.bilibili.com/bangumi/*
@@ -26,6 +26,8 @@
 // https://gitee.com/ABacker/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.user.js
 // https://github.com/ABackerNINI/TampermonkeyScripts/blob/master/src/BilibiliEnterFullscreen.user.js
 
+const ScriptName = 'B站Enter键全屏';
+
 (function () {
     'use strict';
 
@@ -37,7 +39,7 @@
         var tryCount = 0;
         var webFullScreenTimer = setInterval(function () {
             tryCount++;
-            console.log(`自动全屏尝试次数: ${tryCount}`);
+            console.log(`[${ScriptName}] 自动全屏尝试次数: ${tryCount}`);
             if (clickWebFullscreenButton() || tryCount >= maxTryCount) {
                 clearInterval(webFullScreenTimer);
             }
@@ -46,22 +48,21 @@
     )();
 
     /**
-     * 尝试点击全屏按钮
-     * 支持新版和旧版播放器的多种类名
+     * 尝试点击按钮, 支持多种选择器, 按优先级尝试点击, 返回是否成功点击
      */
     function clickButton(selectors, buttonName) {
         for (let selector of selectors) {
             const button = document.querySelector(selector);
             if (button) {
                 button.click();
-                console.log(`[${buttonName}] 已点击按钮: ${selector}`);
+                console.log(`[${ScriptName}] 已点击按钮: ${buttonName}, selector=${selector}`);
                 return true;
             } else {
-                console.log(`[${buttonName}] 未找到按钮: ${selector}`);
+                console.log(`[${ScriptName}] 未找到按钮: ${buttonName}, selector=${selector}`);
             }
         }
 
-        console.warn(`[${buttonName}] 未找到按钮: ${selectors.join(', ')}`);
+        console.warn(`[${ScriptName}] 未找到按钮: ${buttonName}, selectors=${selectors.join(', ')}`);
         return false;
     }
 
@@ -125,5 +126,5 @@
     // 监听键盘按下事件
     document.addEventListener('keydown', handleKeyDown);
 
-    console.log('[Enter全屏]脚本已加载，按<Enter>键切换全屏');
+    console.log(`[${ScriptName}] 脚本已加载，按<Enter>键切换全屏, 按<Shift+Enter>键切换网页全屏`);
 })();
