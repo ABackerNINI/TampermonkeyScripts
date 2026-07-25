@@ -35,7 +35,7 @@ const ScriptName = 'B站Enter键全屏';
      * 自动网页全屏
      */
     window.onload = (function () {
-        var maxTryCount = 10;
+        var maxTryCount = 50;
         var tryCount = 0;
         var webFullScreenTimer = setInterval(function () {
             tryCount++;
@@ -43,7 +43,7 @@ const ScriptName = 'B站Enter键全屏';
             if (clickWebFullscreenButton() || tryCount >= maxTryCount) {
                 clearInterval(webFullScreenTimer);
             }
-        }, 1000);
+        }, 200);
     }
     )();
 
