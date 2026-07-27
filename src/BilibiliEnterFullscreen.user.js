@@ -92,6 +92,32 @@ const ScriptName = 'B站Enter键全屏';
     }
 
     /**
+     * 让弹幕输入框及当前焦点元素失焦，防止全屏后弹幕输入框不自动隐藏
+     */
+    function blurActiveElement() {
+        // 先让当前焦点元素失焦
+        if (document.activeElement && document.activeElement !== document.body) {
+            document.activeElement.blur();
+        }
+        // 特别针对弹幕输入框（多种可能的选择器）
+        const dmSelectors = [
+            '.bpx-player-dm-input',
+            'input[class*="dm-input"]',
+            'input[class*="danmaku"]',
+            '[class*="danmaku"] input'
+        ];
+        for (let selector of dmSelectors) {
+            const input = document.querySelector(selector);
+            if (input) {
+                input.blur();
+                console.log(`[${ScriptName}] 已让弹幕输入框失焦: ${selector}`);
+            } else {
+                console.log(`[${ScriptName}] 未找到弹幕输入框: ${selector}`);
+            }
+        }
+    }
+
+    /**
      * 键盘事件处理函数
      */
     function handleKeyDown(event) {
@@ -103,23 +129,18 @@ const ScriptName = 'B站Enter键全屏';
                 return;
             }
 
-            // 检测Shift+Enter
-            if (event.shiftKey && event.key === 'Enter') {
-                // 阻止 Enter 键的默认行为（如表单提交等）
-                event.preventDefault();
+            // 阻止 Enter 键的默认行为和事件冒泡，防止焦点转移到弹幕输入框
+            event.preventDefault();
+            event.stopPropagation();
 
+            if (event.shiftKey) {
                 clickWebFullscreenButton();
-                return;
-            }
-
-            // 检测单独的Enter
-            if (event.key === 'Enter') {
-                // 阻止 Enter 键的默认行为（如表单提交等）
-                event.preventDefault();
-
+            } else {
                 clickFullscreenButton();
-                return;
             }
+
+            // 延迟失焦，确保在全屏切换完成后让弹幕输入框失焦
+            setTimeout(blurActiveElement, 50);
         }
     }
 
