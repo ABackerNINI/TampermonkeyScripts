@@ -19,6 +19,62 @@ const ScriptName = 'BTSchool自动下载小种子';
 (function () {
     'use strict';
 
+    function findTextNodeContaining(root, text) {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node;
+        while (node = walker.nextNode()) {
+            if (node.textContent.includes(text)) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 通过文本 "剩余时间：" 定位 span，并获取其绝对时间（title）和相对时间（文本）
+     * @param {string} textMarker - 标记文本，默认为 "剩余时间："
+     * @returns {object|null} 返回 { absolute, absoluteStr, relativeStr }，若未找到 span 则返回 null
+     */
+    function getRemainingTimeByText(node, textMarker = '剩余时间：') {
+        const textNode = findTextNodeContaining(node, textMarker);
+        if (!textNode) {
+            // console.warn(`未找到包含 "${textMarker}" 的文本`);
+            return null;
+        }
+
+        // 获取该文本节点的父元素（通常是 <font> 或 <div>）
+        const parent = textNode.parentNode;
+        if (!parent) return null;
+
+        // 尝试在父元素内查找第一个 <span> 元素（且具有 title 属性）
+        let span = parent.querySelector('span[title]');
+        if (!span) {
+            console.warn('在 "剩余时间：" 附近未找到带 title 的 span');
+            return null;
+        }
+
+        // 提取数据
+        const absoluteStr = span.getAttribute('title');
+        const absolute = new Date(absoluteStr);
+        const relativeStr = span.textContent.trim();
+
+        return { absolute: absolute, absoluteStr: absoluteStr, relativeStr: relativeStr };
+    }
+
+    function getReleaseTimeFromRowCell(timeCell) {
+        const timeSpan = timeCell ? timeCell.querySelector('span[title]') : null;
+        const absoluteStr = timeSpan ? timeSpan.getAttribute('title') || '' : '';
+        const relativeStr = timeCell ? timeCell.textContent.replace(/\s+/g, ' ').trim() : '';
+        const releaseTime = { absolute: new Date(absoluteStr), absoluteStr: absoluteStr, relativeStr: relativeStr };
+        return releaseTime;
+    }
+
+    function getSizeFromRowCell(sizeCell) {
+        const sizeStr = sizeCell ? sizeCell.textContent.replace(/\s+/g, ' ').trim() : '';
+        const size = sizeStr ? parseFileSizeInBytes(sizeStr) : null;
+        return { sizeStr: sizeStr, size: size };
+    }
+
     /**
      * 解析PT站种子表格, 提取所有种子数据
      * @param {string|Element} selector - CSS选择器或表格元素, 默认为 'table.torrents'
@@ -81,13 +137,7 @@ const ScriptName = 'BTSchool自动下载小种子';
                 // 免费 & 剩余时间
                 const freeImg = titleCell.querySelector('img.pro_free');
                 const free = freeImg !== null;
-                let freeRemain = '';
-                if (free) {
-                    const timeSpan = titleCell.querySelector('font[color="#0000FF"] span[title]');
-                    if (timeSpan) {
-                        freeRemain = timeSpan.textContent.trim();
-                    }
-                }
+                const remainingTime = getRemainingTimeByText(titleCell);
 
                 // 官方标签 & 字幕信息
                 const officialSpan = titleCell.querySelector('span.label-primary');
@@ -133,37 +183,34 @@ const ScriptName = 'BTSchool自动下载小种子';
 
                 // ---- 3. 评论数 (索引2) ----
                 const commentsText = cells[2] ? cells[2].textContent.trim() : '';
-                const comments = parseInt(commentsText, 10) || 0;
+                const numComments = parseCommaIntSafe(commentsText, 10) || 0;
 
                 // ---- 4. 存活时间 (索引3) ----
-                const timeCell = cells[3];
-                const timeSpan = timeCell ? timeCell.querySelector('span[title]') : null;
-                const timeFull = timeSpan ? timeSpan.getAttribute('title') || '' : '';
-                const time = timeCell ? timeCell.textContent.replace(/\s+/g, ' ').trim() : '';
+                const releaseTime = getReleaseTimeFromRowCell(cells[3]);
 
                 // ---- 5. 大小 (索引4) ----
-                const size = cells[4] ? cells[4].textContent.replace(/\s+/g, ' ').trim() : '';
+                const size = getSizeFromRowCell(cells[4]);
 
                 // ---- 6. 种子数 (索引5) ----
                 const seedersText = cells[5] ? cells[5].textContent.trim() : '';
-                const seeders = parseInt(seedersText, 10) || 0;
+                const seeders = parseCommaIntSafe(seedersText, 0);
 
                 // ---- 7. 下载数 (索引6) ----
                 const leechersText = cells[6] ? cells[6].textContent.trim() : '';
-                const leechers = parseInt(leechersText, 10) || 0;
+                const leechers = parseCommaIntSafe(leechersText, 0);
 
                 // ---- 8. 完成数 (索引7) ----
                 const snatchedText = cells[7] ? cells[7].textContent.trim() : '';
-                const snatched = parseInt(snatchedText, 10) || 0;
+                const snatched = parseCommaIntSafe(snatchedText, 0);
 
                 // ---- 9. 时魔 (索引8) ----
                 const calcACell = cells[8];
-                const calcA = calcACell ? parseFloat(calcACell.getAttribute('data-calc-a')) || 0 : 0;
+                const calcA = calcACell ? parseCommaIntSafe(calcACell.getAttribute('data-calc-a'), 0) : 0;
                 const calcADisplay = calcACell ? calcACell.textContent.trim() : '';
 
                 // ---- 10. 时魔/GB (索引9) ----
                 const calcAveCell = cells[9];
-                const calcAve = calcAveCell ? parseFloat(calcAveCell.getAttribute('data-calc-ave')) || 0 : 0;
+                const calcAve = calcAveCell ? parseCommaIntSafe(calcAveCell.getAttribute('data-calc-ave'), 0) : 0;
                 const calcAveDisplay = calcAveCell ? calcAveCell.textContent.trim() : '';
 
                 // ---- 11. 发布者 (索引10) ----
@@ -189,7 +236,7 @@ const ScriptName = 'BTSchool自动下载小种子';
                     sticky: sticky,
                     hot: hot,
                     free: free,
-                    freeRemain: freeRemain,
+                    remainingTime: remainingTime,
                     official: official,
                     subtitle: subtitle,
 
@@ -202,9 +249,8 @@ const ScriptName = 'BTSchool自动下载小种子';
                     bookmarkId: bookmarkId,
 
                     // 统计数据
-                    comments: comments,
-                    time: time,
-                    timeFull: timeFull,
+                    numComments: numComments,
+                    releaseTime: releaseTime,
                     size: size,
                     seeders: seeders,
                     leechers: leechers,
@@ -279,7 +325,7 @@ const ScriptName = 'BTSchool自动下载小种子';
      * @returns {number} 对应的字节数
      * @throws {Error} 格式无效或单位不支持时抛出异常
      */
-    function getFileSizeInBytes(sizeStr) {
+    function parseFileSizeInBytes(sizeStr) {
         // 定义单位与字节数的映射（按二进制 1024 进制）
         const unitBytes = {
             'B': 1,
@@ -323,7 +369,7 @@ const ScriptName = 'BTSchool自动下载小种子';
         // 2. 访问所有种子的所有信息
         torrents.forEach((t, index) => {
             console.log(`第 ${index + 1} 个种子:`, t);
-            console.log(`文件大小: ${t.size}, 对应字节数: ${getFileSizeInBytes(t.size)}`);
+            console.log(`文件大小: ${t.size}, 对应字节数: ${parseFileSizeInBytes(t.size)}`);
         });
 
         // 3. 筛选免费种子
@@ -341,8 +387,8 @@ const ScriptName = 'BTSchool自动下载小种子';
         // 6. 按大小排序（需要解析大小, 这里仅作示例）
         // 实际使用时可以写一个解析大小的辅助函数
         const bySize = [...torrents].sort((a, b) => {
-            const aSize = getFileSizeInBytes(a.size) || 0;
-            const bSize = getFileSizeInBytes(b.size) || 0;
+            const aSize = parseFileSizeInBytes(a.size) || 0;
+            const bSize = parseFileSizeInBytes(b.size) || 0;
             return bSize - aSize;
         });
         console.log('最大的种子:', bySize[0]?.title, bySize[0]?.size);
