@@ -16,6 +16,36 @@
 
 const ScriptName = 'BTSchool自动下载小种子';
 
+const TorrentState = Object.freeze({
+    NORMAL: 'normal',
+    FREE: '免费',
+    _2XUP: '2x上传',
+    FREE_2XUP: '免费&2x上传',
+    _50PCT_DOWN: '50%下载',
+    _50PCT_DOWN_2XUP: '50%下载&2x上传',
+    _30PCT_DOWN: '30%下载'
+});
+
+const TorrentStateAltMap = Object.freeze({
+    '': TorrentState.NORMAL,
+    'Free': TorrentState.FREE,
+    '2X': TorrentState._2XUP,
+    '2X Free': TorrentState.FREE_2XUP,
+    '50%': TorrentState._50PCT_DOWN,
+    '2X 50%': TorrentState._50PCT_DOWN_2XUP,
+    '30%': TorrentState._30PCT_DOWN
+});
+
+const TorrentStateClassMap = Object.freeze({
+    '': TorrentState.NORMAL,
+    'pro_free': TorrentState.FREE,
+    'pro_2xup': TorrentState._2XUP,
+    'pro_free2up': TorrentState.FREE_2XUP,
+    'pro_50pctdown': TorrentState._50PCT_DOWN,
+    'pro_50pctdown2up': TorrentState._50PCT_DOWN_2XUP,
+    'pro_30pctdown': TorrentState._30PCT_DOWN
+});
+
 (function () {
     'use strict';
 
@@ -73,6 +103,14 @@ const ScriptName = 'BTSchool自动下载小种子';
         const sizeStr = sizeCell ? sizeCell.textContent.replace(/\s+/g, ' ').trim() : '';
         const size = sizeStr ? parseFileSizeInBytes(sizeStr) : null;
         return { sizeStr: sizeStr, size: size };
+    }
+
+    function getTorrentStateFromRowCell(stateCell) {
+        // 查找 <img> 标签，获取其 class 属性，并转换为种子状态
+        const img = stateCell ? stateCell.querySelector('img[class*="pro_"]') : null;
+        const className = img ? img.getAttribute('class') || '' : '';
+        const state = TorrentStateClassMap[className] || TorrentState.NORMAL;
+        return state;
     }
 
     /**
@@ -135,8 +173,7 @@ const ScriptName = 'BTSchool自动下载小种子';
                 const hot = titleCell.querySelector('font.hot') !== null;
 
                 // 免费 & 剩余时间
-                const freeImg = titleCell.querySelector('img.pro_free');
-                const free = freeImg !== null;
+                const state = getTorrentStateFromRowCell(titleCell);
                 const remainingTime = getRemainingTimeByText(titleCell);
 
                 // 官方标签 & 字幕信息
@@ -189,7 +226,7 @@ const ScriptName = 'BTSchool自动下载小种子';
                 const releaseTime = getReleaseTimeFromRowCell(cells[3]);
 
                 // ---- 5. 大小 (索引4) ----
-                const size = getSizeFromRowCell(cells[4]);
+                const sizeInfo = getSizeFromRowCell(cells[4]);
 
                 // ---- 6. 种子数 (索引5) ----
                 const seedersText = cells[5] ? cells[5].textContent.trim() : '';
@@ -235,7 +272,7 @@ const ScriptName = 'BTSchool自动下载小种子';
                     // 标签
                     sticky: sticky,
                     hot: hot,
-                    free: free,
+                    state: state,
                     remainingTime: remainingTime,
                     official: official,
                     subtitle: subtitle,
@@ -251,7 +288,8 @@ const ScriptName = 'BTSchool自动下载小种子';
                     // 统计数据
                     numComments: numComments,
                     releaseTime: releaseTime,
-                    size: size,
+                    size: sizeInfo.size,
+                    sizeStr: sizeInfo.sizeStr,
                     seeders: seeders,
                     leechers: leechers,
                     snatched: snatched,
@@ -369,7 +407,7 @@ const ScriptName = 'BTSchool自动下载小种子';
         // 2. 访问所有种子的所有信息
         torrents.forEach((t, index) => {
             console.log(`第 ${index + 1} 个种子:`, t);
-            console.log(`文件大小: ${t.size}, 对应字节数: ${parseFileSizeInBytes(t.size)}`);
+            console.log(`文件大小: ${t.size}, 对应字节数: ${t.size}`);
         });
 
         // 3. 筛选免费种子
@@ -387,9 +425,7 @@ const ScriptName = 'BTSchool自动下载小种子';
         // 6. 按大小排序（需要解析大小, 这里仅作示例）
         // 实际使用时可以写一个解析大小的辅助函数
         const bySize = [...torrents].sort((a, b) => {
-            const aSize = parseFileSizeInBytes(a.size) || 0;
-            const bSize = parseFileSizeInBytes(b.size) || 0;
-            return bSize - aSize;
+            return b.size - a.size;
         });
         console.log('最大的种子:', bySize[0]?.title, bySize[0]?.size);
     }
