@@ -35,9 +35,9 @@ const ScriptName = 'B站Enter键全屏';
      * 自动网页全屏
      */
     window.onload = (function () {
-        var maxTryCount = 50;
-        var tryCount = 0;
-        var webFullScreenTimer = setInterval(function () {
+        const maxTryCount = 50;
+        let tryCount = 0;
+        let webFullScreenTimer = setInterval(function () {
             tryCount++;
             console.log(`[${ScriptName}] 自动全屏尝试次数: ${tryCount}`);
             if (clickWebFullscreenButton() || tryCount >= maxTryCount) {
