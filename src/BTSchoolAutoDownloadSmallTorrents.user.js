@@ -159,10 +159,10 @@ const TorrentStateClassMap = Object.freeze({
                 const titleCell = cells[1];
 
                 // 标题链接和ID
-                const detailLink = titleCell.querySelector('a[href*="details.php?id="]');
-                const title = detailLink ? detailLink.textContent.trim() : '';
-                const titleFull = detailLink ? detailLink.getAttribute('title') || '' : '';
-                const detailUrl = detailLink ? detailLink.getAttribute('href') || '' : '';
+                const titleElement = titleCell.querySelector('a[href*="details.php?id="]');
+                const title = titleElement ? titleElement.textContent.trim() : '';
+                const titleFull = titleElement ? titleElement.getAttribute('title') || '' : '';
+                const detailUrl = titleElement ? titleElement.getAttribute('href') || '' : '';
                 const idMatch = detailUrl.match(/id=(\d+)/);
                 const id = idMatch ? idMatch[1] : '';
 
@@ -209,11 +209,11 @@ const TorrentStateClassMap = Object.freeze({
 
                 // 下载链接 & 收藏
                 const actionCell = titleCell.querySelector('td.embedded[width="20"]');
+                const downloadButtonElement = actionCell ? actionCell.querySelector('a[href*="download.php"]') : null;
                 let downloadUrl = '';
                 let bookmarkId = '';
                 if (actionCell) {
-                    const dlLink = actionCell.querySelector('a[href*="download.php"]');
-                    if (dlLink) downloadUrl = dlLink.getAttribute('href') || '';
+                    if (downloadButtonElement) downloadUrl = downloadButtonElement.getAttribute('href') || '';
                     const bmLink = actionCell.querySelector('a[id^="bookmark"]');
                     if (bmLink) bookmarkId = bmLink.id || '';
                 }
@@ -268,6 +268,7 @@ const TorrentStateClassMap = Object.freeze({
                     title: title,
                     titleFull: titleFull,
                     detailUrl: detailUrl,
+                    titleElement: titleElement,
 
                     // 标签
                     sticky: sticky,
@@ -282,6 +283,7 @@ const TorrentStateClassMap = Object.freeze({
                     imdbScore: imdbScore,
 
                     // 操作
+                    downloadButtonElement: downloadButtonElement,
                     downloadUrl: downloadUrl,
                     bookmarkId: bookmarkId,
 
@@ -430,20 +432,60 @@ const TorrentStateClassMap = Object.freeze({
         console.log('最大的种子:', bySize[0]?.title, bySize[0]?.size);
     }
 
-    // 1. 基本使用 - 解析表格并打印结果
-    var torrents = [];
-
-    const maxTryCount = 10;
-    var tryCount = 0;
-    var getTorrentsTimer = setInterval(function () {
-        tryCount++;
-        console.log(`[${ScriptName}] 尝试获取种子次数: ${tryCount}`);
-        torrents = parseTorrentTable('table.torrents');
-        if (torrents.length > 0 || tryCount >= maxTryCount) {
-            showTorrents(torrents);
-            clearInterval(getTorrentsTimer);
+    // 滑动到第一个非sticky且2xfree种子
+    function scrollToFirst2xFreeTorrent(torrents) {
+        const first2xFree = torrents.find(t => t.state === TorrentState.FREE_2XUP && !t.sticky);
+        if (first2xFree && first2xFree._row) {
+            first2xFree._row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            console.log('已滚动到第一个 2x Free 种子:', first2xFree.title);
+            return true;
         }
-    }, 500);
+        return false;
+    }
+
+    // 滑动到第一个非sticky的种子
+    function scrollToFirstNonStickyTorrent(torrents) {
+        const firstNonSticky = torrents.find(t => !t.sticky);
+        if (firstNonSticky && firstNonSticky._row) {
+            firstNonSticky._row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            console.log('已滚动到第一个非Sticky种子:', firstNonSticky.title);
+            return true;
+        }
+        return false;
+    }
+
+    // 将所有2xfree种子高亮显示
+    function highlight2xFreeTorrents(torrents) {
+        torrents.forEach(t => {
+            if (!t.sticky && t.state === TorrentState.FREE_2XUP) {
+                t.titleElement.style.color = 'red';
+            }
+        });
+    }
+
+    function doIt(torrents) {
+        showTorrents(torrents);
+        if (!scrollToFirst2xFreeTorrent(torrents)) {
+            scrollToFirstNonStickyTorrent(torrents);
+        }
+        highlight2xFreeTorrents(torrents);
+    }
+
+    function main() {
+        // 尝试获取种子列表, 获取成功后调用doIt()
+        const maxTryCount = 10;
+        let tryCount = 0;
+        let getTorrentsTimer = setInterval(function () {
+            tryCount++;
+            console.log(`[${ScriptName}] 尝试获取种子次数: ${tryCount}`);
+            const torrents = parseTorrentTable('table.torrents');
+            if (torrents.length > 0 || tryCount >= maxTryCount) {
+                doIt(torrents);
+                clearInterval(getTorrentsTimer);
+            }
+        }, 500);
+    }
 
     console.log(`[${ScriptName}] 脚本已加载`);
+    main();
 })();
