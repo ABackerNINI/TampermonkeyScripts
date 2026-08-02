@@ -5,6 +5,9 @@
 // @description  访问网站时自动完成签到（支持多步骤、不同选择器）
 // @author       ABacker
 // @match        *://*.tangpt.top/*
+// @match        *://*.pttime.org/*
+// @match        *://*.bilibili.download/*
+// @match        *://*.ptzone.xyz/*
 // @run-at       document-end
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -16,63 +19,47 @@
     'use strict';
 
     // ========== 配置区 ==========
+
+    const CLICK_CHECK_IN = {
+        type: 'click_checkin',
+        description: '点击“签到”按钮',
+        timeout: 5000
+    };
+
     // 每个站点配置一个对象
     const SITES = [
-        // 示例1：论坛签到（单步）
         {
             name: '躺平',
-            match: /^https:\/\/.*\.tangpt\.top\/.*/,
-            alreadyCheckedInSelector: '.checked-in-today',   // 已签到标记
-            steps: [
-                {
-                    type: 'click',
-                    selector: 'a.faqlink[href="attendance.php"',            // 签到按钮选择器
-                    description: '点击“签到”按钮',
-                    timeout: 5000
-                },
-                {
-                    type: 'wait',
-                    ms: 2000
-                },
-                {
-                    type: 'check',
-                    selector: '.checkin-success',
-                    description: '验证签到成功'
-                }
-            ]
+            match: /^https:\/\/.*\.tangpt\.top/,
+            checkInSelector: 'a.faqlink[href="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
         },
-        // 示例2：资源站签到（两步）
         {
-            name: '示例资源站',
-            match: /^https?:\/\/www\.example2\.com\/.*/,
-            alreadyCheckedInSelector: '.already-signed',
-            steps: [
-                {
-                    type: 'click',
-                    selector: 'button.qiandao-btn',
-                    description: '点击“签到得魔力”'
-                },
-                {
-                    type: 'wait',
-                    ms: 1500
-                },
-                {
-                    type: 'click',
-                    selector: 'div.popup .confirm-btn',
-                    description: '点击弹窗中的“确认签到”'
-                },
-                {
-                    type: 'wait',
-                    ms: 1000
-                },
-                {
-                    type: 'check',
-                    selector: '.toast-success',
-                    description: '检查签到成功提示'
-                }
-            ]
-        }
-        // 继续添加更多……
+            name: 'PTTime',
+            match: /^https:\/\/.*\.pttime\.org/,
+            checkInSelector: 'a.fcb[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到详情',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            name: 'Railgun',
+            match: /^https?:\/\/bilibili\.download\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            name: 'PTZone',
+            match: /^https?:\/\/ptzone\.xyz\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[簽到得魔力]',
+            alreadyCheckedInContent: '簽到已得',
+            steps: [CLICK_CHECK_IN]
+        },
     ];
 
     // ========== 工具函数 ==========
@@ -109,11 +96,23 @@
      * @param {object} step  步骤配置
      * @returns {Promise<void>}
      */
-    async function executeStep(step) {
+    async function executeStep(site, step) {
         console.log(`[签到] 执行步骤: ${step.description || step.type}`);
         switch (step.type) {
-            case 'click': {
-                const el = await waitForElement(step.selector, step.timeout || 5000);
+            case 'click_checkin': {
+                const el = await waitForElement(site.checkInSelector, step.timeout || 5000);
+                if (!el) {
+                    console.warn(`[签到] 未找到签到按钮: ${site.checkInSelector}`);
+                    return;
+                }
+                if (site.alreadyCheckedInContent && el.textContent.includes(site.alreadyCheckedInContent)) {
+                    console.log(`[签到] 已签到: ${el.textContent}`);
+                    return;
+                }
+                if (site.checkInContent && !el.textContent.includes(site.checkInContent)) {
+                    console.warn(`[签到] 签到按钮内容不匹配: ${el.textContent}`);
+                    return;
+                }
                 el.click();
                 break;
             }
@@ -139,52 +138,16 @@
         }
     }
 
-    // 获取今日日期字符串
-    function getTodayStr() {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    }
-
-    // 检查某站点今天是否已签到（根据存储）
-    function isTodayCheckedIn(siteName) {
-        const key = `checkin_${siteName}`;
-        const lastDate = GM_getValue(key, '');
-        return lastDate === getTodayStr();
-    }
-
-    // 记录某站点今日签到成功
-    function recordCheckinToday(siteName) {
-        const key = `checkin_${siteName}`;
-        GM_setValue(key, getTodayStr());
-        console.log(`[签到] 已记录 ${siteName} 今日签到状态`);
-    }
-
     // 执行站点签到流程
     async function runSiteCheckin(site) {
         const siteName = site.name;
         console.log(`[签到] 开始处理站点: ${siteName}`);
 
-        // 1. 检查存储是否已签到
-        if (isTodayCheckedIn(siteName)) {
-            console.log(`[签到] ${siteName} 今日已签到（存储记录），跳过`);
-            return;
-        }
-
-        // 2. 如果存在 alreadySignedSelector，也作为辅助判断（防止存储失效或手动签到）
-        if (site.alreadySignedSelector) {
-            const signedEl = document.querySelector(site.alreadySignedSelector);
-            if (signedEl) {
-                console.log(`[签到] ${siteName} 页面上已有已签到标记，跳过并更新存储`);
-                recordCheckinToday(siteName); // 同步存储
-                return;
-            }
-        }
-
         // 3. 执行签到步骤
         let success = true;
         for (const step of site.steps) {
             try {
-                await executeStep(step);
+                await executeStep(site, step);
             } catch (error) {
                 console.error(`[签到] ${siteName} 签到失败:`, error);
                 success = false;
@@ -194,29 +157,35 @@
 
         // 4. 如果全部执行完毕（没有抛出异常），认为签到成功，记录
         if (success) {
-            recordCheckinToday(siteName);
-            console.log(`[签到] ${siteName} 签到流程成功完成`);
+            console.log(`[签到] ${siteName} 签到完成`);
         } else {
-            console.warn(`[签到] ${siteName} 签到未完成，未记录今日状态`);
+            console.warn(`[签到] ${siteName} 签到未完成`);
         }
     }
 
     // 主入口
     async function autoCheckin() {
         const url = window.location.href;
+        console.log(`[签到] 当前页面 URL: ${url}`);
+        let matchedSite = false;
         for (const site of SITES) {
             if (site.match.test(url)) {
+                matchedSite = true;
                 await runSiteCheckin(site);
-                break;
             }
         }
+        if (!matchedSite) {
+            console.warn('[签到] 未匹配到任何站点规则');
+        }
     }
+
+    if (window.top !== window.self) return; // 若在 iframe 中则直接退出
 
     // 启动
     console.log('[签到] 启动签到脚本');
     if (document.readyState === 'complete') {
         autoCheckin();
     } else {
-        window.addEventListener('load', autoCheckin());
+        window.addEventListener('load', autoCheckin, { once: true });
     }
 })();
