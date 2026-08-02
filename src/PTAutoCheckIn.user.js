@@ -5,15 +5,14 @@
 // @description  访问网站时自动完成签到（支持多步骤、不同选择器）
 // @author       ABacker
 // @match        *://*.tangpt.top/*
-// @grant        none
 // @run-at       document-end
-// @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_setValue
 // @license      GNU GPL-3.0
 // @tag          utilities
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
     // ========== 配置区 ==========
@@ -143,7 +142,7 @@
     // 获取今日日期字符串
     function getTodayStr() {
         const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
 
     // 检查某站点今天是否已签到（根据存储）
@@ -218,6 +217,6 @@
     if (document.readyState === 'complete') {
         autoCheckin();
     } else {
-        window.addEventListener('load', autoCheckin);
+        window.addEventListener('load', autoCheckin());
     }
 })();
