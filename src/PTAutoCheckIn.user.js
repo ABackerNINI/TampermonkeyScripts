@@ -8,6 +8,9 @@
 // @match        *://*.pttime.org/*
 // @match        *://*.bilibili.download/*
 // @match        *://*.ptzone.xyz/*
+// @match        *://*.ptsbao.club/*
+// @match        *://*.hdclone.top/*
+// @match        *://*.hdbao.cc/*
 // @run-at       document-end
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -60,6 +63,30 @@
             alreadyCheckedInContent: '簽到已得',
             steps: [CLICK_CHECK_IN]
         },
+        {
+            name: 'PTSBao',
+            match: /^https?:\/\/ptsbao\.club\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            name: 'HDClone',
+            match: /^https?:\/\/pt\.hdclone\.top\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        // { // 点击签到后会进入一个新的页面，无法在同一页面完成签到，因此暂时注释掉
+        //     name: 'HDBao',
+        //     match: /^https?:\/\/hdbao\.cc\//,
+        //     checkInSelector: 'a.faqlink[href*="attendance.php"]',
+        //     checkInContent: '[签到得魔力]',
+        //     alreadyCheckedInContent: '签到已得',
+        //     steps: [CLICK_CHECK_IN]
+        // },
     ];
 
     // ========== 工具函数 ==========
@@ -186,6 +213,6 @@
     if (document.readyState === 'complete') {
         autoCheckin();
     } else {
-        window.addEventListener('load', autoCheckin, { once: true });
+        window.addEventListener('DOMContentLoaded', autoCheckin, { once: true });
     }
 })();
