@@ -46,7 +46,7 @@
             name: 'PTTime',
             match: /^https:\/\/.*\.pttime\.org/,
             checkInSelector: 'a.fcb[href*="attendance.php"]',
-            checkInContent: '[签到得魔力]',
+            checkInContent: '签到领魔力',
             alreadyCheckedInContent: '签到详情',
             steps: [CLICK_CHECK_IN]
         },
@@ -164,7 +164,7 @@
                     return;
                 }
                 if (site.checkInContent && !el.textContent.includes(site.checkInContent)) {
-                    console.warn(`[签到] 签到按钮内容不匹配: ${el.textContent}`);
+                    console.warn(`[签到] 签到按钮内容不匹配: expected ${site.checkInContent}, got ${el.textContent}`);
                     return;
                 }
                 el.click();
