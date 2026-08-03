@@ -11,6 +11,8 @@
 // @match        *://*.ptsbao.club/*
 // @match        *://*.hdclone.top/*
 // @match        *://*.hdbao.cc/*
+// @match        *://*.btschool.club/*
+// @match        *://*.daxiangjiao.org/*
 // @run-at       document-end
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -79,6 +81,22 @@
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
+        {
+            name: 'BTSchool',
+            match: /^https?:\/\/pt\.btschool\.club\//,
+            checkInSelector: 'a[href*="index.php?action=addbonus"] > font',
+            checkInContent: '每日签到',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            name: '大香蕉',
+            match: /^https?:\/\/pt\.daxiangjiao\.org\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
         // { // 点击签到后会进入一个新的页面，无法在同一页面完成签到，因此暂时注释掉
         //     name: 'HDBao',
         //     match: /^https?:\/\/hdbao\.cc\//,
@@ -129,7 +147,7 @@
             case 'click_checkin': {
                 const el = await waitForElement(site.checkInSelector, step.timeout || 5000);
                 if (!el) {
-                    console.warn(`[签到] 未找到签到按钮: ${site.checkInSelector}`);
+                    console.warn(`[签到] 未找到签到按钮: ${site.checkInSelector} (已签到?)`);
                     return;
                 }
                 if (site.alreadyCheckedInContent && el.textContent.includes(site.alreadyCheckedInContent)) {
