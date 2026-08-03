@@ -106,14 +106,27 @@
             alreadyCheckedInContent: '连签',
             steps: [CLICK_CHECK_IN]
         },
-        // { // 点击签到后会进入一个新的页面，无法在同一页面完成签到，因此暂时注释掉
-        //     name: 'HDBao',
-        //     match: /^https?:\/\/hdbao\.cc\//,
-        //     checkInSelector: 'a.faqlink[href*="attendance.php"]',
-        //     checkInContent: '[签到得魔力]',
-        //     alreadyCheckedInContent: '签到已得',
-        //     steps: [CLICK_CHECK_IN]
-        // },
+        { // 点击签到后会进入一个新的页面，无法在同一页面完成签到，因此暂时注释掉
+            name: 'HDBao',
+            match: /^https?:\/\/hdbao\.cc\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [
+                {
+                    type: 'click',
+                    selector: 'input[type="submit"][value="立即签到"][class="btn"]',
+                    description: '点击"立即签到"按钮',
+                    timeout: 5000
+                },
+                {
+                    type: 'wait',
+                    ms: 2000,
+                    description: '等待2秒，确保签到请求完成'
+                },
+                CLICK_CHECK_IN
+            ]
+        },
     ];
 
     // ========== 工具函数 ==========
@@ -165,6 +178,15 @@
                 }
                 if (site.checkInContent && !el.textContent.includes(site.checkInContent)) {
                     console.warn(`[签到] 签到按钮内容不匹配: expected ${site.checkInContent}, got ${el.textContent}`);
+                    return;
+                }
+                el.click();
+                break;
+            }
+            case 'click': {
+                el = await waitForElement(step.selector, step.timeout || 5000);
+                if (!el) {
+                    console.warn(`[签到] 按钮未找到: ${step.selector}`);
                     return;
                 }
                 el.click();
