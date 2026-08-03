@@ -2,7 +2,7 @@
 // @name         PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
 // @version      2026.05.03.1
-// @description  访问网站时自动完成签到（支持多步骤、不同选择器）
+// @description  访问部分PT网站与百度贴吧时自动完成签到
 // @author       ABacker
 // @match        *://*.tangpt.top/*
 // @match        *://*.pttime.org/*
@@ -13,6 +13,7 @@
 // @match        *://*.hdbao.cc/*
 // @match        *://*.btschool.club/*
 // @match        *://*.daxiangjiao.org/*
+// @match        *://*.tieba.baidu.com/*
 // @run-at       document-end
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -95,6 +96,14 @@
             checkInSelector: 'a.faqlink[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            name: '百度贴吧',
+            match: /^https?:\/\/tieba\.baidu\.com\//,
+            checkInSelector: '.button-wrapper.operate-btn.follow-sign',
+            checkInContent: ' 签到 ',
+            alreadyCheckedInContent: '连签',
             steps: [CLICK_CHECK_IN]
         },
         // { // 点击签到后会进入一个新的页面，无法在同一页面完成签到，因此暂时注释掉
