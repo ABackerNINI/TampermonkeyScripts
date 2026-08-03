@@ -1,5 +1,6 @@
 // ==UserScript==
-// @name         PT多站点自动签到
+// @name         PTAutoCheckIn
+// @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
 // @version      2026.05.03.1
 // @description  访问部分PT网站与百度贴吧时自动完成签到
@@ -17,9 +18,13 @@
 // @run-at       document-end
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_log
 // @license      GNU GPL-3.0
 // @tag          utilities
 // ==/UserScript==
+
+const ScriptName = '[PTAutoCheckIn]';
+const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
 
 (function () {
     'use strict';
@@ -164,29 +169,29 @@
      * @returns {Promise<void>}
      */
     async function executeStep(site, step) {
-        console.log(`[签到] 执行步骤: ${step.description || step.type}`);
+        console.log(`${ScriptName} 执行步骤: ${step.description || step.type}`);
         switch (step.type) {
             case 'click_checkin': {
                 const el = await waitForElement(site.checkInSelector, step.timeout || 5000);
                 if (!el) {
-                    console.warn(`[签到] 未找到签到按钮: ${site.checkInSelector} (已签到?)`);
+                    console.warn(`${ScriptName} 未找到签到按钮: ${site.checkInSelector} (已签到?)`);
                     return;
                 }
                 if (site.alreadyCheckedInContent && el.textContent.includes(site.alreadyCheckedInContent)) {
-                    console.log(`[签到] 已签到: ${el.textContent}`);
+                    console.log(`${ScriptName} 已签到: ${el.textContent}`);
                     return;
                 }
                 if (site.checkInContent && !el.textContent.includes(site.checkInContent)) {
-                    console.warn(`[签到] 签到按钮内容不匹配: expected ${site.checkInContent}, got ${el.textContent}`);
+                    console.warn(`${ScriptName} 签到按钮内容不匹配: expected ${site.checkInContent}, got ${el.textContent}`);
                     return;
                 }
                 el.click();
                 break;
             }
             case 'click': {
-                el = await waitForElement(step.selector, step.timeout || 5000);
+                const el = await waitForElement(step.selector, step.timeout || 5000);
                 if (!el) {
-                    console.warn(`[签到] 按钮未找到: ${step.selector}`);
+                    console.warn(`${ScriptName} 按钮未找到: ${step.selector}`);
                     return;
                 }
                 el.click();
@@ -199,9 +204,9 @@
             case 'check': {
                 try {
                     await waitForElement(step.selector, step.timeout || 3000);
-                    console.log(`[签到] 检查通过: ${step.selector}`);
+                    console.log(`${ScriptName} 检查通过: ${step.selector}`);
                 } catch (e) {
-                    console.warn(`[签到] 检查未通过: ${e.message}`);
+                    console.warn(`${ScriptName} 检查未通过: ${e.message}`);
                 }
                 break;
             }
@@ -210,14 +215,14 @@
                 break;
             }
             default:
-                console.warn(`[签到] 未知步骤类型: ${step.type}`);
+                console.warn(`${ScriptName} 未知步骤类型: ${step.type}`);
         }
     }
 
     // 执行站点签到流程
     async function runSiteCheckin(site) {
         const siteName = site.name;
-        console.log(`[签到] 开始处理站点: ${siteName}`);
+        console.log(`${ScriptName} 开始处理站点: ${siteName}`);
 
         // 3. 执行签到步骤
         let success = true;
@@ -225,7 +230,7 @@
             try {
                 await executeStep(site, step);
             } catch (error) {
-                console.error(`[签到] ${siteName} 签到失败:`, error);
+                console.error(`${ScriptName} ${siteName} 签到失败:`, error);
                 success = false;
                 break;
             }
@@ -233,16 +238,16 @@
 
         // 4. 如果全部执行完毕（没有抛出异常），认为签到成功，记录
         if (success) {
-            console.log(`[签到] ${siteName} 签到完成`);
+            console.log(`${ScriptName} ${siteName} 签到完成`);
         } else {
-            console.warn(`[签到] ${siteName} 签到未完成`);
+            console.warn(`${ScriptName} ${siteName} 签到未完成`);
         }
     }
 
     // 主入口
     async function autoCheckin() {
         const url = window.location.href;
-        console.log(`[签到] 当前页面 URL: ${url}`);
+        console.log(`${ScriptName} 当前页面 URL: ${url}`);
         let matchedSite = false;
         for (const site of SITES) {
             if (site.match.test(url)) {
@@ -251,17 +256,55 @@
             }
         }
         if (!matchedSite) {
-            console.warn('[签到] 未匹配到任何站点规则');
+            console.warn(`${ScriptName} 未匹配到任何站点规则`);
+        }
+    }
+
+    function loadLastActivationTime() {
+        const siteKey = window.location.origin;
+        const storageKey = `lastActivation_${siteKey}`;
+        return GM_getValue(storageKey, 0);
+    }
+
+    function saveLastActivationTime() {
+        const siteKey = window.location.origin;
+        const storageKey = `lastActivation_${siteKey}`;
+        console.log(`${ScriptName} 保存上次激活时间: ${new Date().toISOString()}`);
+        GM_setValue(storageKey, Date.now());
+    }
+
+    async function waitForFromLastActivation(interval) {
+        console.log(`${ScriptName} 检查上次激活时间...`);
+
+        let lastTime = loadLastActivationTime();
+
+        // ---------- 计算需要等待的时间 ----------
+        const now = Date.now();
+        const elapsed = now - lastTime;
+        let waitTime = Math.max(0, interval - elapsed); // 剩余等待毫秒数
+
+        if (waitTime > 0) {
+            // 等待时间
+            console.log(`${ScriptName} 已激活，请等待 ${waitTime / 1000} 秒...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        console.log(`${ScriptName} 等待完毕...`);
+
+        saveLastActivationTime();
+    }
+
+    async function main() {
+        console.log(`${ScriptName} 启动签到脚本`);
+        if (document.readyState === 'complete') {
+            autoCheckin();
+        } else {
+            window.addEventListener('DOMContentLoaded', autoCheckin, { once: true });
         }
     }
 
     if (window.top !== window.self) return; // 若在 iframe 中则直接退出
 
-    // 启动
-    console.log('[签到] 启动签到脚本');
-    if (document.readyState === 'complete') {
-        autoCheckin();
-    } else {
-        window.addEventListener('DOMContentLoaded', autoCheckin, { once: true });
-    }
+    waitForFromLastActivation(MIN_INTERVAL).then(() => {
+        main();
+    });
 })();
