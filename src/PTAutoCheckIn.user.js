@@ -14,6 +14,8 @@
 // @match        *://*.hdbao.cc/*
 // @match        *://*.btschool.club/*
 // @match        *://*.daxiangjiao.org/*
+// @match        *://*.novahd.top/*
+// @match        *://*.ptfans.cc/*
 // @match        *://*.tieba.baidu.com/*
 // @run-at       document-end
 // @grant        GM_getValue
@@ -98,6 +100,22 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
         {
             name: '大香蕉',
             match: /^https?:\/\/pt\.daxiangjiao\.org\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            name: 'NovaHD',
+            match: /^https?:\/\/pt\.novahd\.top\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },        
+        {
+            name: 'NovaHD',
+            match: /^https?:\/\/ptfans\.cc\//,
             checkInSelector: 'a.faqlink[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -287,8 +305,8 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
             // 等待时间
             console.log(`${ScriptName} 已激活，请等待 ${waitTime / 1000} 秒...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
+            console.log(`${ScriptName} 等待完毕...`);
         }
-        console.log(`${ScriptName} 等待完毕...`);
 
         saveLastActivationTime();
     }
