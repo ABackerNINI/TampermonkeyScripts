@@ -17,7 +17,7 @@
 // @match        *://*.novahd.top/*
 // @match        *://*.ptfans.cc/*
 // @match        *://*.tieba.baidu.com/*
-// @run-at       document-end
+// @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_log
@@ -112,9 +112,9 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
-        },        
+        },
         {
-            name: 'NovaHD',
+            name: 'PTFans',
             match: /^https?:\/\/ptfans\.cc\//,
             checkInSelector: 'a.faqlink[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
@@ -147,7 +147,12 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                     ms: 2000,
                     description: '等待2秒，确保签到请求完成'
                 },
-                CLICK_CHECK_IN
+                {
+                    type: 'click_checkin',
+                    ignoreError: true,
+                    description: '点击“签到”按钮',
+                    timeout: 5000
+                }
             ]
         },
     ];
@@ -203,6 +208,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                     console.warn(`${ScriptName} 签到按钮内容不匹配: expected ${site.checkInContent}, got ${el.textContent}`);
                     return;
                 }
+                console.log(`${ScriptName} 点击按钮: ${el.textContent}`);
                 el.click();
                 break;
             }
@@ -212,6 +218,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                     console.warn(`${ScriptName} 按钮未找到: ${step.selector}`);
                     return;
                 }
+                console.log(`${ScriptName} 点击按钮: ${el.textContent}`);
                 el.click();
                 break;
             }
@@ -244,14 +251,20 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
 
         // 3. 执行签到步骤
         let success = true;
-        for (const step of site.steps) {
-            try {
-                await executeStep(site, step);
-            } catch (error) {
-                console.error(`${ScriptName} ${siteName} 签到失败:`, error);
-                success = false;
-                break;
+
+        try {
+            for (const step of site.steps) {
+                try {
+                    await executeStep(site, step);
+                } catch (error) {
+                    if (!step.ignoreError) {
+                        throw error;
+                    }
+                }
             }
+        } catch (error) {
+            console.error(`${ScriptName} ${siteName} 签到失败:`, error);
+            success = false;
         }
 
         // 4. 如果全部执行完毕（没有抛出异常），认为签到成功，记录
@@ -279,15 +292,15 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
     }
 
     function loadLastActivationTime() {
-        const siteKey = window.location.origin;
+        const siteKey = window.location.origin + window.location.pathname;
         const storageKey = `lastActivation_${siteKey}`;
         return GM_getValue(storageKey, 0);
     }
 
     function saveLastActivationTime() {
-        const siteKey = window.location.origin;
+        const siteKey = window.location.origin + window.location.pathname;
         const storageKey = `lastActivation_${siteKey}`;
-        console.log(`${ScriptName} 保存上次激活时间: ${new Date().toISOString()}`);
+        console.log(`${ScriptName} 保存上次激活时间: ${new Date().toLocaleString()}`);
         GM_setValue(storageKey, Date.now());
     }
 
@@ -296,6 +309,8 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
 
         let lastTime = loadLastActivationTime();
 
+        console.log(`${ScriptName} 上次激活时间: ${lastTime > 0 ? new Date(lastTime).toLocaleString() : '从未激活过'}`);
+
         // ---------- 计算需要等待的时间 ----------
         const now = Date.now();
         const elapsed = now - lastTime;
@@ -303,9 +318,11 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
 
         if (waitTime > 0) {
             // 等待时间
-            console.log(`${ScriptName} 已激活，请等待 ${waitTime / 1000} 秒...`);
+            console.log(`${ScriptName} 已激活，请等待 ${waitTime / 1000} / ${interval / 1000} 秒...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
             console.log(`${ScriptName} 等待完毕...`);
+        } else {
+            console.log(`${ScriptName} 已激活，无需等待...`);
         }
 
         saveLastActivationTime();
@@ -313,10 +330,11 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
 
     async function main() {
         console.log(`${ScriptName} 启动签到脚本`);
-        if (document.readyState === 'complete') {
-            autoCheckin();
-        } else {
+
+        if (document.readyState === 'loading') {
             window.addEventListener('DOMContentLoaded', autoCheckin, { once: true });
+        } else {
+            autoCheckin();
         }
     }
 
