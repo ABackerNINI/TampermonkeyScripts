@@ -145,7 +145,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                 {
                     type: 'wait',
                     ms: 2000,
-                    description: '等待2秒，确保签到请求完成'
+                    description: '等待2秒, 确保签到请求完成'
                 },
                 {
                     type: 'click_checkin',
