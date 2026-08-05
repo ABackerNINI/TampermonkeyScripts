@@ -138,6 +138,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
             steps: [
                 {
                     type: 'click',
+                    ignoreError: true,
                     selector: 'input[type="submit"][value="立即签到"][class="btn"]',
                     description: '点击"立即签到"按钮',
                     timeout: 5000
@@ -321,8 +322,6 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
             console.log(`${ScriptName} 已激活，请等待 ${waitTime / 1000} / ${interval / 1000} 秒...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
             console.log(`${ScriptName} 等待完毕...`);
-        } else {
-            console.log(`${ScriptName} 已激活，无需等待...`);
         }
 
         saveLastActivationTime();
