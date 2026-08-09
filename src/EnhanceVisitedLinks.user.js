@@ -2,11 +2,11 @@
 // @name         Enhance Visited Links
 // @name:zh-CN   已访问链接增强
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.08.01.1
+// @version      2026.08.09.1
 // @description  增强已访问链接辨识度，使用中度亮度紫色，并增加点状下划线，适配明亮模式和暗黑模式。
 // @author       ABacker
 // @include      *
-// @run-at       document-end
+// @run-at       document-start
 // @grant        GM_addStyle
 // ==/UserScript==
 
