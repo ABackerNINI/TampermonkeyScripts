@@ -2,8 +2,8 @@
 // @name         BTSchool Helper
 // @name:zh-CN   BTSchool助手
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.07.28.1
-// @description  * 跳过置顶: 高亮显示BTSchool种子列表中的免费&2x上传种子，低亮显示置顶种子, 并滚动到第一个非置顶的2x Free种子, 如果不存在则滚动到第一个非置顶种子。
+// @version      2026.08.09.1
+// @description  * 高亮显示BTSchool种子列表中的免费&2x上传种子，低亮显示置顶种子。* 按<空格>键滚动到第一个非置顶的种子。
 // @author       ABacker
 // @match        https://pt.btschool.club/torrents.php*
 // @icon         https://pt.btschool.club/favicon.ico
@@ -433,29 +433,127 @@ const TorrentStateClassMap = Object.freeze({
         console.log('最大的种子:', bySize[0]?.title, bySize[0]?.size);
     }
 
-    // 滑动到第一个非sticky且2xfree种子
+    function arrayFind(array, predicate, fromIndex = 0) {
+        for (let i = fromIndex; i < array.length; i++) {
+            if (predicate(array[i], i, array)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    function scrollToTorrent(torrent) {
+        if (torrent && torrent._row) {
+            torrent._row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return true;
+        }
+        return false;
+    }
+
+    function getBottomElements() {
+        // 获取视口的宽度和高度
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // 选取屏幕底部中央的点：x为中间，y为视口底部稍微往上一点
+        const x = width / 2;
+        const y = height - 50;
+
+        // 获取该点下的所有元素，最上层（也是视觉上最靠下）的元素在数组最前面
+        const elements = document.elementsFromPoint(x, y);
+
+        // 返回最顶层的元素
+        return elements;
+    }
+
+    // 尝试获取屏幕最下方的torrent ID
+    function getBottomTorrentID() {
+        const elements = getBottomElements();
+
+        if (!elements || elements.length === 0) {
+            return null;
+        }
+
+        // 从最小的元素往上找
+        const element = elements[0];
+        while (element) {
+            if (element.tagName === 'table' && element.className === 'torrents') {
+                console.log(`[${ScriptName}] 已到达table.torrents`);
+                break;
+            } else if (element.tagName === 'table' && element.className === 'main') {
+                console.log(`[${ScriptName}] 已到达table.main`);
+                break;
+            } else if (element.tagName === 'td' && element.className === 'outer') {
+                console.log(`[${ScriptName}] 已到达td.outer`);
+                break;
+            } else if (element.tagName === 'body' || element.tagName === 'html') {
+                console.log(`[${ScriptName}] 已到达body或html`);
+                break;
+            }
+
+            const titleCell = element;
+
+            // 尝试查找标题链接和ID
+            const titleElement = titleCell.querySelector('a[href*="details.php?id="]');
+            if (titleElement) {
+                const title = titleElement ? titleElement.textContent.trim() : '';
+                const titleFull = titleElement ? titleElement.getAttribute('title') || '' : '';
+                const detailUrl = titleElement ? titleElement.getAttribute('href') || '' : '';
+                const idMatch = detailUrl.match(/id=(\d+)/);
+                const id = idMatch ? idMatch[1] : '';
+
+                return id;
+            }
+
+            element = element.parentNode;
+        }
+
+        return null;
+    }
+
+    // 滑动到第一个非置顶且2xfree种子
     function scrollToFirst2xFreeTorrent(torrents) {
         const first2xFree = torrents.find(t => t.state === TorrentState.FREE_2XUP && !t.sticky);
-        if (first2xFree && first2xFree._row) {
-            first2xFree._row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (scrollToTorrent(first2xFree)) {
             console.log('已滚动到第一个 2x Free 种子:', first2xFree.title);
             return true;
         }
+
+        console.log('没有 2x Free 种子');
         return false;
     }
 
-    // 滑动到第一个非sticky的种子
-    function scrollToFirstNonStickyTorrent(torrents) {
-        const firstNonSticky = torrents.find(t => !t.sticky);
-        if (firstNonSticky && firstNonSticky._row) {
-            firstNonSticky._row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            console.log('已滚动到第一个非Sticky种子:', firstNonSticky.title);
+    // 滑动到下一个2xfree种子
+    function scrollToNext2xFreeTorrent(torrents) {
+        const bottomTorrentId = getBottomTorrentId();
+        if (bottomTorrentId === null) {
+            console.log('没有找到种子列表');
+            return false;
+        }
+        const currentIndex = arrayFindIndex(torrents, t => t.id === bottomTorrentId);
+
+        const next2xFreeIndex = arrayFind(torrents, (t, i) => t.state === TorrentState.FREE_2XUP && !t.sticky, currentIndex);
+        if (next2xFreeIndex !== -1 && scrollToTorrent(torrents[next2xFreeIndex])) {
+            console.log('滑动到下一个2xFree种子');
             return true;
         }
+        console.log('没有下一个2xFree种子');
         return false;
     }
 
-    // 将所有sticky种子"低亮"显示
+    // 滑动到第一个非置顶的种子
+    function scrollToFirstNonStickyTorrent(torrents) {
+        const firstNonSticky = torrents.find(t => !t.sticky);
+        if (scrollToTorrent(firstNonSticky)) {
+            console.log('已滚动到第一个非置顶种子:', firstNonSticky.title);
+            return true;
+        }
+
+        console.log('没有非置顶种子');
+        return false;
+    }
+
+    // 将所有置顶种子"低亮"显示
     function dimStickyTorrents(torrents) {
         torrents.forEach(t => {
             if (t.sticky && t._row) {
@@ -473,13 +571,40 @@ const TorrentStateClassMap = Object.freeze({
         });
     }
 
-    function doIt(torrents) {
-        showTorrents(torrents);
-        if (!scrollToFirst2xFreeTorrent(torrents)) {
+    function handleKeyDown(event, torrents) {
+        // 如果按了空格, 跳过所有sticky种子
+        if (event.keyCode === 32) {
+            // 防止在输入框中误触
+            const tagName = document.activeElement.tagName.toLowerCase();
+            if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
             scrollToFirstNonStickyTorrent(torrents);
+        } else if (event.key === 'keyN') { //如果按了N键, 跳到下一个2xfree种子, 暂未实装
+            // 防止在输入框中误触
+            const tagName = document.activeElement.tagName.toLowerCase();
+            if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            // scrollToNext2xFreeTorrent(torrents);
         }
+    }
+
+    function doIt(torrents) {
+        // showTorrents(torrents);
         dimStickyTorrents(torrents);
         highlight2xFreeTorrents(torrents);
+        document.addEventListener('keydown', function (e) {
+            handleKeyDown(e, torrents);
+        });
     }
 
     function main() {
