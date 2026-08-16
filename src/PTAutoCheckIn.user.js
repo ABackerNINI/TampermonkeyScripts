@@ -139,7 +139,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
             alreadyCheckedInContent: '连签',
             steps: [CLICK_CHECK_IN]
         },
-        { // 点击签到后会进入一个新的页面，无法在同一页面完成签到，因此暂时注释掉
+        { // 点击签到后会进入一个新的页面，无法在同一页面完成签到
             name: 'HDBao',
             match: /^https?:\/\/hdbao\.cc\//,
             checkInSelector: 'a.faqlink[href*="attendance.php"]',
@@ -166,7 +166,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                 }
             ]
         },
-        {
+        {// 点击签到后会弹出对话框, 需要再次点击对话框中的签到按钮, 签到完成后点击对话框的关闭按钮
             name: '蜂巢',
             match: /^https?:\/\/pting\.club\//,
             steps: [
@@ -177,7 +177,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                 },
                 {
                     type: 'click',
-                    selector: () => {
+                    selector: () => { // 外层"签到"按钮
                         const btns = document.querySelectorAll('button[data-slot="button"]:has(> svg):not([title])');
                         for (const btn of btns) {
                             if (btn.textContent.includes('签到')) {
@@ -196,7 +196,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                 },
                 {
                     type: 'click',
-                    selector: () => {
+                    selector: () => { // 对话框"签到"按钮
                         const btns = document.querySelectorAll('span > button[data-slot="button"][type="button"]:not([title])');
                         for (const btn of btns) {
                             if (btn.textContent.includes('签到')) {
@@ -205,7 +205,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                         }
                         return null;
                     },
-                    description: '点击里层"签到"按钮',
+                    description: '点击对话框"签到"按钮',
                     timeout: 5000
                 },
                 {
@@ -215,7 +215,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                 },
                 {
                     type: 'click',
-                    selector: () => {
+                    selector: () => { // 对话框"关闭"按钮
                         const btns = document.querySelectorAll('div > button[data-slot="dialog-close"][type="button"]:not([title])');
                         for (const btn of btns) {
                             if (btn.textContent.includes('关闭')) {
