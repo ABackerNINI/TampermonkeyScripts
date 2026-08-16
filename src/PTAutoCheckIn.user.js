@@ -18,6 +18,7 @@
 // @match        *://*.ptfans.cc/*
 // @match        *://*.tieba.baidu.com/*
 // @match        *://*.carpt.net/*
+// @match        *://*.pting.club/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -165,17 +166,86 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                 }
             ]
         },
+        {
+            name: '蜂巢',
+            match: /^https?:\/\/pting\.club\//,
+            steps: [
+                {
+                    type: 'wait',
+                    ms: 3000,
+                    description: '等待3秒'
+                },
+                {
+                    type: 'click',
+                    selector: () => {
+                        const btns = document.querySelectorAll('button[data-slot="button"]:has(> svg):not([title])');
+                        for (const btn of btns) {
+                            if (btn.textContent.includes('签到')) {
+                                return btn;
+                            }
+                        }
+                        return null;
+                    },
+                    description: '点击外层"签到"按钮',
+                    timeout: 5000
+                },
+                {
+                    type: 'wait',
+                    ms: 1000,
+                    description: '等待1秒'
+                },
+                {
+                    type: 'click',
+                    selector: () => {
+                        const btns = document.querySelectorAll('span > button[data-slot="button"][type="button"]:not([title])');
+                        for (const btn of btns) {
+                            if (btn.textContent.includes('签到')) {
+                                return btn;
+                            }
+                        }
+                        return null;
+                    },
+                    description: '点击里层"签到"按钮',
+                    timeout: 5000
+                },
+                {
+                    type: 'wait',
+                    ms: 1000,
+                    description: '等待1秒'
+                },
+                {
+                    type: 'click',
+                    selector: () => {
+                        const btns = document.querySelectorAll('div > button[data-slot="dialog-close"][type="button"]:not([title])');
+                        for (const btn of btns) {
+                            if (btn.textContent.includes('关闭')) {
+                                return btn;
+                            }
+                        }
+                        return null;
+                    },
+                    description: '点击对话框"关闭"按钮',
+                    timeout: 5000
+                }
+            ]
+        },
     ];
 
     // ========== 工具函数 ==========
 
     function waitForElement(selector, timeout = 5000) {
+        const isFunction = (selector) => typeof selector === 'function';
+
+        if (isFunction) {
+            console.info(`${ScriptName} waitForElement: 函数selector`);
+        }
+
         return new Promise((resolve, reject) => {
-            const existing = document.querySelector(selector);
+            const existing = isFunction ? selector() : document.querySelector(selector);
             if (existing) return resolve(existing);
 
             const observer = new MutationObserver(() => {
-                const el = document.querySelector(selector);
+                const el = isFunction ? selector() : document.querySelector(selector);
                 if (el) {
                     observer.disconnect();
                     resolve(el);
@@ -229,6 +299,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                     return;
                 }
                 console.log(`${ScriptName} 点击按钮: ${el.textContent}`);
+                console.log(el);
                 el.click();
                 break;
             }
