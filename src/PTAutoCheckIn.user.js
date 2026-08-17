@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.05.03.1
+// @version      2026.08.17.1
 // @description  访问部分PT网站与百度贴吧时自动完成签到
 // @author       ABacker
 // @match        *://*.tangpt.top/*
