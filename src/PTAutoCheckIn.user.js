@@ -180,7 +180,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                     selector: () => { // 外层"签到"按钮
                         const btns = document.querySelectorAll('button[data-slot="button"]:has(> svg):not([title])');
                         for (const btn of btns) {
-                            if (btn.textContent.includes('签到')) {
+                            if (btn.textContent === '签到') {
                                 return btn;
                             }
                         }
@@ -199,7 +199,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                     selector: () => { // 对话框"签到"按钮
                         const btns = document.querySelectorAll('span > button[data-slot="button"][type="button"]:not([title])');
                         for (const btn of btns) {
-                            if (btn.textContent.includes('签到')) {
+                            if (btn.textContent === '签到') {
                                 return btn;
                             }
                         }
@@ -218,7 +218,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                     selector: () => { // 对话框"关闭"按钮
                         const btns = document.querySelectorAll('div > button[data-slot="dialog-close"][type="button"]:not([title])');
                         for (const btn of btns) {
-                            if (btn.textContent.includes('关闭')) {
+                            if (btn.textContent === '关闭') {
                                 return btn;
                             }
                         }
