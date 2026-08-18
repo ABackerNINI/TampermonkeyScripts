@@ -35,9 +35,10 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
 
     // ========== 配置区 ==========
 
+    // 通用步骤, 适用于大部分简单的站点: 仅需点击一个按钮
     const CLICK_CHECK_IN = {
         type: 'click_checkin',
-        description: '点击“签到”按钮',
+        description: '点击"签到"按钮',
         timeout: 5000
     };
 
@@ -170,10 +171,10 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
             name: '蜂巢',
             match: /^https?:\/\/pting\.club\//,
             steps: [
-                {
+                { // 网站限制必须等待
                     type: 'wait',
-                    ms: 3000,
-                    description: '等待3秒'
+                    ms: 5000, // 等待3秒似乎不够
+                    description: '等待5秒'
                 },
                 {
                     type: 'click',
