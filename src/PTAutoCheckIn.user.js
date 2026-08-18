@@ -235,7 +235,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
     // ========== 工具函数 ==========
 
     function waitForElement(selector, timeout = 5000) {
-        const isFunction = (selector) => typeof selector === 'function';
+        const isFunction = (typeof selector === 'function');
 
         if (isFunction) {
             console.info(`${ScriptName} waitForElement: 函数selector`);
