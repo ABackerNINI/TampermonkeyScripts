@@ -19,6 +19,7 @@
 // @match        *://*.tieba.baidu.com/*
 // @match        *://*.carpt.net/*
 // @match        *://*.pting.club/*
+// @match        *://*.hdtime.org/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -127,6 +128,14 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
         {
             name: 'CarPT',
             match: /^https?:\/\/carpt\.net\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            name: 'HDTime',
+            match: /^https?:\/\/hdtime\.org\//,
             checkInSelector: 'a.faqlink[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
