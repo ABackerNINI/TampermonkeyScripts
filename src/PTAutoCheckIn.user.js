@@ -206,9 +206,9 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                 {
                     type: 'click',
                     selector: () => { // 外层"签到"按钮
-                        const btns = document.querySelectorAll('button[data-slot="button"]:has(> svg):not([title])');
+                        const btns = document.querySelectorAll('button:has(> svg):not([title])');
                         for (const btn of btns) {
-                            if (btn.textContent === '签到') {
+                            if (btn.textContent.includes('签到') && btn.textContent.length < 4) {
                                 return btn;
                             }
                         }
@@ -227,7 +227,7 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                     selector: () => { // 对话框"签到"按钮
                         const btns = document.querySelectorAll('span > button[data-slot="button"][type="button"]:not([title])');
                         for (const btn of btns) {
-                            if (btn.textContent === '签到') {
+                            if (btn.textContent.includes('签到') && btn.textContent.length < 4) {
                                 return btn;
                             }
                         }
