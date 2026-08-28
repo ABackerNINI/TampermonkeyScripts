@@ -22,6 +22,7 @@
 // @match        *://*.hdtime.org/*
 // @match        *://*.hdfans.org/*
 // @match        *://*.cyanbug.net/*
+// @match        *://*.crabpt.vip/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -148,6 +149,14 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
             match: /^https?:\/\/hdfans\.org\//,
             checkInSelector: 'a.faqlink[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            name: 'CrabPT',
+            match: /^https?:\/\/crabpt\.vip\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得蟹币]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
