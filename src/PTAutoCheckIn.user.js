@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.08.21.1
+// @version      2026.08.28.1
 // @description  访问部分PT网站与百度贴吧时自动完成签到
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -217,7 +217,11 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
                     selector: () => { // 外层"签到"按钮
                         const btns = document.querySelectorAll('button:has(> svg):not([title])');
                         for (const btn of btns) {
-                            if (btn.textContent.includes('签到') && !btn.textContent.includes('去签到') && btn.textContent.length < 4) {
+                            const text = btn.textContent;
+                            console.log('text:', JSON.stringify(text), 'length:', text.length);
+                            const match = text.includes('签到') && !text.includes('已') && text.length < 4;
+                            if (match) {
+                                console.log('Matched button:', btn);
                                 return btn;
                             }
                         }
