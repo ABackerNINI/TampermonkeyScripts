@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.08.28.1
+// @version      2026.08.30.1
 // @description  访问部分PT网站与百度贴吧时自动完成签到
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -23,6 +23,7 @@
 // @match        *://*.hdfans.org/*
 // @match        *://*.cyanbug.net/*
 // @match        *://*.crabpt.vip/*
+// @match        *://*.muxuege.org/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -179,6 +180,33 @@ const MIN_INTERVAL = 10 * 60 * 1000; // 10 分钟（单位：毫秒）
         { // 点击签到后会进入一个新的页面，无法在同一页面完成签到
             name: 'HDBao',
             match: /^https?:\/\/hdbao\.cc\//,
+            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [
+                {
+                    type: 'click',
+                    ignoreError: true,
+                    selector: 'input[type="submit"][value="立即签到"][class="btn"]',
+                    description: '点击"立即签到"按钮',
+                    timeout: 5000
+                },
+                {
+                    type: 'wait',
+                    ms: 2000,
+                    description: '等待2秒, 确保签到请求完成'
+                },
+                {
+                    type: 'click_checkin',
+                    ignoreError: true,
+                    description: '点击“签到”按钮',
+                    timeout: 5000
+                }
+            ]
+        },
+        { // 点击签到后会进入一个新的页面，无法在同一页面完成签到
+            name: 'MuXueGe',
+            match: /^https?:\/\/pt\.muxuege\.org\//,
             checkInSelector: 'a.faqlink[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
