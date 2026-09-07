@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.8
+// @version      2026.09.07.9
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -70,7 +70,8 @@ const K = {
     // unit 字段说明:
     //   id: 稳定唯一标识(存储与批量任务均用它); name: 展示名
     //   url: 批量任务导航入口; attendanceUrl: 可选, 直达签到/结果页(引擎优先跳它)
-    //   match: RegExp 或函数(传 location.href), 决定当前页面是否属于该 unit
+    //   match: 可选 — RegExp 或函数(传 location.href), 显式决定页面归属; 缺省由 url 推导:
+    //     host 相等(忽略 www. 前缀差异), 且 url 带 query 时逐参数一致(页面可带额外参数, 如贴吧 kw)
     //   checkInSelector/checkInContent/alreadyCheckedInContent: 签到按钮定位与文案校验
     //     → 已签到检测以按钮文案为准, 每次访问页面都会检测, 不受 10 分钟冷却限制
     //       (冷却只限制"是否点击", 不限制"是否检测")
@@ -91,7 +92,6 @@ const K = {
         {
             id: 'tangpt', name: '躺平',
             url: 'https://www.tangpt.top/',
-            match: /^https?:\/\/[^/]*\.tangpt\.top\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -100,7 +100,6 @@ const K = {
         {
             id: 'pttime', name: 'PTTime',
             url: 'https://www.pttime.org/',
-            match: /^https?:\/\/[^/]*\.pttime\.org\//,
             checkInSelector: 'a.fcb[href*="attendance.php"]',
             checkInContent: '签到领魔力',
             alreadyCheckedInContent: '签到详情',
@@ -109,7 +108,6 @@ const K = {
         {
             id: 'railgun', name: 'Railgun',
             url: 'https://bilibili.download/',
-            match: /^https?:\/\/bilibili\.download\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -118,7 +116,6 @@ const K = {
         {
             id: 'ptzone', name: 'PTZone',
             url: 'https://ptzone.xyz/',
-            match: /^https?:\/\/ptzone\.xyz\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[簽到得魔力]',
             alreadyCheckedInContent: '簽到已得',
@@ -127,7 +124,6 @@ const K = {
         {
             id: 'ptsbao', name: 'PTSBao',
             url: 'https://ptsbao.club/',
-            match: /^https?:\/\/ptsbao\.club\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -136,7 +132,6 @@ const K = {
         {
             id: 'hdclone', name: 'HDClone',
             url: 'https://pt.hdclone.top/',
-            match: /^https?:\/\/pt\.hdclone\.top\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -145,7 +140,6 @@ const K = {
         {
             id: 'btschool', name: 'BTSchool',
             url: 'https://pt.btschool.club/',
-            match: /^https?:\/\/pt\.btschool\.club\//,
             checkInSelector: 'a[href*="index.php?action=addbonus"] > font',
             checkInContent: '每日签到',
             alreadyCheckedInContent: '签到已得',
@@ -155,7 +149,6 @@ const K = {
         {
             id: 'daxiangjiao', name: '大香蕉',
             url: 'https://pt.daxiangjiao.org/',
-            match: /^https?:\/\/pt\.daxiangjiao\.org\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -164,7 +157,6 @@ const K = {
         {
             id: 'novahd', name: 'NovaHD',
             url: 'https://pt.novahd.top/',
-            match: /^https?:\/\/pt\.novahd\.top\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -173,7 +165,6 @@ const K = {
         {
             id: 'ptfans', name: 'PTFans',
             url: 'https://ptfans.cc/',
-            match: /^https?:\/\/ptfans\.cc\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -182,7 +173,6 @@ const K = {
         {
             id: 'carpt', name: 'CarPT',
             url: 'https://carpt.net/',
-            match: /^https?:\/\/carpt\.net\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -191,7 +181,6 @@ const K = {
         {
             id: 'hdtime', name: 'HDTime',
             url: 'https://hdtime.org/',
-            match: /^https?:\/\/hdtime\.org\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -200,7 +189,6 @@ const K = {
         {
             id: 'hdfans', name: 'HDFans',
             url: 'https://hdfans.org/',
-            match: /^https?:\/\/hdfans\.org\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -209,7 +197,6 @@ const K = {
         {
             id: 'crabpt', name: 'CrabPT',
             url: 'https://crabpt.vip/',
-            match: /^https?:\/\/crabpt\.vip\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得蟹币]',
             alreadyCheckedInContent: '签到已得',
@@ -218,7 +205,6 @@ const K = {
         {
             id: 'cyanbug', name: 'Cyanbug',
             url: 'https://cyanbug.net/',
-            match: /^https?:\/\/cyanbug\.net\//,
             checkInSelector: 'a.nav-btn[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -228,7 +214,6 @@ const K = {
             id: 'hdbao', name: 'HDBao',
             url: 'https://hdbao.cc/',
             attendanceUrl: 'https://hdbao.cc/attendance.php',
-            match: /^https?:\/\/hdbao\.cc\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -258,7 +243,6 @@ const K = {
             id: 'muxuege', name: 'MuXueGe',
             url: 'https://pt.muxuege.org/',
             attendanceUrl: 'https://pt.muxuege.org/attendance.php',
-            match: /^https?:\/\/pt\.muxuege\.org\//,
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
@@ -290,7 +274,6 @@ const K = {
             //   无可靠成功特征, 点击后仍 confirmManual 记 pending 待人工确认
             id: 'pting', name: '蜂巢',
             url: 'https://pting.club/',
-            match: /^https?:\/\/pting\.club\//,
             checkInSelector: 'button[data-slot="sidebar-user-check-in"]',
             alreadyCheckedInContent: '已签到',
             confirmManual: true,
@@ -355,10 +338,6 @@ const K = {
                 {
                     id: 'tieba_pt', name: 'pt吧',
                     url: 'https://tieba.baidu.com/f?kw=pt',
-                    match: (href) => { // 按 URL 参数 kw 判定所属吧, 比正则更可靠
-                        try { return new URL(href).searchParams.get('kw') === 'pt'; }
-                        catch (e) { return false; }
-                    },
                     checkInSelector: '.button-wrapper.operate-btn.follow-sign',
                     checkInContent: '签到',
                     alreadyCheckedInContent: '连签', // 待实测校准: 已签后按钮可能显示"已签/连签"
@@ -371,10 +350,6 @@ const K = {
                 {
                     id: 'tieba_hdsky', name: 'hdsky吧',
                     url: 'https://tieba.baidu.com/f?kw=hdsky',
-                    match: (href) => {
-                        try { return new URL(href).searchParams.get('kw') === 'hdsky'; }
-                        catch (e) { return false; }
-                    },
                     checkInSelector: '.button-wrapper.operate-btn.follow-sign',
                     checkInContent: '签到',
                     alreadyCheckedInContent: '连签',
@@ -401,10 +376,19 @@ const K = {
     }
     const UNIT_MAP = new Map(UNITS.map((u) => [u.id, u]));
 
-    // 判断当前页面是否属于某 unit
+    // 判断当前页面是否属于某 unit: 显式 match(正则/函数)优先; 缺省由 url 推导 ——
+    // 域名单一事实来源在 url, 新增/改入口无需再同步 match, 避免两者漂移
     function matchUnit(unit, href) {
         try {
-            return typeof unit.match === 'function' ? !!unit.match(href) : unit.match.test(href);
+            if (unit.match) return typeof unit.match === 'function' ? !!unit.match(href) : unit.match.test(href);
+            let u, p;
+            try { u = new URL(unit.url); p = new URL(href); } catch (e) { return false; }
+            if (u.hostname.replace(/^www\./, '') !== p.hostname.replace(/^www\./, '')) return false;
+            // url 带 query(如贴吧 kw)时逐参数比较; 无 query 的站忽略页面参数
+            for (const [k, v] of u.searchParams) {
+                if (p.searchParams.get(k) !== v) return false;
+            }
+            return true;
         } catch (e) {
             console.warn(`${ScriptName} match 判定异常: ${unit.id}`, e);
             return false;
