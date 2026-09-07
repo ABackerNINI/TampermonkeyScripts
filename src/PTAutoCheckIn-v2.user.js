@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.08.15
+// @version      2026.09.08.16
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -653,6 +653,14 @@ const K = {
         return `${p(d.getHours())}:${p(d.getMinutes())}`;
     }
 
+    // ---------- 页面出生日期(跨天守卫用) ----------
+    // 页面 DOM 是页面加载时刻服务器状态的快照: 本地日期跨天后, DOM 上「今日已签到/
+    // 已签到」等通用文案仍是昨日渲染结果, 无日期锚。若直接用旧 DOM 做当日判定,
+    // 会把昨日已签误写为今日 success(实际今日未签)。故在脚本注入(document-start)
+    // 瞬间记录出生日期, 任何「基于本页 DOM 的当日判定/执行」前先查跨天(见守卫),
+    // 跨天一律整页刷新重新加载(新 DOM = 新一天服务器状态)后再判定。
+    const PAGE_BORN_DATE = todayStr();
+
     // ---------- 单站状态(当日结果) ----------
     function readStatus(unitId) {
         return gmGet(K.status(unitId), null);
@@ -693,6 +701,25 @@ const K = {
     function isFailedInCooldown(unitId) {
         const st = readStatus(unitId);
         return !!(st && st.status === 'failed' && st.date === todayStr() && cooldownRemainMs(unitId) > 0);
+    }
+
+    // ---------- 跨天守卫(页面出生日期 vs 今日) ----------
+    // isDayRolled: 页面出生日(脚本注入时刻)与今日不一致 = 页面跨天常驻/加载期间跨天,
+    //   其上一切「已签到」文案都属于昨日, 不可作为今日判定依据。
+    // dayRollReload: 跨天即发起整页刷新(仅一次, 防多入口同刻重入); 返回 true 表示
+    //   调用方须立刻终止本次执行且不得再读写当日状态(刷新后新页面会重走主流程)。
+    //   策略 = 仅执行前守卫: 纯挂机常驻页跨天不主动刷新(不打扰用户), 只在引擎正要
+    //   基于本页 DOM 做当日判定/执行(被动/批量/落地结算/发起批量)时拦截刷新。
+    let dayRollReloadRequested = false;
+    function isDayRolled() {
+        return PAGE_BORN_DATE !== todayStr();
+    }
+    function dayRollReload() {
+        if (!isDayRolled() || dayRollReloadRequested) return isDayRolled();
+        dayRollReloadRequested = true;
+        console.warn(`${ScriptName} 检测到跨天: 页面 DOM 为 ${PAGE_BORN_DATE} 状态(当前 ${todayStr()}), 已签到文案不可信 → 刷新页面以获取新一天状态`);
+        location.reload();
+        return true;
     }
 
     // ---------- 站点图标(favicon) ----------
@@ -927,6 +954,12 @@ const K = {
     async function runUnit(unit, ctx = {}) {
         const log = (msg) => console.log(`${ScriptName} [${unit.name}] ${msg}`);
         const warn = (msg) => console.warn(`${ScriptName} [${unit.name}] ${msg}`);
+
+        // 0) 跨天守卫: 页面 DOM 是昨日状态, 已签文案不可信 → 刷新取新一天状态后重跑;
+        //    刷新后本页进程销毁, 不写任何当日状态(reload 后普通页/后台任务标签重走 main)
+        if (dayRollReload()) {
+            return { status: 'skipped', msg: '页面跨天, 刷新中', reason: 'day_roll' };
+        }
 
         // 1) 当日已签到成功 → 跳过(今日不再检测/点击)
         if (isSuccessToday(unit.id)) {
@@ -1833,6 +1866,7 @@ const K = {
 
     // 发起页开始批量: force=true 时纳入"今日失败且仍在冷却期"的站并强制重试(无视冷却点击)
     function startBatch(force) {
+        if (dayRollReload()) return; // 跨天旧发起页: 先刷新, 以今日状态页重新发起
         force = !!force;
         const list = remainingCandidates(force);
         if (list.length === 0) {
@@ -1971,6 +2005,10 @@ const K = {
         }
         const res = await runUnitWithTimeout(unit, { mode: 'batch', forceCooldown: !!task.force });
         console.log(`${ScriptName} [${unit.name}] 后台标签执行完成: ${res.status}(${res.reason || ''})`);
+        // 跨天守卫触发: 本标签正在刷新重载(重载后重新执行本站), 此时不得把
+        // skipped(day_roll) 写入当日状态——否则调度页会把它当作结算结果推进任务,
+        // 该站今日实际未签。直接返回, 由重载后的执行写真实结果(调度窗口内可等到)
+        if (res.reason === 'day_roll') return;
         // runUnit 的 skipped(冷却中/今日成功)不落盘状态, 而调度页靠状态回写判定完成:
         // 若今日尚无任何结果写入, 补写本次结果, 避免调度页等待到超时误判为"无法访问"
         const st = readStatus(unit.id);
@@ -1983,6 +2021,7 @@ const K = {
     // 任务当前 unit → 只检测已签并写成功(不推进任务, 由调度页轮询推进); 未命中已签
     // 则不改写(保留 pending, 由调度页宽限观察后决定)
     async function settleUnitOnLandingPage(unit) {
+        if (dayRollReload()) return; // 跨天旧落地页: 不采信昨日 DOM, 刷新后重结算
         if (isSuccessToday(unit.id)) return;
         try {
             const already = await detectAlreadyCheckedIn(unit);
@@ -2015,6 +2054,7 @@ const K = {
 
     // ==================== 主流程 ====================
     async function main() {
+        if (dayRollReload()) return; // 页面加载期间跨天(DOM 慢/大页面): 刷新后重走主流程
         collectFavicon(); // 路过收集当前站真实 icon URL(仅匹配站), 供面板列表图标显示
         let task = loadTask();
         if (task && isTaskStale(task)) {
