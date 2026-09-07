@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.7
+// @version      2026.09.07.8
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -49,6 +49,7 @@ const HEARTBEAT_FRESH_MS = 15 * 1000;          // 调度页心跳保鲜判定(ms
 const K = {
     status: (uid) => `ptac_status_${uid}`,     // {date:'YYYY-MM-DD', status:'success|failed|pending|skipped', msg, ts}
     cooldown: (uid) => `ptac_cooldown_${uid}`, // 上次触发时间戳(ms)
+    favicon: (uid) => `ptac_favicon_${uid}`,   // 路过收集的站点真实 icon URL(面板列表图标用)
     task: 'ptac_task'                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
 };
 
@@ -523,6 +524,41 @@ const K = {
         return !!(st && st.status === 'failed' && st.date === todayStr() && cooldownRemainMs(unitId) > 0);
     }
 
+    // ---------- 站点图标(favicon) ----------
+    // 取用链: unit.favicon 配置显式指定 → GM 路过收集的真实 icon URL → 站点根 /favicon.ico → 空(不显示)。
+    // 图标 URL 与站点页面所用一致时天然命中浏览器 HTTP 缓存, 无额外网络流量。
+    const favCache = new Map(); // 同页多次渲染(批量推进时)避免反复 GM 读
+    function faviconSrc(unit) {
+        if (favCache.has(unit.id)) return favCache.get(unit.id);
+        let src = '';
+        if (unit.favicon) src = unit.favicon;
+        else {
+            src = gmGet(K.favicon(unit.id), '');
+            if (!src) {
+                try { src = new URL(unit.url).origin + '/favicon.ico'; } catch (e) { src = ''; }
+            }
+        }
+        favCache.set(unit.id, src);
+        return src;
+    }
+    // 路过收集: 脚本运行在当前站时读取其 <link rel="icon"> 真实 URL 存入匹配 unit
+    // (同 host 多吧共享同一 icon, 各自存一份量级可忽略); 仅收 http(s), 无 icon/已相同则跳过
+    function collectFavicon() {
+        try {
+            const link = document.querySelector('link[rel~="icon"]');
+            const href = link && link.getAttribute('href');
+            if (!href) return;
+            let abs;
+            try { abs = new URL(href, document.baseURI).href; } catch (e) { return; }
+            if (!/^https?:/i.test(abs)) return; // 丢弃 data:/javascript: 等
+            for (const u of UNITS) {
+                if (!matchUnit(u, location.href)) continue;
+                if (gmGet(K.favicon(u.id), '') === abs) continue;
+                gmSet(K.favicon(u.id), abs);
+            }
+        } catch (e) { /* 静默: 收集失败不影响签到主流程 */ }
+    }
+
     // ---------- 批量任务 ----------
     function loadTask() {
         return gmGet(K.task, null);
@@ -960,6 +996,10 @@ const K = {
             font-weight: 600;
         }
         .row-name .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .row-name .fav {
+            width: 14px; height: 14px; border-radius: 3px; object-fit: contain;
+            flex-shrink: 0; background: rgba(128, 128, 128, 0.15); /* 透明图标底色, 防白底/透明 png 不可见 */
+        }
         .row-name .ext { font-size: 10px; color: var(--muted); flex-shrink: 0; opacity: 0.8; }
         .row-name:hover { color: var(--accent-1); }
         .row-name:hover .ext { opacity: 1; }
@@ -1064,8 +1104,10 @@ const K = {
                 if (cool) sub += ' · 冷却中, 默认不参与批量';
             }
             const url = esc(unit.url);
+            const fav = faviconSrc(unit);
             return `<div class="row${cool ? ' cool' : ''}">`
                 + `<div class="row-main"><div class="row-name" data-url="${url}" title="新标签打开 ${url}">`
+                + (fav ? `<img class="fav" src="${esc(fav)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '')
                 + `<span class="nm">${esc(unit.name)}</span><span class="ext">↗</span></div>`
                 + `<div class="row-sub">${sub}</div></div>`
                 + `<span class="badge ${meta.cls}">${meta.label}</span>`
@@ -1147,6 +1189,14 @@ const K = {
                 try { GM_openInTab(url, { active: true }); }
                 catch (err) { toast(`打开站点失败: ${url}`); }
             });
+            // 图标加载失败(站点无 favicon/路径非标准/防外链) → 隐藏图标不占位, 站名不受影响;
+            // img 的 error 事件不冒泡, 需捕获阶段委托(行每次 render 重建, 委托避免重复绑定)
+            listEl.addEventListener('error', (e) => {
+                const t = e.target;
+                if (t && t.tagName === 'IMG' && t.classList.contains('fav')) {
+                    t.style.display = 'none';
+                }
+            }, true);
 
             fab.addEventListener('click', togglePanel);
 
@@ -1525,6 +1575,7 @@ const K = {
 
     // ==================== 主流程 ====================
     async function main() {
+        collectFavicon(); // 路过收集当前站真实 icon URL(仅匹配站), 供面板列表图标显示
         let task = loadTask();
         if (task && isTaskStale(task)) {
             console.log(`${ScriptName} 清理过期批量任务(中断超过 ${TASK_STALE_MS / 60000} 分钟)`);
