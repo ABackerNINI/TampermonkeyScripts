@@ -1,11 +1,11 @@
 # PTAutoCheckIn-v2.user.js — PT 多站点自动签到 v2
 
-> 源文件：`src/PTAutoCheckIn-v2.user.js` ｜ 版本 `2026.09.07.10`(升级时同步更新)
+> 源文件：`src/PTAutoCheckIn-v2.user.js` ｜ 版本 `2026.09.08.15`(升级时同步更新)
 > ⚠️ 状态：**v2 重构版, 待实测校准后并入正式版**。原 `src/PTAutoCheckIn.user.js`（v2026.08.30.1）暂保留；并入时改回 `@name PTAutoCheckIn` 并递增版本号, 删除旧文件。
 
 ## 功能概述
 
-覆盖 18 个 PT 站 + 百度贴吧(**多吧**, 每个吧为独立签到单元)。双模式：
+覆盖 20 个 PT 站 + 百度贴吧(**多吧**, 每个吧为独立签到单元)。双模式：
 
 1. **被动模式**：访问匹配站点自动签到(同 v1)。
 2. **主动批量模式**：点击右下角悬浮按钮 → 面板「批量签到」→ **发起页常驻**, 由调度循环依次用 `GM_openInTab` 在**后台标签**打开各站执行签到, 发起页轮询 GM 状态逐个推进, 全部完成后停在发起页弹出完成面板。
@@ -103,7 +103,7 @@
 - **失败且冷却中的站**(今日 `failed` + 10min 冷却未过): 整行降透明度 + 左侧琥珀竖条 + 副文案提示「冷却中, 默认不参与批量」; 批量候选**默认排除**此类站。常规「批量签到」按钮**右侧紧贴一个窄 chevron 图标钮**(拆分按钮组, 同色系+细分隔线) → 点击后琥珀色的 **「强制批量签到(n 站)」** 按钮从**按钮行上方浮出**(absolute 浮层不占文档流, 覆盖站点列表底部; 按钮与「批量签到」本体对齐), 浮出钮带详细 tooltip; 点击无视冷却强制重试(点击前仍重写冷却, 再失败进入新一轮冷却)。**全部签到完毕(无失败冷却站)或批量进行中隐藏图标钮**(此时「批量签到」恢复完整圆角); 图标钮 hover/展开态变琥珀色(图标不旋转); 强制按钮 tooltip 说明适用场景与风控风险。
 - 面板数据读 GM 存储, 任何已匹配站打开均为同一份(满足「任意已添加网站查看完成面板」)。
 
-## 已有站点一览(18 PT + 贴吧 2 吧)
+## 已有站点一览(20 PT + 贴吧 2 吧)
 
 > 2026.09.07 实测各站签到链接普遍不再带 `faqlink` class, 故所有 PT 站 `checkInSelector` 一律去掉 class 依赖(仅按 `href*="attendance.php"` 定位); PTTime 保留 `a.fcb`、Cyanbug 保留 `a.nav-btn`(非 faqlink, 实测仍有效)。站点 `url` 同步更新为当前有效入口(大多去掉 `www.` 前缀, 与 `match` 保持一致)。蜂巢为 shadcn/Radix 改版站(签到是按钮不是 attendance 链接), 例外按 `data-slot` 定位, 见下表。
 
@@ -127,6 +127,8 @@
 | HDBao | hdbao.cc | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 跳页; `attendanceUrl` 直达; `alreadyPageCheck:true` |
 | MuXueGe | pt.muxuege.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 同上 |
 | 蜂巢 | pting.club | `button[data-slot="sidebar-user-check-in"]` | — / `已签到` | 对话框式(改版后已签检测启用, 对话框步骤可选); `successDetect` 按钮变已签 5s |
+| MTeam | kp.m-team.cc | —(无按钮, 登录态访问主页 `/index` 即自动签到) | — / — | 显式 `match` 只认 kp 子域 `/index`; `successDetect` func 轮询 antd 卡片「站点数据/站點數據」(16s); 未登录被重定向无卡片 → failed |
+| HHCLUB | hhanclub.net | 先点 `img#user-avatar` 展开菜单, 再点 `a[href*="attendance.php"]` | `[签到得憨豆]` / 落地页 `#date-display` 当月 `yyyy-mm` | `alreadyCheck` 自定义函数(动态算当月); **头像点-验-重试函数步骤**(点击后验签到链接可见, 最多3次) + `successDetect` 同页确认(轮询变 attendance.php 且当月日历 8s)双通道; 2026.09.08 修复普通触发偶发失败 |
 | pt吧 | tieba f?kw=pt | `.button-wrapper.operate-btn.follow-sign` | `签到` / `连签` | `batchDelayMs:3000` |
 | hdsky吧 | tieba f?kw=hdsky | 同上 | 同上 | 同上 |
 
@@ -137,6 +139,8 @@
 - **PTTime**(落地页无反馈型, 2026.09.08): 点击签到按钮整页跳到 `attendance.php`, 该落地页**不显示**「签到详情/签到已得」类按钮或文案(判定会卡 pending)→ 改用**落地页标记** `landingCheckedInContent: '总签到记录'`: 签到成功落地后页内出现「总签到记录」记录表头(`<p class="mt10 fwb">`, class 可能改版变化故**纯文本匹配不绑 class**)即判 success; 落地页判定**不写死 attendance.php**——由签到按钮 href 自动推导(`isLandingPageOf`: 解析 `checkInSelector` 的 href / `attendanceUrl` 优先), 同款语义站(NexusPHP 落地无反馈)照配 `landingCheckedInContent` 即可, 落地页叫 attendance.php/sign.php/... 都能识别(非落地页不检测防误报)。
 - **HDBao / MuXueGe**(跳页式): `attendanceUrl` 直达 `attendance.php` → 点「立即签到」提交 → 页面刷新显示结果; `alreadyPageCheck:true` 用整页文本判定已签; 兜底 `click_checkin` 带 `ignoreError`。
 - **蜂巢**(对话框式, 2026.09.07 站方改版为 shadcn/Radix 风格): 签到按钮固定 `data-slot="sidebar-user-check-in"`, 已签时文案为「已签到」→ 按钮级已签检测自动命中(步骤 2 前置 detect 与步骤内 `click_checkin` 双保险), 不再依赖旧「文本含签到不含已」函数选择器; 未签时点同一按钮; 等待 5s(站点限制, 3s 不够) → `click_checkin` → 对话框「签到/关闭」两步降级为**可选**(`ignoreError` + 2s 超时, 改版后是否仍弹对话框待实测, 无则自动跳过)。**2026.09.08 实测点击成功后按钮即时变「已签到」→ 弃 `confirmManual`(否则成功却卡 pending 待人工确认), 改 `successDetect:[{type:'text', selector: 同按钮, text:'已签到', timeout:5000}]`** → 点击后按钮变已签即 success, 5s 未变走通用回退(再等 2.5s)后记 failed(不再卡 pending; 若响应慢于 7.5s 会误报 failed, 实测暂稳)。
+- **MTeam**(无按钮访问即签型, 2026.09.08 接入): 站方新站 `kp.m-team.cc` **没有签到按钮/页面**, 登录态访问主页 `/index` 即自动完成当日签到(隐式签到)。→ 建模: **显式 `match` 只认 kp 子域 `/index`**(详情页/其它子域不触发, 防把浏览页误当签到动作、详情页无卡片误报 failed 污染当日状态); 无 `checkInSelector`/`alreadyCheckedInContent`(无按钮可检可点); 步骤仅 `wait 3000` 等 SPA 渲染; 成功靠 `successDetect:[{type:'func', fn: 轮询 .ant-card-head-title 含「站点数据」或「站點數據」(16s)}]`(antd Card 标题, 简/繁双文本防 locale; 未登录被重定向登录页 → 无卡片 → failed, 需登录后脚本才会成功)。
+- **HHCLUB**(菜单展开 + 动态落地页型, 2026.09.08 接入): 签到入口藏在头像下拉菜单: 先点 `img#user-avatar` 展开 → 再点菜单内 `a[href*="attendance.php"]`(`[签到得憨豆]`)→ 跳 `attendance.php`; 落地页渲染当月日历 `<p id="date-display">`(内容为**动态 `yyyy-mm`** 如 2026-09, 静态 `landingCheckedInContent` 字符串匹配不适用)→ 用 `alreadyCheck` 自定义 async 函数(非 attendance.php 落地页不判; 落地页上 `#date-display` 含**动态算出的当月前缀**才命中)→ 挂统一 `detectAlreadyCheckedIn` → 被动/批量/落地结算三路径自动共用。**2026.09.08 实测普通触发偶发「未检测到成功特征」+「整流程超时」, 强制重试即成功 → 点击后导航不稳定(SPA 路由/慢导航/首访点击无效)→ 修复双保险**: ① 头像改**点-验-重试函数步骤**: 点 avatar 后轮询签到链接**可见**(`getClientRects()>0`——菜单链接可能常驻 DOM 但 display:none, 隐藏元素程序化 `.click()` 不触发导航), 未现则再点(点击是 toggle), 最多 3 次; ② 补 `successDetect:[{type:'func', fn: 轮询 location.pathname 变 attendance.php 且 #date-display 含当月(8s)}]` → SPA 路由/800ms 后才跳转(无 pagehide)时同页也能确认, 不再秒判 failed; 整页跳转仍走落地结算(两通道并存)。已签当日菜单内容不变(无按钮级已签特征)。
 - **贴吧吧页**: `match` 用函数解析 `?kw=` 精确归属(同域多个吧互不误签); 已关注吧才有签到按钮(未关注按失败提示)。
 
 ## 主流程(v2)
@@ -164,12 +168,15 @@ boot()
 1. 贴吧：已签特征文案(现配 `连签`)、点击后成功文案(现配 body 含 `签到成功`)、未关注吧时按钮缺失的行为。
 2. 蜂巢：已签检测已启用(改版后按钮 `data-slot="sidebar-user-check-in"` 文案「已签到」, 实测命中); **2026.09.08 已实测点击后按钮即时变「已签到」→ 已弃 confirmManual 改 `successDetect`(按钮文案 5s 轮询)** → 待实测: 点击后按钮变已签稳定可靠(数日观察无 "未检测到成功特征" failed); 未签时点击后是否仍弹对话框(步骤已做可选兼容)。
 3. HDBao / MuXueGe：`attendanceUrl` 落地页的整页已签文案检测是否误报/漏报(**全部站点默认关闭整页检测, 仅这两站显式开启**; 注意站内其他区域是否含 `签到已得` 字样)。
-4. 其余 15 个 PT 站：按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。BTSchool 特例(`noButtonMeansCheckedIn`): 未签页按钮在→能点; 已签页按钮消失→判 success, 需实测确认按钮确实随已签消失、且不会在无签到入口的其它页面误判。PTTime 落地页无反馈问题见上 `landingCheckedInContent`(已配 `总签到记录`, 待实测确认落地页文本稳定; 若其它站同问题参照配置)。
+4. 其余 15 个 PT 站(普通按钮级站, 不含蜂巢/HDBao/MuXueGe/MTeam/HHCLUB 五个特殊站):按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。BTSchool 特例(`noButtonMeansCheckedIn`): 未签页按钮在→能点; 已签页按钮消失→判 success, 需实测确认按钮确实随已签消失、且不会在无签到入口的其它页面误判。PTTime 落地页无反馈问题见上 `landingCheckedInContent`(已配 `总签到记录`, 待实测确认落地页文本稳定; 若其它站同问题参照配置)。
 5. 批量调度(重点)：发起页停留不动, 后台标签逐个打开签到并自动关闭; 模拟单站断网/无法访问 → 50s 窗口后写 failed 自动跳过继续下一站(不再死链); 点击跳转型站落地页结算写 success; 调度中途关闭发起页 → 其它站横幅提示「恢复批量」一键续跑。
 6. 深浅色主题切换、批量完成面板在任意站打开的一致性(完成后面板停留发起页, 其它站打开面板数据一致)。
 7. 新增 UI 交互: 点击站点名 → 新标签打开该站; 失败且冷却中的站被排除且行有特殊样式(琥珀竖条+降透明度); 常规批量按钮右侧紧贴的 chevron 图标钮 → 点击从按钮行上方浮出琥珀色「强制批量签到」按钮(带 tooltip, 不占文档流), 点它把失败冷却站纳入并强制点击(注意反爬风险, 谨慎使用); 全部完成/批量中图标钮隐藏、批量按钮恢复完整圆角; 站点图标: 各站名前显示 favicon(路过收集 → 根路径兜底 → 加载失败隐藏, 不影响布局)。
 8. match 字段删除回归: 全部站已删显式 `match`, 页面归属改由 `url` 推导(host 忽略 www 前缀 + url 带 query 时逐参一致); 验证各站被动命中、批量后台标签/落地页结算仍正确, 贴吧两吧靠 `kw` 参数区分正常。
-9. FAB 皮肤: 头部「外观」展开四皮肤(变色/数字/信号灯/光环)切换即时生效并跨站记忆; 两态验证: 全部签到完毕 vs 有站未签(FAB 应一眼可辨), 面板汇总与角标数字一致; 深浅色下皮肤均清晰。
+9. 新增两站(2026.09.08 接入, 待实测):
+   - MTeam: 登录态打开 `kp.m-team.cc/index` 实际 path 是否 `/index`(是否重定向到 `/`?若重定向需改 `match`); 页面渲染后「站点数据/站點數據」卡片是否 16s 内出现(SPA 慢则调大 func 轮询超时); 未登录时行为(应 failed 而非 success)。
+   - HHCLUB: 头像点击后菜单是否即时展开(hover 则需改 mouseover); 点击签到链接后是否整页跳转 `attendance.php`; `#date-display` 文本是否为当月 `yyyy-mm` 且秒现; **当天已签后**再访问落地页的表现(若仍显示当月日历, 引擎每日只结算一次 success 无碍; 若菜单/入口随已签变化需补按钮级特征)。**2026.09.08 已加修复**(头像点-验-重试 + `successDetect` 同页确认 8s) → 待实测: 普通触发不再偶发「未检测到成功特征/整流程超时」(多触发几次批量/被动验证稳定), 若仍有零星失败看日志区分是 SPA 路径确认慢(调大 8s)还是点击无效(查头像菜单结构)。
+10. FAB 皮肤: 头部「外观」展开四皮肤(变色/数字/信号灯/光环)切换即时生效并跨站记忆; 两态验证: 全部签到完毕 vs 有站未签(FAB 应一眼可辨), 面板汇总与角标数字一致; 深浅色下皮肤均清晰。
 
 ## 修改与扩展指南
 

@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.08.13
+// @version      2026.09.08.15
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -24,6 +24,8 @@
 // @match        *://*.cyanbug.net/*
 // @match        *://*.crabpt.vip/*
 // @match        *://*.muxuege.org/*
+// @match        *://*.m-team.cc/*
+// @match        *://*.hhanclub.net/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -343,6 +345,126 @@ const K = {
                     },
                     description: '点击对话框"关闭"按钮(可选)'
                 }
+            ]
+        },
+
+        { // MTeam: 2026.09.08 接入 — 站方新站(kp.m-team.cc)无签到按钮/页面, 登录态访问主页
+            //   /index 即自动完成当日签到(隐式签到, 无点击对象); 成功特征 = 主页渲染出「站点数据」
+            //   卡片(antd Card 标题 .ant-card-head-title), 简体/繁体双文本防 locale 差异; 未登录会被
+            //   重定向走登录页 → 无卡片 → 判 failed(需登录后脚本才会成功)。
+            //   显式 match 只认 kp 子域 /index: 详情页/其它子域不触发, 防把"浏览页"误当签到动作
+            //   (否则详情页无卡片会误报 failed 并污染当日状态); 无按钮 → 不配 checkInSelector /
+            //   alreadyCheckedInContent(无按钮可检可点), 步骤仅等待 SPA 渲染, 成功靠 successDetect
+            id: 'mteam', name: 'MTeam',
+            url: 'https://kp.m-team.cc/index',
+            match: (href) => {
+                try {
+                    const u = new URL(href);
+                    return u.hostname.replace(/^www\./, '') === 'kp.m-team.cc'
+                        && u.pathname.replace(/\/+$/, '') === '/index';
+                } catch (e) { return false; }
+            },
+            steps: [{ type: 'wait', ms: 3000, description: '等待 SPA 主页渲染' }],
+            successDetect: [{
+                type: 'func',
+                fn: async () => {
+                    try {
+                        await waitForTrue(() => {
+                            for (const el of document.querySelectorAll('.ant-card-head-title')) {
+                                const t = visibleText(el);
+                                if (t.includes('站点数据') || t.includes('站點數據')) return true;
+                            }
+                            return null;
+                        }, 16000, 300, '站点数据卡片');
+                        return true;
+                    } catch (e) { return false; }
+                }
+            }]
+        },
+        { // HHCLUB: 2026.09.08 接入 — 签到入口藏在头像下拉菜单: 先点 img#user-avatar 展开菜单,
+            //   再点菜单内 a[href="attendance.php"](文案[签到得憨豆])→ 跳 attendance.php; 落地页渲染
+            //   当月日历 <p id="date-display">(内容为动态 yyyy-mm, 如 2026-09)→ 判已签。
+            //   date-display 为动态文本, landingCheckedInContent(静态串匹配)不适用 → 用 alreadyCheck
+            //   自定义函数(落地页限定 + 动态算当月前缀), 挂统一 detectAlreadyCheckedIn → 被动/批量/
+            //   落地结算三路径自动共用; 无"签到已得"类已签反馈按钮。
+            //   2026.09.08 实测: 普通触发偶发"未检测到成功特征"、随后"整流程超时", 强制重试即成功 →
+            //   点击后导航不稳定(SPA 路由/慢导航/首访点击无效). 修复双保险:
+            //   ① steps 头像改"点-验-重试"函数步骤: 点击后轮询签到链接"可见"(getClientRects>0, 非仅
+            //      DOM 存在——隐藏元素 .click() 不触发导航), 未现则再点 avatar, 最多 3 次, 消除首访/
+            //      页面未就绪导致程序化 click 无效的时序抖动;
+            //   ② 补 successDetect func 同页确认: 点击后轮询 location.pathname 变 attendance.php 且
+            //      #date-display 含当月(8s) → SPA 路由/800ms 后才跳转(无 pagehide)时同页也能确认成功,
+            //      不再秒判 failed; 整页跳转仍走落地结算(两通道并存互不冲突)
+            id: 'hhclub', name: 'HHCLUB',
+            url: 'https://hhanclub.net/',
+            checkInSelector: 'a[href*="attendance.php"]',
+            checkInContent: '[签到得憨豆]',
+            alreadyCheck: async () => {
+                // 非签到落地页不判(防首页/其它区域误报)
+                if (!/attendance\.php/i.test(location.pathname)) return false;
+                try {
+                    let hit = false;
+                    await waitForTrue(() => {
+                        const el = document.getElementById('date-display');
+                        if (!el) return null;
+                        const d = new Date();
+                        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        hit = visibleText(el).includes(ym);
+                        return hit ? true : null;
+                    }, 3000, 200, '落地页日历(#date-display 当月)');
+                    return hit;
+                } catch (e) { return false; }
+            },
+            // 同页/慢导航成功确认: SPA 路由或 pagehide 前 URL 已变时, 轮询到 attendance.php + 当月日历即 success
+            successDetect: [{
+                type: 'func',
+                fn: async () => {
+                    try {
+                        await waitForTrue(() => {
+                            if (!/attendance\.php/i.test(location.pathname)) return null;
+                            const el = document.getElementById('date-display');
+                            if (!el) return null;
+                            const d = new Date();
+                            const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                            return visibleText(el).includes(ym) ? true : null;
+                        }, 8000, 300, '进入 attendance.php 且日历为当月');
+                        return true;
+                    } catch (e) { return false; }
+                }
+            }],
+            steps: [
+                { // 点击头像展开签到菜单(点-验-重试): 点击后轮询签到链接可见(getClientRects>0——菜单内
+                    //   链接可能常驻 DOM 但 display:none, 隐藏元素程序化 .click() 不触发导航), 未现则再点
+                    //   avatar(点击是 toggle, 奇数次开), 最多 3 次; 消除首访/页面未就绪的点击无效
+                    type: 'function',
+                    description: '点击头像展开签到菜单(点-验-重试, 最多3次)',
+                    func: async () => {
+                        const linkVisible = () => {
+                            const a = document.querySelector('a[href*="attendance.php"]');
+                            if (!a) return null;
+                            const r = a.getClientRects();
+                            return r && r.length > 0 ? a : null;
+                        };
+                        for (let i = 0; i < 3; i++) {
+                            const avatar = document.querySelector('img#user-avatar');
+                            if (avatar) {
+                                console.log(`${ScriptName} [HHCLUB] 点击头像展开菜单 (尝试 ${i + 1}/3)`);
+                                avatar.click();
+                            } else {
+                                console.warn(`${ScriptName} [HHCLUB] 未找到头像 img#user-avatar`);
+                            }
+                            try {
+                                await waitForElement(linkVisible, 2500);
+                                await sleep(300); // 菜单动画就位
+                                return;
+                            } catch (e) {
+                                console.warn(`${ScriptName} [HHCLUB] 签到链接不可见, 重试 (${i + 1}/3)`);
+                            }
+                        }
+                        throw new Error('头像菜单展开失败(签到链接 3 次重试后仍不可见)');
+                    }
+                },
+                CLICK_CHECK_IN
             ]
         },
 
