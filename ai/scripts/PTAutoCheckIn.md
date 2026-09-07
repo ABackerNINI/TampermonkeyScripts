@@ -44,6 +44,7 @@
 | `alreadyCheck` | 可选函数, 自定义已签到判定 |
 | `noButtonMeansCheckedIn` | true: **找不到签到按钮即视为已签**(已签后签到按钮消失的站, 如 BTSchool); 仅当按钮确实会因已签而消失时启用 |
 | `alreadyPageCheck` | **默认 false(全部站点默认关闭整页文本检测**, 防页面其它区域误报); 仅特殊站显式 true(如跳页型落地页无签到按钮的 HDBao/MuXueGe) |
+| `landingCheckedInContent` | **落地页确认标记文本(可选)**: 签到动作导向的落地页上签到后才出现的唯一文本(如 PTT「总签到记录」表头)即判已签; 落地页路径由签到按钮 href 推导(`isLandingPageOf`: `attendanceUrl` 优先, 否则解析 `checkInSelector` 的 href 属性选择器——**不写死 attendance.php**, 落地页叫 attendance/signin/任意 php 都自动识别); 整页文本匹配、纯文本不绑 class(class 会随改版变化), 非落地页不检测防误报 |
 | `successDetect` | 点击后成功检测(同页 AJAX 场景) `[{type:'url'\|'text'\|'func',...}]`, 任一命中即成功 |
 | `confirmManual` | true: 无可靠成功特征, 点击后记 pending 待人工确认 |
 | `batchDelayMs` | 批量模式本站处理完后、跳下一站前的缓冲(贴吧吧间 3s 防风控) |
@@ -65,7 +66,8 @@
 ```
 1. 当日 success                    → skipped(今日已完成)
 2. 已签到检测 —— 每次访问都执行, 不受冷却限制(检测≠点击, 无封号风险):
-   按钮文案命中 / (noButtonMeansCheckedIn 站)找不到签到按钮 / (仅显式 alreadyPageCheck 的站)整页文案命中 → success
+   按钮文案命中 / (noButtonMeansCheckedIn 站)找不到签到按钮 / (仅显式 alreadyPageCheck 的站)整页文案命中
+   / (设了 landingCheckedInContent 的站)签到落地页(按钮 href 推导路径, isLandingPageOf)出现标记文本 → success
 3. 上次 pending 未确认且未过冷却、且第 2 步仍无已签证据 → failed(上次点击确实未生效)
 4. 冷却中(<10min)                  → skipped(冷却只防重复点击, 不阻止检测)
 5. 执行 steps                      → 点击前先写 cooldown(即使跳页丢页面, 冷却也已落盘)
@@ -108,7 +110,7 @@
 | unit | 域名/kw | 入口选择器 | 签到文案 / 已签特征 | 备注 |
 |------|---------|-----------|-------------------|------|
 | 躺平 | tangpt.top | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| PTTime | pttime.org | `a.fcb[href*="attendance.php"]` | `签到领魔力` / `签到详情` | — |
+| PTTime | pttime.org | `a.fcb[href*="attendance.php"]` | `签到领魔力` / `签到详情` | 落地页标记 `总签到记录`(见下) |
 | Railgun | bilibili.download | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | PTZone | ptzone.xyz | `a[href*="attendance.php"]` | `[簽到得魔力]`(繁) / `簽到已得` | — |
 | PTSBao | ptsbao.club | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
@@ -132,6 +134,7 @@
 
 ### 复杂站点步骤细节
 
+- **PTTime**(落地页无反馈型, 2026.09.08): 点击签到按钮整页跳到 `attendance.php`, 该落地页**不显示**「签到详情/签到已得」类按钮或文案(判定会卡 pending)→ 改用**落地页标记** `landingCheckedInContent: '总签到记录'`: 签到成功落地后页内出现「总签到记录」记录表头(`<p class="mt10 fwb">`, class 可能改版变化故**纯文本匹配不绑 class**)即判 success; 落地页判定**不写死 attendance.php**——由签到按钮 href 自动推导(`isLandingPageOf`: 解析 `checkInSelector` 的 href / `attendanceUrl` 优先), 同款语义站(NexusPHP 落地无反馈)照配 `landingCheckedInContent` 即可, 落地页叫 attendance.php/sign.php/... 都能识别(非落地页不检测防误报)。
 - **HDBao / MuXueGe**(跳页式): `attendanceUrl` 直达 `attendance.php` → 点「立即签到」提交 → 页面刷新显示结果; `alreadyPageCheck:true` 用整页文本判定已签; 兜底 `click_checkin` 带 `ignoreError`。
 - **蜂巢**(对话框式, 2026.09.07 站方改版为 shadcn/Radix 风格): 签到按钮固定 `data-slot="sidebar-user-check-in"`, 已签时文案为「已签到」→ 按钮级已签检测自动命中(步骤 2 前置 detect 与步骤内 `click_checkin` 双保险), 不再依赖旧「文本含签到不含已」函数选择器; 未签时点同一按钮; 等待 5s(站点限制, 3s 不够) → `click_checkin` → 对话框「签到/关闭」两步降级为**可选**(`ignoreError` + 2s 超时, 改版后是否仍弹对话框待实测, 无则自动跳过); 无可靠成功特征, `confirmManual:true` 记 pending。
 - **贴吧吧页**: `match` 用函数解析 `?kw=` 精确归属(同域多个吧互不误签); 已关注吧才有签到按钮(未关注按失败提示)。
@@ -161,7 +164,7 @@ boot()
 1. 贴吧：已签特征文案(现配 `连签`)、点击后成功文案(现配 body 含 `签到成功`)、未关注吧时按钮缺失的行为。
 2. 蜂巢：已签检测已启用(改版后按钮 `data-slot="sidebar-user-check-in"` 文案「已签到」, 实测命中)→ 待实测: 未签时点击同一按钮后是否仍弹对话框(步骤已做可选兼容)、点击后按钮是否即时变「已签到」(若稳定可改 successDetect, 摆脱 confirmManual)。
 3. HDBao / MuXueGe：`attendanceUrl` 落地页的整页已签文案检测是否误报/漏报(**全部站点默认关闭整页检测, 仅这两站显式开启**; 注意站内其他区域是否含 `签到已得` 字样)。
-4. 其余 15 个 PT 站：按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。BTSchool 特例(`noButtonMeansCheckedIn`): 未签页按钮在→能点; 已签页按钮消失→判 success, 需实测确认按钮确实随已签消失、且不会在无签到入口的其它页面误判。
+4. 其余 15 个 PT 站：按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。BTSchool 特例(`noButtonMeansCheckedIn`): 未签页按钮在→能点; 已签页按钮消失→判 success, 需实测确认按钮确实随已签消失、且不会在无签到入口的其它页面误判。PTTime 落地页无反馈问题见上 `landingCheckedInContent`(已配 `总签到记录`, 待实测确认落地页文本稳定; 若其它站同问题参照配置)。
 5. 批量调度(重点)：发起页停留不动, 后台标签逐个打开签到并自动关闭; 模拟单站断网/无法访问 → 50s 窗口后写 failed 自动跳过继续下一站(不再死链); 点击跳转型站落地页结算写 success; 调度中途关闭发起页 → 其它站横幅提示「恢复批量」一键续跑。
 6. 深浅色主题切换、批量完成面板在任意站打开的一致性(完成后面板停留发起页, 其它站打开面板数据一致)。
 7. 新增 UI 交互: 点击站点名 → 新标签打开该站; 失败且冷却中的站被排除且行有特殊样式(琥珀竖条+降透明度); 常规批量按钮右侧紧贴的 chevron 图标钮 → 点击从按钮行上方浮出琥珀色「强制批量签到」按钮(带 tooltip, 不占文档流), 点它把失败冷却站纳入并强制点击(注意反爬风险, 谨慎使用); 全部完成/批量中图标钮隐藏、批量按钮恢复完整圆角; 站点图标: 各站名前显示 favicon(路过收集 → 根路径兜底 → 加载失败隐藏, 不影响布局)。

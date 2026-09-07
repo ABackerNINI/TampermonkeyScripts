@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.11
+// @version      2026.09.08.12
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -81,6 +81,12 @@ const K = {
     //     注意仅当按钮确实会因已签而消失时启用, 避免在无签到入口的其它页面误判
     //   alreadyPageCheck: 默认 false — 全部站点默认关闭整页文本检测(防页面其它区域误报);
     //     仅特殊站点显式置 true 才启用整页文本级"已签到"检测(如跳页型落地页无签到按钮的站)
+    //   landingCheckedInContent: 落地页确认标记文本(可选) — 签到动作导向的落地页上签到后才出现的
+    //     唯一文本(如 PTT「总签到记录」表头)即判已签; "落地页"由签到按钮 href 推导(isLandingPageOf:
+    //     显式 attendanceUrl 优先, 否则解析 checkInSelector 的 href 属性选择器得路径), 不写死
+    //     attendance.php —— 各站落地页命名可不同(attendance/signin/...), 跟签到按钮走天然可扩展;
+    //     整页文本匹配、纯文本不绑 class(class 可能随改版变化), 供"落地页无签到详情/无按钮反馈"的站
+    //     确认; 非落地页不检测(防其它区域同文本误报); 等价于只对该站启用受限版整页已签检测
     //   successDetect: 点击后成功检测列表(同页 AJAX 场景) [{type:'url'|'text'|'func', ...}], 任一命中即成功
     //   confirmManual: true 表示无可靠成功特征, 点击后记为 pending 待人工确认
     //   batchDelayMs: 批量模式本站处理完后、跳转下一站前的缓冲(ms)
@@ -99,11 +105,15 @@ const K = {
             steps: [CLICK_CHECK_IN]
         },
         {
+            // PTT(PTTime): 签到落地页(attendance.php)本身不显示"签到详情/签到已得"类反馈文案, 但签到成功
+            // 后落地页会出现「总签到记录」记录表头 → 以其为落地确认标记(纯文本匹配, 不绑 class="mt10 fwb"——
+            // class 可能随改版变化); 见配置头 landingCheckedInContent 说明
             id: 'pttime', name: 'PTTime',
             url: 'https://www.pttime.org/',
             checkInSelector: 'a.fcb[href*="attendance.php"]',
             checkInContent: '签到领魔力',
             alreadyCheckedInContent: '签到详情',
+            landingCheckedInContent: '总签到记录', // 落地页确认标记: 签到按钮导向页(路径由按钮 href 推导)整页文本命中才判已签
             steps: [CLICK_CHECK_IN]
         },
         {
@@ -413,6 +423,37 @@ const K = {
         return unit.attendanceUrl || unit.url;
     }
 
+    // 该 unit 签到动作导向的落地页路径(仅 pathname, 无 query/hash): 显式 attendanceUrl 优先;
+    // 否则解析 checkInSelector 里的 href 属性选择器得按钮 href, 再相对 unit.url 解析出绝对路径
+    // (按钮 href 多为 "attendance.php" 这类相对路径)。返回如 "/attendance.php", 解析失败返回 null。
+    // 供 landingCheckedInContent 落地页确认标记判定"当前页是否为签到导向页"——不硬编码 attendance.php,
+    // 各站落地页命名可不同(attendance/signin/...), 一律跟签到按钮 href 走, 天然可扩展。
+    function landingPathOf(unit) {
+        let raw = null;
+        if (unit.attendanceUrl) raw = unit.attendanceUrl;
+        else {
+            const m = /\[href[~|^$*]?=\s*["']([^"']+)["']\]/.exec(unit.checkInSelector || '');
+            if (m) raw = m[1];
+        }
+        if (!raw) return null;
+        try {
+            const u = new URL(raw, unit.url);
+            let p = u.pathname;
+            if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+            return p || null;
+        } catch (e) {
+            return null;
+        }
+    }
+    // 当前页是否该 unit 的签到落地页: pathname 与签到动作导向路径一致(忽略 query; host 已由 matchUnit 保证)
+    function isLandingPageOf(unit) {
+        const target = landingPathOf(unit);
+        if (!target) return false;
+        let cur = location.pathname;
+        if (cur.length > 1 && cur.endsWith('/')) cur = cur.slice(0, -1);
+        return cur === target;
+    }
+
     // ==================== 工具函数 ====================
 
     function sleep(ms) {
@@ -693,6 +734,16 @@ const K = {
             const body = document.body;
             if (body && visibleText(body).includes(unit.alreadyCheckedInContent)) {
                 return { hit: true, source: '页面文案' };
+            }
+        }
+        // 4) 落地页确认标记 — 仅在签到动作导向的落地页(路径由签到按钮 href 推导, 见 isLandingPageOf,
+        //    不写死 attendance.php)上做整页文本匹配: 标记=签到落地后才出现的记录表头等(如 PTT
+        //    「总签到记录」); 纯文本不绑 class(class 会随改版变化), 非落地页不检测(防首页/其它区域
+        //    同文本误报); 落地页由点击跳转而来(被动/批量/调度落地结算共用本函数)
+        if (unit.landingCheckedInContent && isLandingPageOf(unit)) {
+            const body = document.body;
+            if (body && visibleText(body).includes(unit.landingCheckedInContent)) {
+                return { hit: true, source: `落地页标记(${unit.landingCheckedInContent})` };
             }
         }
         return { hit: false };
