@@ -1119,18 +1119,29 @@ const K = {
         .badge.skip { background: rgba(100, 116, 139, 0.16); color: var(--skip); }
         .badge.none { background: var(--surface-2); color: var(--muted); }
         .panel-foot { padding: 10px 14px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
-        .btn-row { display: flex; align-items: center; gap: 8px; }
-        .btn-row .btn-primary { flex: 1; width: auto; }
+        .btn-row { position: relative; display: flex; align-items: stretch; gap: 0; }
+        .btn-row .btn-primary { flex: 1; width: auto; border-radius: 10px 0 0 10px; }
+        .btn-row .btn-primary.full { border-radius: 10px; }
+        /* 强制展开钮: 图标化, 紧贴「批量签到」右侧成拆分按钮组(同色系深紫 + 细分隔线), 展开态/悬停琥珀警示 */
         .force-toggle {
-            flex-shrink: 0; width: 32px; height: 38px; border: 1px solid var(--border);
-            cursor: pointer; border-radius: 10px; background: var(--surface-2);
-            color: var(--muted); font-family: var(--font); font-size: 14px; line-height: 1;
-            transition: color 0.15s ease, background 0.15s ease, transform 0.2s ease;
+            flex-shrink: 0; width: 28px; border: none; cursor: pointer; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 0 10px 10px 0;
+            background: linear-gradient(135deg, #4b53e0, #7a4cf0);
+            color: #fff; border-left: 1px solid rgba(255, 255, 255, 0.28);
+            transition: background 0.15s ease, transform 0.2s ease;
         }
-        .force-toggle:hover:not(:disabled) { color: var(--pend); background: rgba(217, 119, 6, 0.12); }
-        .force-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
-        .force-toggle.open { transform: rotate(180deg); color: var(--pend); }
-        .force-pop { display: none; padding-top: 8px; }
+        .force-toggle svg { width: 15px; height: 15px; }
+        .force-toggle:hover:not(:disabled) { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .force-toggle:disabled { opacity: 0.45; cursor: not-allowed; }
+        /* 展开态仅以琥珀色高亮提示(图标不旋转, 保持 chevron-up) */
+        .force-toggle.open { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        /* 强制弹出层: 点击图标后自批量按钮上方浮出(不占文档流, 覆盖站点列表底部);
+           右缘留出 28px 图标钮宽度 → 弹出按钮与「批量签到」本体对齐 */
+        .force-pop {
+            position: absolute; left: 0; right: 28px; bottom: calc(100% + 6px);
+            display: none; z-index: 12;
+        }
         .force-pop.open { display: block; }
         .force-wrap { position: relative; }
         .btn-force {
@@ -1265,12 +1276,12 @@ const K = {
                 <div class="panel-foot">
                     <div class="btn-row">
                         <button class="btn-primary">批量签到</button>
-                        <button class="force-toggle" title="展开 / 收起「强制批量签到」选项">^</button>
-                    </div>
-                    <div class="force-pop">
-                        <div class="force-wrap">
-                            <button class="btn-force" type="button">强制批量签到</button>
-                            <div class="tooltip">强制批量签到: 将今日「已失败且仍在冷却期(10 分钟)」的站点加入批量, 无视冷却直接重试点击, 适用于站点短暂故障/超时恢复后想立即补签。风险提示: 若站点持续不可用, 强制重试会反复触发点击, 可能触发站点风控/封号, 请确认站点可访问后再使用。</div>
+                        <button class="force-toggle" title="展开 / 收起「强制批量签到」选项"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                        <div class="force-pop">
+                            <div class="force-wrap">
+                                <button class="btn-force" type="button">强制批量签到</button>
+                                <div class="tooltip">强制批量签到: 将今日「已失败且仍在冷却期(10 分钟)」的站点加入批量, 无视冷却直接重试点击, 适用于站点短暂故障/超时恢复后想立即补签。风险提示: 若站点持续不可用, 强制重试会反复触发点击, 可能触发站点风控/封号, 请确认站点可访问后再使用。</div>
+                            </div>
                         </div>
                     </div>
                 </div>`;
@@ -1427,9 +1438,11 @@ const K = {
                 btnForce.textContent = `强制批量签到 (${forceTotal} 站)`;
                 forceToggle.style.display = '';
                 forceToggle.disabled = false;
+                btnBatch.classList.remove('full'); // 拆分按钮组: 批量钮左侧圆角
             } else {
                 forceToggle.style.display = 'none';
                 forceToggle.disabled = true;
+                btnBatch.classList.add('full'); // 独立按钮: 恢复完整圆角
                 setForcePop(false);
             }
         }
