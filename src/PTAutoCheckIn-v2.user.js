@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.08.27
+// @version      2026.09.08.28
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -53,6 +53,7 @@ const POLL_INTERVAL_MS = 1000;                 // 调度页轮询后台标签结
 const PER_UNIT_TIMEOUT_MS = 50 * 1000;         // 单站调度窗口上限(ms): 覆盖标签内整流程 + 落地页结算 + 网络慢
 const PENDING_GRACE_MS = 10 * 1000;            // 状态 pending 后观察窗口(ms): 等待落地页将其改写为 success/failed
 const HEARTBEAT_FRESH_MS = 15 * 1000;          // 调度页心跳保鲜判定(ms): 超过视为调度者已离开(断链/关页)
+const RETRY_LOCK_MS = 30 * 1000;               // 单站前台重试互斥锁窗口(ms): 同站两个重试页不可并发点击; 跳转型页面跳走后锁自然过期
 
 // 存储 key 前缀(GM 存储按脚本共享, 跨域可读, 满足"任意站点查看同一份状态")
 const K = {
@@ -61,7 +62,8 @@ const K = {
     favicon: (uid) => `ptac_favicon_${uid}`,   // 路过收集的站点真实 icon URL(面板列表图标用)
     skin: 'ptac_skin',                          // FAB 外观皮肤: chameleon|number|signal|ring
     task: 'ptac_task',                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
-    alert: (uid) => `ptac_alert_${uid}`        // 签到按钮重现提醒 {date, btnText, ts, state:'on'|'off'}(见 P25)
+    alert: (uid) => `ptac_alert_${uid}`,       // 签到按钮重现提醒 {date, btnText, ts, state:'on'|'off'}(见 P25)
+    retryLock: (uid) => `ptac_retry_${uid}`    // 单站前台重试一次性锁(时间戳 ms): 防同站重试页/落地页并发强点(30s 窗口)
 };
 
 (function () {
@@ -1110,6 +1112,20 @@ const K = {
         try { return new URL(location.href).searchParams.get('ptacTask'); }
         catch (e) { return null; }
     }
+    function readRetryUidFromUrl() {
+        try { return new URL(location.href).searchParams.get('ptacRetry'); }
+        catch (e) { return null; }
+    }
+    // 一次性语义: 剥掉 URL 上的 ptacRetry(history.replaceState 不触发页面刷新/不产生历史记录),
+    // 防用户停留在重试页按 F5/刷新重复强点; 站点内链接跳转(签到后跳落地页)本就丢弃该参数
+    function stripRetryParamFromUrl() {
+        try {
+            const u = new URL(location.href);
+            if (!u.searchParams.has('ptacRetry')) return;
+            u.searchParams.delete('ptacRetry');
+            history.replaceState(null, '', u.pathname + u.search + u.hash);
+        } catch (e) { /* 忽略: 剥参失败不影响本次重试执行 */ }
+    }
     function appendQuery(url, key, value) {
         const sep = url.includes('?') ? '&' : '?';
         return `${url}${sep}${key}=${encodeURIComponent(value)}`;
@@ -1911,6 +1927,12 @@ const K = {
         .badge.pend { background: rgba(217, 119, 6, 0.16); color: var(--pend); }
         .badge.skip { background: rgba(100, 116, 139, 0.16); color: var(--skip); }
         .badge.none { background: var(--surface-2); color: var(--muted); }
+        /* 失败站重试入口: 悬停由「失败」切换为「↻ 重试」(琥珀警示 + 可点击); 点击=前台新标签强制重试 */
+        .badge.retry { cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+        .badge.retry .t-retry { display: none; }
+        .badge.retry:hover { background: rgba(245, 158, 11, 0.22); color: var(--pend); }
+        .badge.retry:hover .t-fail { display: none; }
+        .badge.retry:hover .t-retry { display: inline; }
         .panel-foot { padding: 10px 14px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
         .btn-row { position: relative; display: flex; align-items: stretch; gap: 0; }
         .btn-row .btn-primary { flex: 1; width: auto; border-radius: 10px 0 0 10px; }
@@ -1989,6 +2011,7 @@ const K = {
         let cancelObj = null;
         let batchBase = '';
         let toastEl = null, toastTimer = null;
+        let lastRetryAt = 0; // 单站重试发起时间戳: 8s 内同页防连点(焦点已切新标签, 防切回误触)
         let skin = 'chameleon'; // FAB 皮肤: 变色龙(chameleon)|图标数字(number)|信号灯(signal)|进度光环(ring)
 
         const SVG_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.26"/></svg>';
@@ -2024,14 +2047,19 @@ const K = {
                 // 重现提醒存在即当日已降级 suspect(失败-待确认): 前置警示按钮文案, 后附降级说明
                 sub = `⚠ 签到按钮重现: ${esc(alert.btnText || '')}${sub && sub !== '今日未处理' ? ' · ' + sub : ''}`;
             }
+            const retryable = todayHit && st.status === 'failed'; // 今日失败 → 提供「重试」入口(suspect 待确认/其余状态不提供)
             const url = esc(unit.url);
             const fav = faviconSrc(unit);
+            const badge = retryable
+                ? `<span class="badge err retry" data-uid="${esc(unit.id)}" title="点击: 在新标签页【强制重试】本站(无视 10 分钟冷却, 执行完不关闭标签)。风险提示: 站点持续不可用时反复强制重试可能触发风控/封号, 请先确认站点可访问">`
+                    + `<span class="t-fail">${meta.label}</span><span class="t-retry">↻ 重试</span></span>`
+                : `<span class="badge ${meta.cls}">${meta.label}</span>`;
             return `<div class="row${cool ? ' cool' : ''}${alert ? ' alert' : ''}">`
                 + `<div class="row-main"><div class="row-name" data-url="${url}" title="新标签打开 ${url}">`
                 + (fav ? `<img class="fav" src="${esc(fav)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '')
                 + `<span class="nm">${esc(unit.name)}</span><span class="ext">↗</span></div>`
                 + `<div class="row-sub">${sub}</div></div>`
-                + `<span class="badge ${meta.cls}">${meta.label}</span>`
+                + badge
                 + `</div>`;
         }
 
@@ -2117,6 +2145,14 @@ const K = {
             });
             // 点击站点名 → 新标签页(前台)打开该站; 行内容每次 render 重建, 故用事件委托
             listEl.addEventListener('click', (e) => {
+                // 失败站行内「重试」badge → 前台新标签强制重试(单站, 执行完不关闭标签, 见 openRetryTab)
+                const retryEl = e.target && e.target.closest ? e.target.closest('.badge.retry') : null;
+                if (retryEl) {
+                    const uid = retryEl.getAttribute('data-uid');
+                    const unit = uid ? UNIT_MAP.get(uid) : null;
+                    if (unit) openRetryTab(unit);
+                    return;
+                }
                 const nameEl = e.target && e.target.closest ? e.target.closest('.row-name') : null;
                 if (!nameEl) return;
                 const url = nameEl.getAttribute('data-url');
@@ -2152,6 +2188,29 @@ const K = {
             if (cancelObj) cancelObj.cancelled = true;
         }
         function isCancelled() { return !!(cancelObj && cancelObj.cancelled); }
+
+        // 单站强制重试入口(行内失败 badge 点击): 前台新标签打开带 ptacRetry=<uid> 的 URL,
+        // 重试页对该站执行一次无视冷却的强制签到(forceCooldown, 语义同批量"强制重试"),
+        // 完毕不关闭标签(用户留在页面观察); 与批量任务(ptacTask)完全隔离——不建任务/
+        // 不进调度/不轮询/不关标签。批量调度进行中或任务正处理该站时拒绝(防并行双点)。
+        function openRetryTab(unit) {
+            if (batchActive()) { toast('批量签到进行中, 暂不支持单站重试', 2800, 'warn'); return; }
+            const t = loadTask();
+            // 仅心跳新鲜的活跃调度才阻止(调度正由某页驱动); 已中断(stale)任务放行
+            if (t && !isTaskStale(t) && Date.now() - (t.hb || 0) < HEARTBEAT_FRESH_MS) {
+                const curId = t.list && t.list[t.index];
+                if (curId === unit.id) { toast('批量任务正在处理该站, 请稍后再试', 2800, 'warn'); return; }
+            }
+            const now = Date.now();
+            if (now - lastRetryAt < 8000) return; // 防连点(双击/误触)
+            lastRetryAt = now;
+            try {
+                GM_openInTab(appendQuery(targetUrlOf(unit), 'ptacRetry', unit.id), { active: true });
+                toast(`正在新标签页强制重试: ${unit.name}`, 3000);
+            } catch (e) {
+                toast(`打开重试标签失败: ${unit.name}`);
+            }
+        }
 
         // 展开/收起「强制批量签到」选项区(同时旋转 ^ 按钮)
         function setForcePop(open) {
@@ -2746,6 +2805,42 @@ const K = {
         }
     }
 
+    // ==================== 前台单站强制重试(面板行内「失败 → 重试」入口) ====================
+    // 入口页(UI 面板)在新标签页打开带 ptacRetry=<uid> 的 URL → 本页执行:
+    //   · UI 已注入(main 分支先行 init), 用户留在本页观察执行过程与结果(不关闭标签);
+    //   · runUnitWithTimeout forceCooldown=true: 无视冷却直接签到(语义同批量"强制重试");
+    //   · 与批量任务完全隔离: 不写 task / 不参与调度心跳轮询 / 不关标签; 若调度正活跃且
+    //     任务当前位置正是本站 → 放弃本次(避免与调度点击竞争, 双点有风控风险);
+    //   · 跨标签互斥锁(K.retryLock): 防同站两个重试页并发点击; 本页未跳转销毁即清锁;
+    //     若点击触发整页跳转(跳转型站), 本页销毁锁不清理 → 30s 窗口内落地页再发起会被拦,
+    //     窗口到期自然解除(期间状态已被落地页结算, 重试页实为多余, 提示合理)。
+    async function runRetryUnitPage(unit) {
+        if (dayRollReload()) return; // 跨天守卫(剥参后刷新会以普通访问重走 main, 不会重复强点)
+        const task = loadTask();
+        if (task && !isTaskStale(task)) {
+            const curId = task.list && task.list[task.index];
+            if (curId === unit.id && Date.now() - (task.hb || 0) < HEARTBEAT_FRESH_MS) {
+                UI.toast('批量任务正在处理该站, 已取消本次重试', 3200, 'warn');
+                console.warn(`${ScriptName} 批量调度正在处理该站, 前台重试放弃`);
+                return;
+            }
+        }
+        const lockKey = K.retryLock(unit.id);
+        const lockAt = gmGet(lockKey, 0);
+        if (Date.now() - lockAt < RETRY_LOCK_MS) {
+            UI.toast('该站重试已在进行中, 请稍候(30 秒锁窗口)', 3200, 'warn');
+            return;
+        }
+        gmSet(lockKey, Date.now());
+        const res = await runUnitWithTimeout(unit, { mode: 'retry', forceCooldown: true });
+        gmSet(lockKey, 0); // 本页未跳转销毁 → 立即清锁; 已跳转(跳转型站)本行不执行, 锁自然过期
+        console.log(`${ScriptName} [${unit.name}] 前台重试执行完成: ${res.status}(${res.reason || ''})`);
+        UI.render(); // 状态已由 runUnit 落盘, 刷新面板呈现(失败 → 成功 / 仍失败 / 其它)
+        if (res.status === 'success') UI.toast(`重试成功: ${unit.name}`, 3200);
+        else if (res.status === 'failed') UI.toast(`重试失败: ${unit.name}${res.msg ? ' - ' + res.msg : ''}`, 4200, 'warn');
+        else UI.toast(`未触发点击: ${unit.name}(${res.msg || ''})`, 3200);
+    }
+
     // 中断恢复: 调度页消失(hb 陈旧)后, 用户回到任意匹配页 → 提供横幅一键恢复调度
     function offerBatchResume(task) {
         const unit = UNIT_MAP.get(task.list[task.index]) || null;
@@ -2773,6 +2868,28 @@ const K = {
             console.log(`${ScriptName} 清理过期批量任务(中断超过 ${TASK_STALE_MS / 60000} 分钟)`);
             clearTask();
             task = null;
+        }
+
+        // 前台单站强制重试页(面板行内「失败 → 重试」入口 GM_openInTab 打开, URL 带
+        // ptacRetry=<uid>): 注入 UI(用户留在页面观察执行结果, 不关闭标签), 对该站执行
+        // 一次无视冷却的强制签到(forceCooldown, 语义同批量"强制重试"); 与批量任务隔离。
+        const urlRetryUid = readRetryUidFromUrl();
+        if (urlRetryUid) {
+            stripRetryParamFromUrl(); // 一次性语义: F5/刷新不再重复强点(不影响本站匹配)
+            UI.init();
+            renderPageAlertBar();
+            const retryUnit = UNIT_MAP.get(urlRetryUid);
+            if (!retryUnit || !matchUnit(retryUnit, location.href)) {
+                // uid 不存在或本页实际不是该站(参数残留/手工拼错): 不硬签, 按普通访问处理
+                console.warn(`${ScriptName} 重试页与站点不匹配(uid=${urlRetryUid}), 转入被动模式`);
+                await runPassiveMode();
+            } else {
+                console.log(`${ScriptName} 前台强制重试页, 站点: ${retryUnit.name}`);
+                await runRetryUnitPage(retryUnit);
+            }
+            UI.render();
+            renderPageAlertBar(); // 刷新提醒横条(执行期间可能新增/清除)
+            return;
         }
 
         const urlTaskId = readTaskIdFromUrl();
