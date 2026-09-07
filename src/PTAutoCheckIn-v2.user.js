@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.6
+// @version      2026.09.07.7
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -517,6 +517,11 @@ const K = {
         const elapsed = Date.now() - readCooldown(unitId);
         return Math.max(0, MIN_INTERVAL - elapsed);
     }
+    // 今日失败且仍在冷却期(批量默认排除此类站, 避免白开标签重复点击; 勾选强制重试才纳入)
+    function isFailedInCooldown(unitId) {
+        const st = readStatus(unitId);
+        return !!(st && st.status === 'failed' && st.date === todayStr() && cooldownRemainMs(unitId) > 0);
+    }
 
     // ---------- 批量任务 ----------
     function loadTask() {
@@ -736,8 +741,10 @@ const K = {
         }
 
         // 4) 冷却中 → 跳过点击(检测已在第 2 步完成; 冷却只防高频点击)
+        //    forceCooldown(批量勾选"强制重试")时无视冷却照常点击; 点击前仍会重写冷却,
+        //    若再失败会进入新一轮冷却, 不会连环无脑重试
         const remain = cooldownRemainMs(unit.id);
-        if (remain > 0) {
+        if (remain > 0 && !(ctx && ctx.forceCooldown)) {
             log(`冷却中, 剩余 ${Math.ceil(remain / 1000)} 秒, 跳过本次触发`);
             return { status: 'skipped', msg: `冷却中(${Math.ceil(remain / 1000)}s)`, reason: 'cooldown' };
         }
@@ -948,8 +955,17 @@ const K = {
         }
         .row:last-child { border-bottom: none; }
         .row-main { flex: 1; min-width: 0; }
-        .row-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .row-name {
+            display: flex; align-items: center; gap: 4px; cursor: pointer; min-width: 0;
+            font-weight: 600;
+        }
+        .row-name .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .row-name .ext { font-size: 10px; color: var(--muted); flex-shrink: 0; opacity: 0.8; }
+        .row-name:hover { color: var(--accent-1); }
+        .row-name:hover .ext { opacity: 1; }
         .row-sub { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .row.cool { opacity: 0.72; box-shadow: inset 3px 0 0 var(--pend); }
+        .row.cool .row-sub { color: var(--pend); }
         .badge {
             flex-shrink: 0; font-size: 11px; font-weight: 600;
             padding: 3px 8px; border-radius: 999px; white-space: nowrap;
@@ -960,6 +976,41 @@ const K = {
         .badge.skip { background: rgba(100, 116, 139, 0.16); color: var(--skip); }
         .badge.none { background: var(--surface-2); color: var(--muted); }
         .panel-foot { padding: 10px 14px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
+        .btn-row { display: flex; align-items: center; gap: 8px; }
+        .btn-row .btn-primary { flex: 1; width: auto; }
+        .force-toggle {
+            flex-shrink: 0; width: 32px; height: 38px; border: 1px solid var(--border);
+            cursor: pointer; border-radius: 10px; background: var(--surface-2);
+            color: var(--muted); font-family: var(--font); font-size: 14px; line-height: 1;
+            transition: color 0.15s ease, background 0.15s ease, transform 0.2s ease;
+        }
+        .force-toggle:hover:not(:disabled) { color: var(--pend); background: rgba(217, 119, 6, 0.12); }
+        .force-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+        .force-toggle.open { transform: rotate(180deg); color: var(--pend); }
+        .force-pop { display: none; padding-top: 8px; }
+        .force-pop.open { display: block; }
+        .force-wrap { position: relative; }
+        .btn-force {
+            width: 100%; border: none; cursor: pointer;
+            padding: 9px 0; border-radius: 10px;
+            background: linear-gradient(135deg, #f59e0b, #d97706); /* 琥珀色警示, 与常规按钮区分 */
+            color: #fff; font-size: 13px; font-weight: 600; font-family: var(--font);
+            transition: opacity 0.15s ease, transform 0.1s ease;
+        }
+        .btn-force:hover { opacity: 0.92; }
+        .btn-force:active { transform: scale(0.98); }
+        .force-wrap .tooltip {
+            position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+            width: max-content; max-width: 270px; padding: 9px 12px; border-radius: 10px;
+            background: #1e293b; color: #e2e8f0; font-size: 11px; line-height: 1.6; font-weight: 400;
+            text-align: left; box-shadow: var(--shadow); z-index: 6; pointer-events: none;
+            opacity: 0; visibility: hidden; transition: opacity 0.15s ease 0.1s, visibility 0s linear 0.15s;
+        }
+        .force-wrap .tooltip::after {
+            content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+            border: 6px solid transparent; border-top-color: #1e293b;
+        }
+        .force-wrap:hover .tooltip { opacity: 1; visibility: visible; transition-delay: 0s; }
         .btn-primary {
             width: 100%; border: none; cursor: pointer;
             padding: 10px 0; border-radius: 10px;
@@ -982,7 +1033,7 @@ const K = {
     `;
 
     const UI = (function () {
-        let host = null, fab, fabBadge, chip, chipText, panel, summaryEl, bannerEl, barEl, barTextEl, listEl, btnBatch;
+        let host = null, fab, fabBadge, chip, chipText, panel, summaryEl, bannerEl, barEl, barTextEl, listEl, btnBatch, forceToggle, forcePop, btnForce;
         let cancelObj = null;
         let batchBase = '';
         let toastEl = null, toastTimer = null;
@@ -1006,11 +1057,16 @@ const K = {
             const st = readStatus(unit.id);
             const todayHit = st && st.date === todayStr();
             const meta = statusMeta(todayHit ? st.status : '');
-            const sub = todayHit && st
-                ? `${esc(st.msg || '')}${st.ts ? ' · ' + formatTime(st.ts) : ''}`
-                : '今日未处理';
-            return `<div class="row">`
-                + `<div class="row-main"><div class="row-name">${esc(unit.name)}</div>`
+            const cool = isFailedInCooldown(unit.id);
+            let sub = '今日未处理';
+            if (todayHit && st) {
+                sub = `${esc(st.msg || '')}${st.ts ? ' · ' + formatTime(st.ts) : ''}`;
+                if (cool) sub += ' · 冷却中, 默认不参与批量';
+            }
+            const url = esc(unit.url);
+            return `<div class="row${cool ? ' cool' : ''}">`
+                + `<div class="row-main"><div class="row-name" data-url="${url}" title="新标签打开 ${url}">`
+                + `<span class="nm">${esc(unit.name)}</span><span class="ext">↗</span></div>`
                 + `<div class="row-sub">${sub}</div></div>`
                 + `<span class="badge ${meta.cls}">${meta.label}</span>`
                 + `</div>`;
@@ -1050,16 +1106,47 @@ const K = {
                 <div class="banner"></div>
                 <div class="batchbar"><span class="batchbar-text"></span><button class="stop">停止</button></div>
                 <div class="list"></div>
-                <div class="panel-foot"><button class="btn-primary">批量签到</button></div>`;
+                <div class="panel-foot">
+                    <div class="btn-row">
+                        <button class="btn-primary">批量签到</button>
+                        <button class="force-toggle" title="展开 / 收起「强制批量签到」选项">^</button>
+                    </div>
+                    <div class="force-pop">
+                        <div class="force-wrap">
+                            <button class="btn-force" type="button">强制批量签到</button>
+                            <div class="tooltip">强制批量签到: 将今日「已失败且仍在冷却期(10 分钟)」的站点加入批量, 无视冷却直接重试点击, 适用于站点短暂故障/超时恢复后想立即补签。风险提示: 若站点持续不可用, 强制重试会反复触发点击, 可能触发站点风控/封号, 请确认站点可访问后再使用。</div>
+                        </div>
+                    </div>
+                </div>`;
             summaryEl = panel.querySelector('#summary');
             bannerEl = panel.querySelector('.banner');
             barEl = panel.querySelector('.batchbar');
             barTextEl = panel.querySelector('.batchbar-text');
             listEl = panel.querySelector('.list');
             btnBatch = panel.querySelector('.btn-primary');
+            forceToggle = panel.querySelector('.force-toggle');
+            forcePop = panel.querySelector('.force-pop');
+            btnForce = panel.querySelector('.btn-force');
             panel.querySelector('.panel-close').addEventListener('click', () => closePanel());
             barEl.querySelector('.stop').addEventListener('click', requestCancel);
-            btnBatch.addEventListener('click', startBatch);
+            btnBatch.addEventListener('click', () => startBatch(false));
+            forceToggle.addEventListener('click', () => {
+                if (batchActive()) return;
+                setForcePop(!forcePop.classList.contains('open'));
+            });
+            btnForce.addEventListener('click', () => {
+                setForcePop(false);
+                startBatch(true);
+            });
+            // 点击站点名 → 新标签页(前台)打开该站; 行内容每次 render 重建, 故用事件委托
+            listEl.addEventListener('click', (e) => {
+                const nameEl = e.target && e.target.closest ? e.target.closest('.row-name') : null;
+                if (!nameEl) return;
+                const url = nameEl.getAttribute('data-url');
+                if (!url) return;
+                try { GM_openInTab(url, { active: true }); }
+                catch (err) { toast(`打开站点失败: ${url}`); }
+            });
 
             fab.addEventListener('click', togglePanel);
 
@@ -1081,6 +1168,12 @@ const K = {
         }
         function isCancelled() { return !!(cancelObj && cancelObj.cancelled); }
 
+        // 展开/收起「强制批量签到」选项区(同时旋转 ^ 按钮)
+        function setForcePop(open) {
+            forcePop.classList.toggle('open', !!open);
+            forceToggle.classList.toggle('open', !!open);
+        }
+
         function render() {
             if (!host) return;
             const c = countToday();
@@ -1098,9 +1191,26 @@ const K = {
                 for (const u of g.units) html += buildRowHtml(u);
             }
             listEl.innerHTML = html;
-            const left = remainingCandidates().length;
-            btnBatch.textContent = left > 0 ? `批量签到 (剩余 ${left})` : '批量签到 (今日已完成)';
-            btnBatch.disabled = batchActive() || left === 0;
+            const running = batchActive();
+            const normalLeft = remainingCandidates(false).length;
+            const forceTotal = remainingCandidates(true).length;
+            const forceExtra = forceTotal - normalLeft; // 仅在强制模式下才纳入的失败冷却站数
+            if (normalLeft > 0) {
+                btnBatch.textContent = `批量签到 (剩余 ${normalLeft})`;
+            } else {
+                btnBatch.textContent = forceExtra > 0 ? '批量签到 (常规已完成)' : '批量签到 (今日已完成)';
+            }
+            btnBatch.disabled = running || normalLeft === 0;
+            // 存在可强制重试的失败冷却站才显示展开钮; 全部签到完毕或批量进行中不显示
+            if (!running && forceExtra > 0) {
+                btnForce.textContent = `强制批量签到 (${forceTotal} 站)`;
+                forceToggle.style.display = '';
+                forceToggle.disabled = false;
+            } else {
+                forceToggle.style.display = 'none';
+                forceToggle.disabled = true;
+                setForcePop(false);
+            }
         }
         function batchActive() { return !!(cancelObj); }
 
@@ -1215,8 +1325,9 @@ const K = {
     // 存活, 单站失败/超时由调度窗口兜底自动跳过, 全部完成后停在发起页弹完成面板。
     // 全程低频(单站 1 次点击) + 站间可配缓冲, 不并行; 后台标签用完即关。
 
-    // 待处理候选: enabled 且非今日成功且非"待确认(pending)未过期"
-    function remainingCandidates() {
+    // 待处理候选: enabled 且非今日成功且非"待确认(pending)未过期";
+    // 默认排除"今日失败且仍在冷却期"的站(避免白开标签重复点击), force=true 时纳入(强制重试)
+    function remainingCandidates(force) {
         const out = [];
         for (const u of UNITS) {
             if (u.enabled === false) continue;
@@ -1224,20 +1335,22 @@ const K = {
             const prev = readStatus(u.id);
             if (prev && prev.status === 'pending' && prev.date === todayStr()
                 && Date.now() - prev.ts < MIN_INTERVAL) continue;
+            if (!force && isFailedInCooldown(u.id)) continue;
             out.push(u.id);
         }
         return out;
     }
 
-    // 发起页开始批量: 建任务并立即启动调度循环(本页不导航)
-    function startBatch() {
-        const list = remainingCandidates();
+    // 发起页开始批量: force=true 时纳入"今日失败且仍在冷却期"的站并强制重试(无视冷却点击)
+    function startBatch(force) {
+        force = !!force;
+        const list = remainingCandidates(force);
         if (list.length === 0) {
             UI.toast('今日签到均已成功或均在待确认中');
             return;
         }
         const taskId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-        const task = { taskId, list, index: 0, startedAt: Date.now(), hb: Date.now() };
+        const task = { taskId, list, index: 0, startedAt: Date.now(), hb: Date.now(), force };
         saveTask(task);
         console.log(`${ScriptName} 批量任务已创建: ${list.join(', ')}`);
         UI.toast(`批量开始, 共 ${list.length} 个站点`);
@@ -1366,7 +1479,7 @@ const K = {
             console.warn(`${ScriptName} 后台标签页与任务不匹配, 终止`);
             return;
         }
-        const res = await runUnitWithTimeout(unit, { mode: 'batch' });
+        const res = await runUnitWithTimeout(unit, { mode: 'batch', forceCooldown: !!task.force });
         console.log(`${ScriptName} [${unit.name}] 后台标签执行完成: ${res.status}(${res.reason || ''})`);
         // runUnit 的 skipped(冷却中/今日成功)不落盘状态, 而调度页靠状态回写判定完成:
         // 若今日尚无任何结果写入, 补写本次结果, 避免调度页等待到超时误判为"无法访问"
