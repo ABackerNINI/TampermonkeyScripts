@@ -82,9 +82,11 @@ PT 站大多基于同一套开源代码（NexusPHP 系），但**各站模板与
 
 1. 编辑 `src/*.user.js`。
 2. **递增版本号**：同一天多次修改用 `.N` 递增（`2026.08.30.1` → `2026.08.30.2`）；跨天修改为 `YYYY.MM.DD.1`。
-3. Tampermonkey 安装/更新脚本后，到目标站点页面按 F12 观察 console 日志验证。
-4. 提交信息用中文，简洁描述改动（如「添加XX自动签到」「修复XX签到流程」）。
-5. 推送后脚本可经 `@downloadURL`/`@updateURL` 更新（BilibiliEnterFullscreen 使用 Gitee 直链）。
+3. **同步更新 `ai/` 知识库**：受影响条目（脚本文档/约定/易错点/路线图）与代码同次提交（见 `conventions.md` 第 0.4 节）。
+4. **提交信息规范且详细**：首行概括 + 正文分条说明背景/要点/影响；一次提交只做一件事（见 `conventions.md` 第 1 节）。
+5. Tampermonkey 安装/更新脚本后，到目标站点页面按 F12 观察 console 日志验证。
+6. 推送后脚本可经 `@downloadURL`/`@updateURL` 更新（BilibiliEnterFullscreen 使用 Gitee 直链）。
+7. 测试纪律：可设计易测代码，但不为测试留后门、不为过测试改生产代码（见 `conventions.md` 第 8 节）。
 
 ## 修改脚本时注意
 
