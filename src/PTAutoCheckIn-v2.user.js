@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.3
+// @version      2026.09.07.4
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -81,13 +81,15 @@ const K = {
     //   batchDelayMs: 批量模式本站处理完后、跳转下一站前的缓冲(ms)
     //   enabled: 是否参与批量签到
     //   steps: 步骤数组(click_checkin/click/wait/check/function), 缺省为 [CLICK_CHECK_IN]
+    //   注: 2026.09.07 实测各站签到链接普遍不再带 faqlink class(如 <a href="attendance.php" class="">),
+    //       故 PT 站 checkInSelector 一律不依赖 class, 仅按 href 定位; url 同步为当前有效入口
     const SITES = [
         // ============ PT 站(单站 group) ============
         {
             id: 'tangpt', name: '躺平',
             url: 'https://www.tangpt.top/',
             match: /^https?:\/\/[^/]*\.tangpt\.top\//,
-            checkInSelector: 'a.faqlink[href="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
@@ -103,9 +105,9 @@ const K = {
         },
         {
             id: 'railgun', name: 'Railgun',
-            url: 'https://www.bilibili.download/',
+            url: 'https://bilibili.download/',
             match: /^https?:\/\/bilibili\.download\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
@@ -114,16 +116,16 @@ const K = {
             id: 'ptzone', name: 'PTZone',
             url: 'https://ptzone.xyz/',
             match: /^https?:\/\/ptzone\.xyz\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[簽到得魔力]',
             alreadyCheckedInContent: '簽到已得',
             steps: [CLICK_CHECK_IN]
         },
         {
             id: 'ptsbao', name: 'PTSBao',
-            url: 'https://www.ptsbao.club/',
+            url: 'https://ptsbao.club/',
             match: /^https?:\/\/ptsbao\.club\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
@@ -132,14 +134,14 @@ const K = {
             id: 'hdclone', name: 'HDClone',
             url: 'https://pt.hdclone.top/',
             match: /^https?:\/\/pt\.hdclone\.top\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
         {
             id: 'btschool', name: 'BTSchool',
-            url: 'https://www.pt.btschool.club/',
+            url: 'https://pt.btschool.club/',
             match: /^https?:\/\/pt\.btschool\.club\//,
             checkInSelector: 'a[href*="index.php?action=addbonus"] > font',
             checkInContent: '每日签到',
@@ -148,70 +150,70 @@ const K = {
         },
         {
             id: 'daxiangjiao', name: '大香蕉',
-            url: 'https://www.pt.daxiangjiao.org/',
+            url: 'https://pt.daxiangjiao.org/',
             match: /^https?:\/\/pt\.daxiangjiao\.org\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
         {
             id: 'novahd', name: 'NovaHD',
-            url: 'https://www.pt.novahd.top/',
+            url: 'https://pt.novahd.top/',
             match: /^https?:\/\/pt\.novahd\.top\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
         {
             id: 'ptfans', name: 'PTFans',
-            url: 'https://www.ptfans.cc/',
+            url: 'https://ptfans.cc/',
             match: /^https?:\/\/ptfans\.cc\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
         {
             id: 'carpt', name: 'CarPT',
-            url: 'https://www.carpt.net/',
+            url: 'https://carpt.net/',
             match: /^https?:\/\/carpt\.net\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
         {
             id: 'hdtime', name: 'HDTime',
-            url: 'https://www.hdtime.org/',
+            url: 'https://hdtime.org/',
             match: /^https?:\/\/hdtime\.org\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
         {
             id: 'hdfans', name: 'HDFans',
-            url: 'https://www.hdfans.org/',
+            url: 'https://hdfans.org/',
             match: /^https?:\/\/hdfans\.org\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
         {
             id: 'crabpt', name: 'CrabPT',
-            url: 'https://www.crabpt.vip/',
+            url: 'https://crabpt.vip/',
             match: /^https?:\/\/crabpt\.vip\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得蟹币]',
             alreadyCheckedInContent: '签到已得',
             steps: [CLICK_CHECK_IN]
         },
         {
             id: 'cyanbug', name: 'Cyanbug',
-            url: 'https://www.cyanbug.net/',
+            url: 'https://cyanbug.net/',
             match: /^https?:\/\/cyanbug\.net\//,
             checkInSelector: 'a.nav-btn[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
@@ -220,10 +222,10 @@ const K = {
         },
         { // 点击"立即签到"提交表单后页面刷新显示结果, 需整页级已签检测
             id: 'hdbao', name: 'HDBao',
-            url: 'https://www.hdbao.cc/',
+            url: 'https://hdbao.cc/',
             attendanceUrl: 'https://hdbao.cc/attendance.php',
             match: /^https?:\/\/hdbao\.cc\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             alreadyPageCheck: true,
@@ -250,10 +252,10 @@ const K = {
         },
         { // 同上: 跳页型站点
             id: 'muxuege', name: 'MuXueGe',
-            url: 'https://www.pt.muxuege.org/',
+            url: 'https://pt.muxuege.org/',
             attendanceUrl: 'https://pt.muxuege.org/attendance.php',
             match: /^https?:\/\/pt\.muxuege\.org\//,
-            checkInSelector: 'a.faqlink[href*="attendance.php"]',
+            checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
             alreadyPageCheck: true,
@@ -280,7 +282,7 @@ const K = {
         },
         { // 对话框式签到, 无可靠的成功特征, 点击后记为 pending 待人工确认(实测校准项)
             id: 'pting', name: '蜂巢',
-            url: 'https://www.pting.club/',
+            url: 'https://pting.club/',
             match: /^https?:\/\/pting\.club\//,
             confirmManual: true,
             steps: [
@@ -351,7 +353,7 @@ const K = {
             units: [
                 {
                     id: 'tieba_pt', name: 'pt吧',
-                    url: 'https://www.tieba.baidu.com/f?kw=pt',
+                    url: 'https://tieba.baidu.com/f?kw=pt',
                     match: (href) => { // 按 URL 参数 kw 判定所属吧, 比正则更可靠
                         try { return new URL(href).searchParams.get('kw') === 'pt'; }
                         catch (e) { return false; }
@@ -367,7 +369,7 @@ const K = {
                 },
                 {
                     id: 'tieba_hdsky', name: 'hdsky吧',
-                    url: 'https://www.tieba.baidu.com/f?kw=hdsky',
+                    url: 'https://tieba.baidu.com/f?kw=hdsky',
                     match: (href) => {
                         try { return new URL(href).searchParams.get('kw') === 'hdsky'; }
                         catch (e) { return false; }
@@ -751,8 +753,8 @@ const K = {
             }
         } catch (e) {
             warn(`签到步骤执行失败: ${e.message}`);
-            writeStatus(unit.id, 'failed', `步骤失败: ${e.message.slice(0, 60)}`);
-            return { status: 'failed', msg: e.message.slice(0, 60), reason: 'step_error' };
+            writeStatus(unit.id, 'failed', `步骤失败: ${e.message.slice(0, 200)}`);
+            return { status: 'failed', msg: e.message.slice(0, 200), reason: 'step_error' };
         }
 
         // 6) 点击后确认: 先落盘 pending(防跳页丢状态), 再同页检测
@@ -796,8 +798,8 @@ const K = {
             ]);
         } catch (e) {
             console.error(`${ScriptName} [${unit.name}] 未捕获异常:`, e);
-            if (!isSuccessToday(unit.id)) writeStatus(unit.id, 'failed', e.message.slice(0, 60));
-            return { status: 'failed', msg: e.message.slice(0, 60), reason: 'exception' };
+            if (!isSuccessToday(unit.id)) writeStatus(unit.id, 'failed', e.message.slice(0, 200));
+            return { status: 'failed', msg: e.message.slice(0, 200), reason: 'exception' };
         }
     }
 

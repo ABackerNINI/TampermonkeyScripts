@@ -1,6 +1,6 @@
 # PTAutoCheckIn-v2.user.js — PT 多站点自动签到 v2
 
-> 源文件：`src/PTAutoCheckIn-v2.user.js` ｜ 版本 `2026.09.07.3`（升级时同步更新）
+> 源文件：`src/PTAutoCheckIn-v2.user.js` ｜ 版本 `2026.09.07.4`（升级时同步更新）
 > ⚠️ 状态：**v2 重构版, 待实测校准后并入正式版**。原 `src/PTAutoCheckIn.user.js`（v2026.08.30.1）暂保留；并入时改回 `@name PTAutoCheckIn` 并递增版本号, 删除旧文件。
 
 ## 功能概述
@@ -97,25 +97,27 @@
 
 ## 已有站点一览(18 PT + 贴吧 2 吧)
 
+> 2026.09.07 实测各站签到链接普遍不再带 `faqlink` class, 故所有 PT 站 `checkInSelector` 一律去掉 class 依赖(仅按 `href*="attendance.php"` 定位); PTTime 保留 `a.fcb`、Cyanbug 保留 `a.nav-btn`(非 faqlink, 实测仍有效)。站点 `url` 同步更新为当前有效入口(大多去掉 `www.` 前缀, 与 `match` 保持一致)。
+
 | unit | 域名/kw | 入口选择器 | 签到文案 / 已签特征 | 备注 |
 |------|---------|-----------|-------------------|------|
-| 躺平 | tangpt.top | `a.faqlink[href="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| 躺平 | tangpt.top | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | PTTime | pttime.org | `a.fcb[href*="attendance.php"]` | `签到领魔力` / `签到详情` | — |
-| Railgun | bilibili.download | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| PTZone | ptzone.xyz | `a.faqlink[href*="attendance.php"]` | `[簽到得魔力]`(繁) / `簽到已得` | — |
-| PTSBao | ptsbao.club | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| HDClone | pt.hdclone.top | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| Railgun | bilibili.download | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| PTZone | ptzone.xyz | `a[href*="attendance.php"]` | `[簽到得魔力]`(繁) / `簽到已得` | — |
+| PTSBao | ptsbao.club | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| HDClone | pt.hdclone.top | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | BTSchool | pt.btschool.club | `a[href*="index.php?action=addbonus"] > font` | `每日签到` / `签到已得` | — |
-| 大香蕉 | pt.daxiangjiao.org | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| NovaHD | pt.novahd.top | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| PTFans | ptfans.cc | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| CarPT | carpt.net | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| HDTime | hdtime.org | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| HDFans | hdfans.org | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| CrabPT | crabpt.vip | `a.faqlink[href*="attendance.php"]` | `[签到得蟹币]` / `签到已得` | — |
+| 大香蕉 | pt.daxiangjiao.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| NovaHD | pt.novahd.top | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| PTFans | ptfans.cc | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| CarPT | carpt.net | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| HDTime | hdtime.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| HDFans | hdfans.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| CrabPT | crabpt.vip | `a[href*="attendance.php"]` | `[签到得蟹币]` / `签到已得` | — |
 | Cyanbug | cyanbug.net | `a.nav-btn[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| HDBao | hdbao.cc | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 跳页; `attendanceUrl` 直达; `alreadyPageCheck:true` |
-| MuXueGe | pt.muxuege.org | `a.faqlink[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 同上 |
+| HDBao | hdbao.cc | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 跳页; `attendanceUrl` 直达; `alreadyPageCheck:true` |
+| MuXueGe | pt.muxuege.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 同上 |
 | 蜂巢 | pting.club | 无(函数选择器) | — / — | 对话框式; `confirmManual:true` |
 | pt吧 | tieba f?kw=pt | `.button-wrapper.operate-btn.follow-sign` | `签到` / `连签` | `batchDelayMs:3000` |
 | hdsky吧 | tieba f?kw=hdsky | 同上 | 同上 | 同上 |
@@ -153,7 +155,7 @@ boot()
 1. 贴吧：已签特征文案(现配 `连签`)、点击后成功文案(现配 body 含 `签到成功`)、未关注吧时按钮缺失的行为。
 2. 蜂巢：无可靠成功特征(confirmManual 记 pending)——若有可靠特征(按钮文案/对话框消失)可改为 successDetect。
 3. HDBao / MuXueGe：`attendanceUrl` 落地页的整页已签文案检测是否误报/漏报(**全部站点默认关闭整页检测, 仅这两站显式开启**; 注意站内其他区域是否含 `签到已得` 字样)。
-4. 其余 15 个 PT 站：按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。
+4. 其余 15 个 PT 站：按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。
 5. 批量调度(重点)：发起页停留不动, 后台标签逐个打开签到并自动关闭; 模拟单站断网/无法访问 → 50s 窗口后写 failed 自动跳过继续下一站(不再死链); 点击跳转型站落地页结算写 success; 调度中途关闭发起页 → 其它站横幅提示「恢复批量」一键续跑。
 6. 深浅色主题切换、批量完成面板在任意站打开的一致性(完成后面板停留发起页, 其它站打开面板数据一致)。
 
