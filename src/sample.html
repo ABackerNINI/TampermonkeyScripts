@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动态日冕辉光 · 融合中心图标</title>
+    <!-- 引用 Font Awesome 作为图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* 全局重置与深空背景 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #0b0e1a 0%, #03050b 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+
+        /* 核心容器 - 负责定位所有元素 */
+        .solar-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* 底层微弱的环境光晕，与图标融合 */
+            background: radial-gradient(circle at center, rgba(255, 180, 50, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        /* ---------- 阳光射线层 (动态生成) ---------- */
+        .ray {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            transform-origin: bottom center;
+            /* 旋转角度由 JS 行内样式控制 */
+            transform: rotate(var(--angle, 0deg));
+            width: 3px;
+            /* 高度由 JS 随机生成，范围在 120px ~ 220px */
+            height: var(--ray-height, 150px);
+            /* 底部对齐圆心 */
+            margin-bottom: 0;
+            /* 让射线底部精准落在圆心 */
+            transform: rotate(var(--angle, 0deg));
+            /* 关键：射线背景从亮金渐变到完全透明，实现羽化融合 */
+            background: linear-gradient(to top,
+                    rgba(255, 220, 100, 0.9) 0%,
+                    rgba(255, 180, 50, 0.6) 30%,
+                    rgba(255, 120, 20, 0.2) 70%,
+                    transparent 100%);
+            border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+            filter: blur(1px);
+            /* 轻微模糊增加辉光质感 */
+            opacity: 0;
+            animation: solarPulse var(--duration, 2s) ease-in-out infinite alternate;
+            animation-delay: var(--delay, 0s);
+            /* 随机宽度微调 */
+            width: var(--ray-width, 4px);
+        }
+
+        /* 核心脉冲动画 - 模仿阳光随机的呼吸与闪烁 */
+        @keyframes solarPulse {
+            0% {
+                opacity: 0.15;
+                transform: rotate(var(--angle, 0deg)) scaleY(0.6);
+                filter: blur(2px);
+            }
+
+            50% {
+                opacity: 0.9;
+                transform: rotate(var(--angle, 0deg)) scaleY(1.1);
+                filter: blur(0px);
+            }
+
+            100% {
+                opacity: 0.3;
+                transform: rotate(var(--angle, 0deg)) scaleY(0.8);
+                filter: blur(1.5px);
+            }
+        }
+
+        /* ---------- 中心图标层 (与辉光深度融合) ---------- */
+        .center-icon {
+            position: relative;
+            z-index: 10;
+            /* 置于射线之上 */
+            width: 110px;
+            height: 110px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at 30% 30%, #fff8e0, #ffb347 60%, #e07c1f);
+            border-radius: 50%;
+            font-size: 55px;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(255, 200, 100, 0.8);
+            box-shadow:
+                0 0 40px 10px rgba(255, 180, 50, 0.6),
+                /* 内圈辉光 */
+                0 0 100px 30px rgba(255, 120, 20, 0.4),
+                /* 中圈辉光 */
+                0 0 200px 60px rgba(255, 80, 0, 0.2);
+            /* 外圈弥散辉光 */
+            /* 增加内发光纹理，让图标感觉在发光而非被照射 */
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: box-shadow 0.3s ease;
+            cursor: default;
+            /* 微妙的图标自身脉动 */
+            animation: iconBreath 3s ease-in-out infinite alternate;
+        }
+
+        /* 图标内部的柔光叠加层（进一步融合） */
+        .center-icon::before {
+            content: '';
+            position: absolute;
+            inset: -15px;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, rgba(255, 200, 100, 0.4), transparent 70%);
+            filter: blur(20px);
+            z-index: -1;
+            animation: glowExpand 4s ease-in-out infinite alternate;
+        }
+
+        /* 图标脉动，让融合感更生动 */
+        @keyframes iconBreath {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 40px 10px rgba(255, 180, 50, 0.6), 0 0 100px 30px rgba(255, 120, 20, 0.4);
+            }
+
+            100% {
+                transform: scale(1.03);
+                box-shadow: 0 0 60px 20px rgba(255, 200, 80, 0.8), 0 0 150px 50px rgba(255, 150, 40, 0.5), 0 0 250px 80px rgba(255, 80, 0, 0.3);
+            }
+        }
+
+        @keyframes glowExpand {
+            0% {
+                opacity: 0.6;
+                transform: scale(1);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+        }
+
+        /* 中心图标内部的图标样式微调 */
+        .center-icon i {
+            filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.5));
+            transition: transform 0.3s ease;
+        }
+
+        /* 悬浮效果：加强融合反馈 */
+        .center-icon:hover {
+            box-shadow: 0 0 80px 30px rgba(255, 200, 100, 0.9), 0 0 200px 60px rgba(255, 150, 50, 0.6);
+        }
+
+        .center-icon:hover i {
+            transform: scale(1.1);
+        }
+
+        /* 背景点缀星星（增加深邃感，衬托阳光） */
+        .stars {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                radial-gradient(2px 2px at 20px 30px, #eee, transparent),
+                radial-gradient(2px 2px at 40px 70px, rgba(255, 255, 255, 0.8), transparent),
+                radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+                radial-gradient(1px 1px at 160px 120px, #ddd, transparent),
+                radial-gradient(2px 2px at 200px 50px, rgba(255, 255, 255, 0.6), transparent),
+                radial-gradient(1px 1px at 300px 80px, #fff, transparent);
+            background-size: 400px 200px;
+            background-repeat: repeat;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 背景星点 -->
+    <div class="stars"></div>
+
+    <div class="solar-container" id="solarContainer">
+        <!-- 阳光射线将由 JavaScript 动态注入到这里 -->
+
+        <!-- 中心图标 (Font Awesome 的太阳，也可换成 bolt/star) -->
+        <div class="center-icon">
+            <i class="fas fa-sun"></i>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const container = document.getElementById('solarContainer');
+            const rayCount = 18; // 18束射线，营造丰富但不杂乱的阳光感
+
+            // 获取第一个子元素（中心图标），用于将射线插入在图标之前
+            const centerIcon = container.querySelector('.center-icon');
+
+            for (let i = 0; i < rayCount; i++) {
+                const ray = document.createElement('div');
+                ray.className = 'ray';
+
+                // 1. 随机角度 (0 ~ 360度)，确保覆盖整个圆周
+                const angle = (i / rayCount) * 360 + (Math.random() * 15 - 7.5); // 加入随机偏移，破坏完全对称
+                // 2. 随机高度 (140px ~ 240px)，产生长短不一的阳光
+                const height = 140 + Math.random() * 100;
+                // 3. 随机动画持续时间 (1.8s ~ 3.8s)，快慢结合
+                const duration = 1.8 + Math.random() * 2.0;
+                // 4. 随机动画延迟 (0s ~ 2.5s)，避免同步，产生随机闪烁感
+                const delay = Math.random() * 2.5;
+                // 5. 随机宽度 (2px ~ 6px)，粗细不均更自然
+                const width = 2 + Math.random() * 4;
+
+                // 应用 CSS 自定义属性
+                ray.style.setProperty('--angle', angle + 'deg');
+                ray.style.setProperty('--ray-height', height + 'px');
+                ray.style.setProperty('--duration', duration + 's');
+                ray.style.setProperty('--delay', delay + 's');
+                ray.style.setProperty('--ray-width', width + 'px');
+
+                // 额外：随机调整动画关键帧的起始透明度（通过行内样式叠加，但不破坏动画，直接设置初始opacity）
+                // 其实动画会覆盖，我们让动画从0开始，但为了更随机，可以在动画里处理，这里保持默认。
+
+                // 将射线插入到容器中，但在中心图标之前（这样射线背景在图标下层，但视觉上从图标边缘发出）
+                container.insertBefore(ray, centerIcon);
+            }
+
+            // 补充几束特别长且细的“日冕射线”，增加随机层次（可选）
+            // 这里再额外添加 4 束特殊射线
+            for (let i = 0; i < 4; i++) {
+                const ray = document.createElement('div');
+                ray.className = 'ray';
+                const angle = Math.random() * 360;
+                const height = 250 + Math.random() * 60; // 更长
+                const duration = 2.5 + Math.random() * 1.5;
+                const delay = Math.random() * 3;
+                const width = 1 + Math.random() * 2; // 更细
+                ray.style.setProperty('--angle', angle + 'deg');
+                ray.style.setProperty('--ray-height', height + 'px');
+                ray.style.setProperty('--duration', duration + 's');
+                ray.style.setProperty('--delay', delay + 's');
+                ray.style.setProperty('--ray-width', width + 'px');
+                // 让这几束更亮一点（通过修改背景色的alpha？但为了通用，不额外处理）
+                container.insertBefore(ray, centerIcon);
+            }
+        })();
+    </script>
+</body>
+
+</html>

@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.10
+// @version      2026.09.07.11
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -964,39 +964,82 @@ const K = {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.15); text-shadow: 0 0 16px rgba(255, 255, 255, 0.9); }
         }
-        /* FAB 皮肤: 进度光环(光环) — 主体保持紫底不变, 外圈 conic 渐变弧由 --ring-p 控比例;
-           配色: 默认青→品红渐变(紫底上对比鲜明), 全完成→绿满环, 今日有失败→琥珀起点红终点警示弧;
-           抗锯齿: mask 内外缘各羽化 1px(消除硬切圆环锯齿), 环与按钮主体间由羽化平滑过渡 */
+        /* FAB 皮肤: 进度光环(光环) — 中间圆本体透明, ::before 合成紫罩+彩环:
+           ①紫罩(径向 closest-side, 中心紫实→越边缘越透明, 实盖至圆缘)= 图标底兼"盖光层"
+           (sample.html 中 center-icon 盖住射线根的作用由此承担: 光芒沉在它下层, 根不外穿);
+           ②--ring-grad 全幅 conic 彩(成功绿/失败粉/待办灰段, 段弧长=站数占比)兼作彩带与
+           圆内透出色; 段色 alpha 低(0.34/0.26) → 常亮辉光弱。
+           辉光呼吸 ringBreathe(brightness 明暗 + drop-shadow 外扩收拢, 幅度小不抢戏)。
+           光芒动感 = 完全复刻 sample.html 太阳算法(逐条真实 DOM 射线; 不用 translateY 锚圆缘/
+           不用埋段+mask 挖孔/不用平台渐变——那几轮发挥都被证伪): 每条射线底边锚圆心、
+           rotate 绕圆心指向均分角+随机扰动(±7.5°), 全长 = 圆心到尖端(根部被 ::before 紫罩
+           盖住, 露出=圆缘外的渐变尾段); 渐变 sample 金档 0.9@0 → 0.6@30% → 0.2@70% →
+           0@100%(根亮尖透, 无平台), 顶部半圆帽弧形收窄, filter blur(1px) 羽化; 静态
+           opacity 0, 动画 rayPulse 三帧(sample solarPulse): 0.15 弱/blur2 → 0.9 峰/blur0 →
+           0.3 缓/blur1.5, alternate 往复 + 正 delay 错相 → 逐条呼吸闪烁(峰值锐利、低谷模糊
+           柔化); 主 18 束 + 4 日冕长细束(sample 同款数量, 长/细/慢/更长延迟)。层序:
+           ring-rays z-index:-1 沉到 ::before 之下(根被中心紫罩盖, 光从圆缘外浮出)、
+           fab-core(图标 z1)/fab-badge(z2)最上; 本体 background 透明 + animation:none(关
+           baseGlow) + box-shadow 换柔和紫光晕(透明圆上黑硬投影破坏光感)。中间圆不做波纹
+           (transform 留给 hover/active 反馈)。 */
         .fab.ring {
-            background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-            animation: none;
-            --ring-c1: #22d3ee; --ring-c2: #e879f9; --ring-gl: rgba(34, 211, 238, 0.55);
+            background: transparent;
+            animation: none; /* 本体透明圆: 必须关掉 .fab 默认 baseGlow(外圈紫晕又强又与呼吸脱节), 辉光全交给 ::before 弱呼吸 + DOM 光芒 */
+            box-shadow: 0 0 14px rgba(139, 92, 246, 0.28), 0 0 42px rgba(139, 92, 246, 0.14); /* 透明圆上硬黑投影换成柔和紫环境光(贴 sample 中心太阳光效) */
         }
-        .fab.ring::before {
-            content: ''; position: absolute; inset: -6px; border-radius: 50%;
-            background: conic-gradient(from -90deg,
-                    var(--ring-c1, #22d3ee) 0%,
-                    var(--ring-c2, #e879f9) var(--ring-p, 0%),
-                    rgba(148, 163, 184, 0.35) var(--ring-p, 0%) 100%);
+        .fab.ring .fab-core { position: relative; z-index: 1; }
+        .fab.ring .fab-badge { z-index: 2; }
+        .fab.ring::before { /* 紫罩蒙版(图标底 + 盖光层, 实盖至圆缘 26px 让光芒根不外穿) + 全幅分段彩光(彩带); 呼吸幅度已收敛(辉光勿过强) */
+            content: ''; position: absolute; inset: -13px; border-radius: 50%;
+            background:
+                radial-gradient(circle closest-side at 50% 50%,
+                        var(--accent-2) 0%, var(--accent-1) 42%, transparent 67%),
+                var(--ring-grad, rgba(148, 163, 184, 0.26));
             -webkit-mask: radial-gradient(farthest-side,
-                    transparent calc(100% - 7px),
-                    #000 calc(100% - 6px),
-                    #000 calc(100% - 1px),
-                    transparent 100%);
-                    mask: radial-gradient(farthest-side,
-                    transparent calc(100% - 7px),
-                    #000 calc(100% - 6px),
-                    #000 calc(100% - 1px),
-                    transparent 100%);
-            animation: ringGlow 2s ease-in-out infinite;
+                    #000 0%, #000 calc(100% - 13px), transparent calc(100% - 5px));
+            mask: radial-gradient(farthest-side,
+                    #000 0%, #000 calc(100% - 13px), transparent calc(100% - 5px));
+            animation: ringBreathe 3.6s ease-in-out infinite;
             pointer-events: none;
         }
-        @keyframes ringGlow {
-            0%, 100% { filter: drop-shadow(0 0 3px var(--ring-gl, transparent)); }
-            50% { filter: drop-shadow(0 0 12px var(--ring-gl, transparent)); }
+        @keyframes ringBreathe { /* 辉光呼吸(弱): blur 重声明防被动画覆盖; 幅度小=呼吸仍在但辉光不刺眼 */
+            0%, 100% { filter: blur(2px) brightness(0.96) drop-shadow(0 0 2px rgba(167, 139, 250, 0.22)); }
+            50% { filter: blur(2px) brightness(1.07) drop-shadow(0 0 9px rgba(167, 139, 250, 0.42)); }
         }
-        .fab.ring.ok::before { --ring-c1: #86efac; --ring-c2: #16a34a; --ring-gl: rgba(74, 222, 128, 0.65); }
-        .fab.ring.err::before { --ring-c1: #fbbf24; --ring-c2: #ef4444; --ring-gl: rgba(239, 68, 68, 0.6); }
+        .fab.ring .ring-rays { /* 光芒容器: 仅作定位(射线底边 bottom:50% = fab 中心); 无 mask 无裁剪——
+                                   射线根部由 ::before 紫罩盖住(本容器 z-index:-1 沉于其下), 与 sample.html
+                                   中心图标盖射线根同构; 容器大小不影响显示(射线溢出可见) */
+            position: absolute; inset: -60px; pointer-events: none; z-index: -1;
+        }
+        .fab.ring .ray { /* 单条光芒(完全照 sample.html): 底边锚圆心、rotate(var(--a)) 绕圆心指向角度
+                            (勿加 translateY——rotate 绕 transform-origin=底边中心, 根会全叠圆正上一点
+                            呈折扇); 全长 --h = 圆心到尖端(根部被 ::before 盖住, 露出=圆缘外渐变尾段);
+                            渐变 sample 金档 0.9@0 → 0.6@30% → 0.2@70% → 透明(根亮尖透, 无平台) +
+                            顶部半圆帽弧形收窄 + filter blur(1px) 羽化; 静态 opacity 0(动画 0.15 起),
+                            三帧 rayPulse 呼吸 + 正 delay 错相 */
+            position: absolute; bottom: 50%; left: 50%;
+            transform-origin: bottom center;
+            width: var(--w, 3px); height: var(--h, 100px);
+            margin-left: calc(var(--w, 3px) / -2);
+            background: linear-gradient(to top,
+                    rgba(255, 220, 100, 0.9) 0%,
+                    rgba(255, 180, 50, 0.6) 30%,
+                    rgba(255, 120, 20, 0.2) 70%,
+                    transparent 100%);
+            border-radius: 50% 50% 0 0 / 100% 100% 0 0; /* 顶部半圆帽: 顶边弧形收窄(同 sample.html) */
+            filter: blur(1px);
+            transform: rotate(var(--a, 0deg));
+            opacity: 0;
+            animation: rayPulse var(--d, 2s) ease-in-out var(--del, 0s) infinite alternate;
+            pointer-events: none;
+        }
+        @keyframes rayPulse { /* 光芒呼吸(照 sample.html solarPulse 三帧): 低谷 0.15 弱且 blur2 柔化 →
+                                峰值 0.9 亮且 blur0 锐利 → 0.3 缓且 blur1.5; alternate 往复 + 正 delay
+                                错相 → 逐条闪烁(峰值时射线清晰带尖); 动画覆盖 transform/filter, 须重组 */
+            0% { opacity: 0.15; transform: rotate(var(--a, 0deg)) scaleY(0.6); filter: blur(2px); }
+            50% { opacity: 0.9; transform: rotate(var(--a, 0deg)) scaleY(1.1); filter: blur(0px); }
+            100% { opacity: 0.3; transform: rotate(var(--a, 0deg)) scaleY(0.8); filter: blur(1.5px); }
+        }
         .chip {
             position: fixed; right: 84px; bottom: 30px; z-index: 2147483000;
             display: none; align-items: center; gap: 8px; max-width: 300px;
@@ -1058,7 +1101,7 @@ const K = {
         .skin-dot.d1 { background: linear-gradient(135deg, #16a34a, #5b6cff); }       /* 变色: 完成绿/未完紫 */
         .skin-dot.d2 { background: #5b6cff; }                                          /* 数字: 主体紫 */
         .skin-dot.d3 { background: conic-gradient(#16a34a 0 120deg, #d97706 120deg 240deg, #e5484d 240deg); } /* 信号灯三色 */
-        .skin-dot.d4 { background: conic-gradient(#5b6cff 0 300deg, rgba(127, 133, 150, 0.35) 300deg); }      /* 光环弧 */
+        .skin-dot.d4 { background: conic-gradient(#6ee7b7 0 210deg, #fda4af 210deg 270deg, rgba(127, 133, 150, 0.6) 270deg); } /* 光环: 柔和淡绿多段/淡粉/灰示例 */
         .banner {
             display: none; margin: 10px 14px 0; padding: 8px 12px; border-radius: 10px;
             background: rgba(22, 163, 74, 0.12); color: var(--ok); font-weight: 600;
@@ -1268,7 +1311,7 @@ const K = {
                     <button class="skin-btn" type="button" data-skin="chameleon" title="变色(默认): 全部完成→绿底✓无角标; 有站点未签→紫底✓ + 红底剩余数角标"><span class="skin-dot d1"></span>变色</button>
                     <button class="skin-btn" type="button" data-skin="number" title="数字: 有未签时 FAB 主体用大字直接显示剩余站数(绿角标=今日成功数); 全部完成→✓"><span class="skin-dot d2"></span>数字</button>
                     <button class="skin-btn" type="button" data-skin="signal" title="信号灯: 全部完成→绿底✓; 今日有失败→红底! + 失败数角标; 仅未完成→琥珀底✓ + 剩余数角标"><span class="skin-dot d3"></span>信号灯</button>
-                    <button class="skin-btn" type="button" data-skin="ring" title="光环: 外圈按今日成功比例画渐变进度弧(青→品红, 带辉光呼吸); 全部完成→绿色满环; 今日有失败→琥珀到红色的警示弧; 绿角标=成功数"><span class="skin-dot d4"></span>光环</button>
+                    <button class="skin-btn" type="button" data-skin="ring" title="光环: 分段彩光贴圆缘(成功绿/失败粉/待办灰段, 段长=站数占比)+弱辉光呼吸(明暗+光晕外扩收拢), 真实 DOM 日冕射线逐条独立呼吸(复刻 sample.html 太阳: 金色渐变长射线根部被中心圆盖住、从圆缘向外发散, 均分角+随机扰动, 长短/粗细/周期/延迟随机, blur 羽化+三帧呼吸峰值锐利, 逐条错相闪烁, 每页图案不同); 绿角标=成功数"><span class="skin-dot d4"></span>光环</button>
                 </div>
                 <div class="banner"></div>
                 <div class="batchbar"><span class="batchbar-text"></span><button class="stop">停止</button></div>
@@ -1365,6 +1408,7 @@ const K = {
         // 语义统一: 全部完成 vs 有站点未签到 必须有明显差异, 四种皮肤各按自身语言表达
         function applyFabSkin(c) {
             fab.classList.remove('ok', 'warn', 'err', 'ring', 'chameleon');
+            if (skin !== 'ring') fab.querySelectorAll('.ring-rays').forEach((el) => el.remove()); // 切走 ring 时移除 DOM 光芒(样式挂在 .fab.ring 下, 不清理会残留裸元素)
             const left = c.total - c.success;       // 未成功站数(含失败/pending/skipped/未处理)
             const allDone = c.total > 0 && left <= 0;
             switch (skin) {
@@ -1380,13 +1424,47 @@ const K = {
                     else { fab.classList.add('warn'); fabCore.innerHTML = SVG_ICON; setFabBadge(left, 'warn'); }
                     break;
                 }
-                case 'ring': { // 进度光环: 主体保持紫底; 外圈渐变弧=完成比例; 全完成→绿满环; 今日有失败→红警示弧
+                case 'ring': { // 进度光环: 弧按状态分段(成功绿/失败粉/待办灰, 段长=各状态站数占比, alpha 0.34/0.26 常亮弱); 辉光 ringBreathe 呼吸(brightness+drop-shadow 外扩收拢); 光芒=完全复刻 sample.html 太阳算法(射线底锚圆心 rotate 绕圆心, 不 translateY/不埋段/不 mask 挖孔): 全长=圆心到尖, 根部被 ::before 紫罩盖(rays z:-1 沉其下), 渐变 sample 金档 0.9@0→0.6@30→0.2@70→透明 + blur 羽化 + 半圆帽; rayPulse 三帧呼吸(0.15 blur2 → 0.9 峰 blur0 → 0.3 blur1.5)alternate + 正 delay 错相; 主 18 束均分±7.5° 扰动 + 日冕长细 4 束全随机角
                     fab.classList.add('ring');
                     fabCore.innerHTML = SVG_ICON;
-                    const pct = c.total > 0 ? Math.round(c.success / c.total * 100) : 0;
-                    fab.style.setProperty('--ring-p', (allDone ? 100 : pct) + '%');
-                    fab.classList.toggle('ok', allDone);
-                    fab.classList.toggle('err', !allDone && c.failed > 0);
+                    if (!fab.querySelector('.ring-rays')) { // DOM 光芒只生成一次(图案随机, 每次页面加载不同); 切走再切回时已移除会重建
+                        const raysBox = document.createElement('div');
+                        raysBox.className = 'ring-rays';
+                        let html = '';
+                        const ray = (a, h, w, dur, del) => { // 完全照 sample.html 生成: 角度/全长高/宽/周期/正延迟
+                            html += `<i class="ray" style="--a:${a.toFixed(1)}deg;--h:${h.toFixed(1)}px;--w:${w.toFixed(1)}px;--d:${dur.toFixed(2)}s;--del:${del.toFixed(2)}s"></i>`; // --del 正延迟(动画静止中等待, 各条错相闪烁); 全长 h=圆心到尖, 根部(0~26px)被 ::before 紫罩盖 → 露出=圆缘外渐变尾段(0.9→0.6→0.2→透明, 尖端渐隐)
+                        };
+                        const n = 18; // 主光芒 18 束(同 sample.html): 均分 360 + 随机扰动, 覆盖全周
+                        for (let i = 0; i < n; i++) {
+                            ray(i / n * 360 + (Math.random() * 15 - 7.5), // 均匀基准角 ±7.5° 扰动(破呆板对称)
+                                70 + Math.random() * 54,                  // 全长 70~124(圆心到尖; 圆缘外露段 ≈ 44~98)
+                                1.8 + Math.random() * 2.8,                // 宽 1.8~4.6px(柔光带)
+                                1.8 + Math.random() * 2.0,                // 周期 1.8~3.8s
+                                Math.random() * 2.5);                     // 延迟 0~2.5s
+                        }
+                        for (let i = 0; i < 4; i++) { // 日冕长细射线 4 束(同 sample.html): 全随机角, 更长更细更慢
+                            ray(Math.random() * 360,
+                                118 + Math.random() * 44,                 // 全长 118~162(露段 ≈ 92~136)
+                                1 + Math.random() * 1.6,                  // 更细 1~2.6px
+                                2.5 + Math.random() * 1.5,                // 更慢 2.5~4s
+                                Math.random() * 3);                       // 延迟 0~3s
+                        }
+                        raysBox.innerHTML = html;
+                        fab.insertBefore(raysBox, fabCore); // 插到图标之前; rays z:-1 沉 ::before 下 → 根被中心紫罩盖, 光从圆缘外浮出
+                    }
+                    const T = c.total > 0 ? c.total : 1;
+                    const segs = [];
+                    let cur = 0;
+                    const seg = (n, from, to) => {
+                        if (n <= 0 || cur >= 100) return;
+                        const end = Math.min(100, cur + n / T * 100);
+                        segs.push(from + ' ' + cur + '%', to + ' ' + end + '%');
+                        cur = end;
+                    };
+                    seg(c.success, 'rgba(110, 231, 183, 0.34)', 'rgba(52, 211, 153, 0.34)'); // 今日成功: 淡绿 mint(alpha 低=常亮辉光弱, 呼吸动效由光芒射线承担)
+                    seg(c.failed, 'rgba(253, 164, 175, 0.34)', 'rgba(251, 113, 133, 0.34)');  // 今日失败: 淡粉 rose(同上)
+                    if (cur < 100) segs.push('rgba(148, 163, 184, 0.26) ' + cur + '% 100%'); // 待办(含跳过/未处理): 灰段
+                    fab.style.setProperty('--ring-grad', 'conic-gradient(from -90deg, ' + segs.join(', ') + ')');
                     setFabBadge(c.success);
                     break;
                 }
