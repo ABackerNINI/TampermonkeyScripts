@@ -123,3 +123,12 @@ resolve = (value) => { clearTimeout(timer); origResolve(value); };
 - url 是归属唯一事实来源——新增/改站入口时只改 `url`, **不要**再手写 `match`(除非特例: 多入口 host/跨域归属页); 写错 url(如漏 `www.` 或画蛇添足加 `www.`)会直接导致页面不归属或错归属。
 - url 带 query 的站(如贴吧 `f?kw=pt`)判定会检查 query, 页面换参数(如 `kw=pt&pn=1`)仍命中; 无 query 的站忽略页面一切参数——后台任务 URL 追加的 `ptacTask` 不会影响归属。
 - `match` 保留为可选项, 特例站仍可用函数细控(如按页面内容归属)。
+
+## P17. FAB 皮肤: 状态语义与角标含义要一致
+
+**要点**：`ptac_skin`(chameleon/number/signal/ring)存 GM 跨站共享, `applyFabSkin(c)` 只认 `countToday()`(遍历全部 UNITS 的今日 status)。「全部完成」= `success >= total`(total 含 disabled 站);「有未签」= 剩余 `total - success`。
+**注意**：
+- 角标颜色语义随皮肤/状态变(默认绿=成功数; chameleon 未完成红=剩余数; signal 红=失败数、琥珀=剩余数)——读代码勿假定「角标=成功数」。
+- **disabled 站**(`enabled:false`)不参与批量也永无 success, 若将来启用, `total` 应改为「参与站数」或跳过 disabled 计数, 否则 FAB 永不显示完成态。
+- 光环皮肤弧度为 success/total, 需 `c.total > 0`; 无 query 站不影响。
+- 皮肤选择条在面板头部「外观」按钮展开(`.panel.skin-open .skin-bar`), 面板 `overflow:hidden` 故选择条用文档流内嵌行而非浮层。

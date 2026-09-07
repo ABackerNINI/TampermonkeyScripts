@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.9
+// @version      2026.09.07.10
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -50,6 +50,7 @@ const K = {
     status: (uid) => `ptac_status_${uid}`,     // {date:'YYYY-MM-DD', status:'success|failed|pending|skipped', msg, ts}
     cooldown: (uid) => `ptac_cooldown_${uid}`, // 上次触发时间戳(ms)
     favicon: (uid) => `ptac_favicon_${uid}`,   // 路过收集的站点真实 icon URL(面板列表图标用)
+    skin: 'ptac_skin',                          // FAB 外观皮肤: chameleon|number|signal|ring
     task: 'ptac_task'                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
 };
 
@@ -358,6 +359,18 @@ const K = {
                     ],
                     batchDelayMs: 3000,
                     steps: [CLICK_CHECK_IN]
+                },
+                {
+                    id: 'tieba_test', name: 'test吧',
+                    url: 'https://tieba.baidu.com/f?kw=test',
+                    checkInSelector: '.button-wrapper.operate-btn.follow-sign',
+                    checkInContent: '签到',
+                    alreadyCheckedInContent: '连签',
+                    successDetect: [
+                        { type: 'text', selector: 'body', text: '签到成功', timeout: 3000 }
+                    ],
+                    batchDelayMs: 3000,
+                    steps: [CLICK_CHECK_IN]
                 }
                 // 新增吧: 复制一条, 修改 id/name/url 与 kw 即可, 无需改引擎
             ]
@@ -484,11 +497,18 @@ const K = {
         const st = readStatus(unitId);
         return !!(st && st.status === 'success' && st.date === todayStr());
     }
-    // 今日成功数 / 总数(面板汇总用)
+    // 今日成功/失败数 / 总数(面板汇总与 FAB 皮肤用)
     function countToday() {
-        let success = 0;
-        for (const u of UNITS) if (isSuccessToday(u.id)) success += 1;
-        return { success, total: UNITS.length };
+        let success = 0, failed = 0;
+        const today = todayStr();
+        for (const u of UNITS) {
+            const st = readStatus(u.id);
+            if (st && st.date === today) {
+                if (st.status === 'success') success += 1;
+                else if (st.status === 'failed') failed += 1;
+            }
+        }
+        return { success, failed, total: UNITS.length };
     }
 
     // ---------- 冷却(防高频触发) ----------
@@ -891,8 +911,14 @@ const K = {
             width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
             background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
             color: #fff; display: flex; align-items: center; justify-content: center;
-            box-shadow: var(--shadow); transition: transform 0.15s ease, box-shadow 0.15s ease;
+            box-shadow: var(--shadow);
+            animation: baseGlow 3.2s ease-in-out infinite; /* 基础紫柔光呼吸(默认态, 所有皮肤共用) */
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
             font-family: var(--font); padding: 0;
+        }
+        @keyframes baseGlow {
+            0%, 100% { box-shadow: var(--shadow), 0 0 5px rgba(139, 92, 246, 0.22); }
+            50% { box-shadow: var(--shadow), 0 0 14px rgba(139, 92, 246, 0.45); }
         }
         .fab:hover { transform: translateY(-2px) scale(1.04); }
         .fab:active { transform: scale(0.96); }
@@ -904,6 +930,73 @@ const K = {
             font-family: var(--font); display: none;
         }
         .fab-badge.show { display: block; }
+        .fab-badge.err { background: var(--err); }
+        .fab-badge.warn { background: var(--pend); }
+        /* FAB 皮肤: 状态底色(变色/信号灯) — 渐变底 + 同色辉光呼吸(双光层, 振幅加强) */
+        .fab.ok { background: linear-gradient(135deg, #22c55e, #15803d); --glow: rgba(74, 222, 128, 0.55); }
+        .fab.warn { background: linear-gradient(135deg, #fbbf24, #d97706); --glow: rgba(251, 191, 36, 0.5); }
+        .fab.err { background: linear-gradient(135deg, #f87171, #dc2626); --glow: rgba(248, 113, 113, 0.6); }
+        .fab.ok, .fab.warn, .fab.err { animation: stateGlow 2.4s ease-in-out infinite; }
+        @keyframes stateGlow {
+            0%, 100% { box-shadow: var(--shadow), 0 0 6px var(--glow, transparent), 0 0 2px var(--glow, transparent); }
+            50% { box-shadow: var(--shadow), 0 0 22px var(--glow, transparent), 0 0 8px var(--glow, transparent); }
+        }
+        /* FAB 皮肤: 变色(chameleon) — 悬浮图标整体波纹荡漾:
+           本体周期性做轻微 scale 拉伸 + 上下浮动 + 圆角波浪起伏(transform/border-radius),
+           按钮连同图标整体如水波荡漾; 动画占用 transform, hover/active 的位移缩放互斥 → 改用 filter 亮度反馈;
+           辉光叠加: 未完成(紫底)→ baseGlow, 完成(.ok)→ stateGlow */
+        .fab.chameleon { animation: chameleonWave 3.6s ease-in-out infinite, baseGlow 3.2s ease-in-out infinite; }
+        .fab.chameleon.ok { animation: chameleonWave 3.6s ease-in-out infinite, stateGlow 2.4s ease-in-out infinite; }
+        .fab.chameleon:hover { filter: brightness(1.12); }
+        .fab.chameleon:active { filter: brightness(0.9); }
+        @keyframes chameleonWave {
+            0%, 100% { transform: translateY(0) scale(1, 1); border-radius: 50%; }
+            12.5% { transform: translateY(-1.5px) scale(1.02, 0.98); border-radius: 49% 51% 54% 46% / 53% 47% 46% 54%; }
+            37.5% { transform: translateY(1px) scale(0.985, 1.02); border-radius: 52% 48% 45% 55% / 47% 53% 56% 44%; }
+            62.5% { transform: translateY(1.8px) scale(1.02, 0.985); border-radius: 46% 54% 52% 48% / 56% 44% 47% 53%; }
+            87.5% { transform: translateY(-1px) scale(0.99, 1.015); border-radius: 53% 47% 47% 53% / 45% 55% 54% 46%; }
+        }
+        /* FAB 皮肤: 数字/感叹号主显示(图标换脸/信号灯) — 白字辉光 + 轻微脉冲 */
+        .fab-core { display: flex; align-items: center; justify-content: center; }
+        .fab-core .num { font-size: 20px; font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.55); animation: numPulse 1.6s ease-in-out infinite; }
+        .fab-core .mark { font-size: 21px; font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.6); animation: numPulse 1.2s ease-in-out infinite; }
+        @keyframes numPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); text-shadow: 0 0 16px rgba(255, 255, 255, 0.9); }
+        }
+        /* FAB 皮肤: 进度光环(光环) — 主体保持紫底不变, 外圈 conic 渐变弧由 --ring-p 控比例;
+           配色: 默认青→品红渐变(紫底上对比鲜明), 全完成→绿满环, 今日有失败→琥珀起点红终点警示弧;
+           抗锯齿: mask 内外缘各羽化 1px(消除硬切圆环锯齿), 环与按钮主体间由羽化平滑过渡 */
+        .fab.ring {
+            background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+            animation: none;
+            --ring-c1: #22d3ee; --ring-c2: #e879f9; --ring-gl: rgba(34, 211, 238, 0.55);
+        }
+        .fab.ring::before {
+            content: ''; position: absolute; inset: -6px; border-radius: 50%;
+            background: conic-gradient(from -90deg,
+                    var(--ring-c1, #22d3ee) 0%,
+                    var(--ring-c2, #e879f9) var(--ring-p, 0%),
+                    rgba(148, 163, 184, 0.35) var(--ring-p, 0%) 100%);
+            -webkit-mask: radial-gradient(farthest-side,
+                    transparent calc(100% - 7px),
+                    #000 calc(100% - 6px),
+                    #000 calc(100% - 1px),
+                    transparent 100%);
+                    mask: radial-gradient(farthest-side,
+                    transparent calc(100% - 7px),
+                    #000 calc(100% - 6px),
+                    #000 calc(100% - 1px),
+                    transparent 100%);
+            animation: ringGlow 2s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes ringGlow {
+            0%, 100% { filter: drop-shadow(0 0 3px var(--ring-gl, transparent)); }
+            50% { filter: drop-shadow(0 0 12px var(--ring-gl, transparent)); }
+        }
+        .fab.ring.ok::before { --ring-c1: #86efac; --ring-c2: #16a34a; --ring-gl: rgba(74, 222, 128, 0.65); }
+        .fab.ring.err::before { --ring-c1: #fbbf24; --ring-c2: #ef4444; --ring-gl: rgba(239, 68, 68, 0.6); }
         .chip {
             position: fixed; right: 84px; bottom: 30px; z-index: 2147483000;
             display: none; align-items: center; gap: 8px; max-width: 300px;
@@ -940,6 +1033,32 @@ const K = {
             font-family: var(--font);
         }
         .panel-close:hover { background: var(--surface-2); color: var(--text); }
+        .btn-skin {
+            border: none; background: none; cursor: pointer; color: var(--muted);
+            font-size: 12px; line-height: 1; padding: 3px 6px; border-radius: 6px;
+            font-family: var(--font); flex-shrink: 0;
+        }
+        .btn-skin:hover { background: var(--surface-2); color: var(--text); }
+        /* FAB 皮肤选择条(面板头部「外观」展开) */
+        .skin-bar { display: none; align-items: center; gap: 6px; padding: 10px 14px 0; flex-wrap: wrap; flex-shrink: 0; }
+        .panel.skin-open .skin-bar { display: flex; }
+        .skin-bar .lbl { font-size: 11px; color: var(--muted); margin-right: 2px; }
+        .skin-btn {
+            display: flex; align-items: center; gap: 5px;
+            border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+            cursor: pointer; border-radius: 999px; padding: 3px 10px 3px 5px;
+            font-size: 11px; font-family: var(--font);
+        }
+        .skin-btn:hover { border-color: var(--accent-1); }
+        .skin-btn.active { border-color: var(--accent-1); background: rgba(91, 108, 255, 0.12); color: var(--accent-1); font-weight: 600; }
+        .skin-dot {
+            width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .skin-dot.d1 { background: linear-gradient(135deg, #16a34a, #5b6cff); }       /* 变色: 完成绿/未完紫 */
+        .skin-dot.d2 { background: #5b6cff; }                                          /* 数字: 主体紫 */
+        .skin-dot.d3 { background: conic-gradient(#16a34a 0 120deg, #d97706 120deg 240deg, #e5484d 240deg); } /* 信号灯三色 */
+        .skin-dot.d4 { background: conic-gradient(#5b6cff 0 300deg, rgba(127, 133, 150, 0.35) 300deg); }      /* 光环弧 */
         .banner {
             display: none; margin: 10px 14px 0; padding: 8px 12px; border-radius: 10px;
             background: rgba(22, 163, 74, 0.12); color: var(--ok); font-weight: 600;
@@ -1057,10 +1176,11 @@ const K = {
     `;
 
     const UI = (function () {
-        let host = null, fab, fabBadge, chip, chipText, panel, summaryEl, bannerEl, barEl, barTextEl, listEl, btnBatch, forceToggle, forcePop, btnForce;
+        let host = null, fab, fabCore, fabBadge, chip, chipText, panel, summaryEl, bannerEl, barEl, barTextEl, listEl, btnBatch, forceToggle, forcePop, btnForce, btnSkin, skinBtns;
         let cancelObj = null;
         let batchBase = '';
         let toastEl = null, toastTimer = null;
+        let skin = 'chameleon'; // FAB 皮肤: 变色龙(chameleon)|图标数字(number)|信号灯(signal)|进度光环(ring)
 
         const SVG_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.26"/></svg>';
 
@@ -1110,8 +1230,10 @@ const K = {
             fab = document.createElement('button');
             fab.className = 'fab';
             fab.title = 'PT 自动签到';
-            fab.innerHTML = SVG_ICON + '<span class="fab-badge"></span>';
+            fab.innerHTML = '<span class="fab-core">' + SVG_ICON + '</span><span class="fab-badge"></span>';
+            fabCore = fab.querySelector('.fab-core');
             fabBadge = fab.querySelector('.fab-badge');
+            skin = gmGet(K.skin, 'chameleon');
 
             // 批量状态条(芯片)
             chip = document.createElement('div');
@@ -1127,7 +1249,15 @@ const K = {
                 <div class="panel-head">
                     <span class="panel-title">PT 自动签到</span>
                     <span class="panel-sub" id="summary"></span>
+                    <button class="btn-skin" type="button" title="FAB 外观(皮肤)">外观</button>
                     <button class="panel-close" title="关闭">\u00d7</button>
+                </div>
+                <div class="skin-bar">
+                    <span class="lbl">FAB:</span>
+                    <button class="skin-btn" type="button" data-skin="chameleon" title="变色(默认): 全部完成→绿底✓无角标; 有站点未签→紫底✓ + 红底剩余数角标"><span class="skin-dot d1"></span>变色</button>
+                    <button class="skin-btn" type="button" data-skin="number" title="数字: 有未签时 FAB 主体用大字直接显示剩余站数(绿角标=今日成功数); 全部完成→✓"><span class="skin-dot d2"></span>数字</button>
+                    <button class="skin-btn" type="button" data-skin="signal" title="信号灯: 全部完成→绿底✓; 今日有失败→红底! + 失败数角标; 仅未完成→琥珀底✓ + 剩余数角标"><span class="skin-dot d3"></span>信号灯</button>
+                    <button class="skin-btn" type="button" data-skin="ring" title="光环: 外圈按今日成功比例画渐变进度弧(青→品红, 带辉光呼吸); 全部完成→绿色满环; 今日有失败→琥珀到红色的警示弧; 绿角标=成功数"><span class="skin-dot d4"></span>光环</button>
                 </div>
                 <div class="banner"></div>
                 <div class="batchbar"><span class="batchbar-text"></span><button class="stop">停止</button></div>
@@ -1153,8 +1283,12 @@ const K = {
             forceToggle = panel.querySelector('.force-toggle');
             forcePop = panel.querySelector('.force-pop');
             btnForce = panel.querySelector('.btn-force');
+            btnSkin = panel.querySelector('.btn-skin');
+            skinBtns = Array.prototype.slice.call(panel.querySelectorAll('.skin-btn'));
             panel.querySelector('.panel-close').addEventListener('click', () => closePanel());
             barEl.querySelector('.stop').addEventListener('click', requestCancel);
+            btnSkin.addEventListener('click', () => panel.classList.toggle('skin-open'));
+            skinBtns.forEach((b) => b.addEventListener('click', () => setSkin(b.dataset.skin)));
             btnBatch.addEventListener('click', () => startBatch(false));
             forceToggle.addEventListener('click', () => {
                 if (batchActive()) return;
@@ -1208,16 +1342,69 @@ const K = {
             forceToggle.classList.toggle('open', !!open);
         }
 
+        // 切换 FAB 皮肤(存 GM, 跨站生效)
+        function setSkin(id) {
+            skin = id;
+            gmSet(K.skin, id);
+            panel.classList.remove('skin-open');
+            render();
+        }
+
+        // 按当前皮肤与今日汇总刷新 FAB(c: countToday 结果)
+        // 语义统一: 全部完成 vs 有站点未签到 必须有明显差异, 四种皮肤各按自身语言表达
+        function applyFabSkin(c) {
+            fab.classList.remove('ok', 'warn', 'err', 'ring', 'chameleon');
+            const left = c.total - c.success;       // 未成功站数(含失败/pending/skipped/未处理)
+            const allDone = c.total > 0 && left <= 0;
+            switch (skin) {
+                case 'number': { // 图标换脸: 全完成→✓; 有未签→主区大字剩余数; 绿角标=成功数(保进度)
+                    if (allDone) fabCore.innerHTML = SVG_ICON;
+                    else fabCore.innerHTML = `<span class="num">${left}</span>`;
+                    setFabBadge(c.success);
+                    break;
+                }
+                case 'signal': { // 信号灯: 完成=绿✓; 今日有失败=红底!+失败角标; 其余=琥珀✓+剩余角标
+                    if (allDone) { fab.classList.add('ok'); fabCore.innerHTML = SVG_ICON; setFabBadge(0); }
+                    else if (c.failed > 0) { fab.classList.add('err'); fabCore.innerHTML = '<span class="mark">!</span>'; setFabBadge(c.failed, 'err'); }
+                    else { fab.classList.add('warn'); fabCore.innerHTML = SVG_ICON; setFabBadge(left, 'warn'); }
+                    break;
+                }
+                case 'ring': { // 进度光环: 主体保持紫底; 外圈渐变弧=完成比例; 全完成→绿满环; 今日有失败→红警示弧
+                    fab.classList.add('ring');
+                    fabCore.innerHTML = SVG_ICON;
+                    const pct = c.total > 0 ? Math.round(c.success / c.total * 100) : 0;
+                    fab.style.setProperty('--ring-p', (allDone ? 100 : pct) + '%');
+                    fab.classList.toggle('ok', allDone);
+                    fab.classList.toggle('err', !allDone && c.failed > 0);
+                    setFabBadge(c.success);
+                    break;
+                }
+                default: { // chameleon 变色龙: 全完成→绿底✓(无角标); 有未签→紫底✓+红底剩余角标; 白色涟漪波纹(::before/::after)随皮肤常驻
+                    fab.classList.add('chameleon');
+                    fabCore.innerHTML = SVG_ICON;
+                    if (allDone) { fab.classList.add('ok'); setFabBadge(0); }
+                    else setFabBadge(left, 'err');
+                }
+            }
+            if (skinBtns) skinBtns.forEach((b) => b.classList.toggle('active', b.dataset.skin === skin));
+        }
+        function setFabBadge(n, cls) {
+            fabBadge.classList.remove('err', 'warn');
+            if (cls) fabBadge.classList.add(cls);
+            if (n > 0) {
+                fabBadge.textContent = String(n);
+                fabBadge.classList.add('show');
+            } else {
+                fabBadge.textContent = '';
+                fabBadge.classList.remove('show');
+            }
+        }
+
         function render() {
             if (!host) return;
             const c = countToday();
             summaryEl.textContent = `今日 ${c.success}/${c.total} 已成功`;
-            if (c.success > 0) {
-                fabBadge.textContent = String(c.success);
-                fabBadge.classList.add('show');
-            } else {
-                fabBadge.classList.remove('show');
-            }
+            applyFabSkin(c);
             let html = '';
             for (const g of GROUPS) {
                 const isMulti = g.units.length > 1;
@@ -1326,6 +1513,7 @@ const K = {
         }
         function closePanel() {
             panel.classList.remove('show');
+            panel.classList.remove('skin-open');
             hideBanner();
         }
         function showBatchDone() {
