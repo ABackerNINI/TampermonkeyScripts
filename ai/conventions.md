@@ -90,7 +90,7 @@
   - 常量（含枚举映射表）：`UPPER_SNAKE_CASE`，枚举对象用 `Object.freeze`；
   - 函数/变量：`camelCase`；
   - 函数名前缀表达意图：`parse*`（解析）、`get*`（取值）、`scrollTo*`（滚动）、`click*`（点击）、`handle*`（事件）。
-- 日志前缀：文件顶部定义 `const ScriptName = '...'`；输出时统一 `[ScriptName]` 或 `[标签]` 前缀（PTAutoCheckIn 用 `[PTAutoCheckIn]`、BTSchoolHelper 用 `[BTSchool助手]`）。
+- 日志前缀：文件顶部定义 `const ScriptName = '...'`；输出时统一 `[ScriptName]` 或 `[标签]` 前缀（PTAutoCheckIn-v2 用 `[PTAutoCheckIn-v2]`、BTSchoolHelper 用 `[BTSchool助手]`）。
 - **注释与日志用中文，但一律使用英文标点**（`,` `:` `?` 而非 `，` `：` `？`）——历史上因中文标点被 IDE 特殊标记而专门修复过。
 - console 分级：成功/过程 `console.log`，可预期失败 `console.warn`，异常堆栈 `console.error`；错误消息中文、含失败对象信息（如选择器、站点名）。
 
@@ -116,7 +116,7 @@
 
 ## 5. 脚本内数据流约定（以 PT/表格解析类为例）
 
-- **配置与逻辑分离**：站点/规则配置集中为数据（如 `SITES` 数组、`TorrentState` 映射），引擎只写一套（`executeStep`、`parseTorrentTable`）。新增站点时**只改配置不改引擎**。
+- **配置与逻辑分离**：站点/规则配置集中为数据（如 `SITES` 数组——PTAutoCheckIn-v2 为 group+unit 两级配置、`TorrentState` 映射），引擎只写一套（`executeStep`、`runUnit`、`parseTorrentTable`）。新增站点/单元时**只改配置不改引擎**。
 - 解析函数返回结构化对象（宁可多带原始元素引用，如 `_row` / `titleElement`，便于后续滚动/样式操作与调试），不直接操作 UI。
 - 所有解析出的「时间」尽量同时保留 `absolute`（`Date`/`title` 属性）与 `relativeStr`（页面显示文本），避免依赖站点格式化。
 
@@ -133,11 +133,11 @@
 
 ## 7. 新增站点/脚本检查清单
 
-新增 PTAutoCheckIn 站点：
-- [ ] 在 `@match` 增加域名；
-- [ ] `SITES` 增加配置对象：`name` / `match` 正则 / `checkInSelector` / `checkInContent` / `alreadyCheckedInContent` / `steps`；
+新增 PTAutoCheckIn-v2 站点（或贴吧加吧）：
+- [ ] 在 `@match` 增加域名（贴吧加吧无需，同域多个吧时 `match` 用函数按参数区分）；
+- [ ] `SITES` 增加配置：简单站加单站对象（`name` / `id` / `url` / `match` / `checkInSelector` / `checkInContent` / `alreadyCheckedInContent` / `steps`）；同站多入口加 group，入口列表加进该 group 的 `units`；
 - [ ] 对照站点页面的真实 DOM（非网络截图）核对选择器与文案；
-- [ ] 实测：未签到页能点、已签到页不重复点、10 分钟内刷新不重复触发；
+- [ ] 实测：未签到页能点、已签到页不重复点、10 分钟内刷新不重复触发、贴吧各吧独立触发；
 - [ ] 递增版本号 + 更新 `ai/scripts/PTAutoCheckIn.md` 站点表。
 
 新增独立脚本：

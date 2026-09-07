@@ -23,7 +23,8 @@ TampermonkeyScripts/
 │   ├── roadmap.md                # 路线图（待修/近期/中期/远期）
 │   └── scripts/                  # 各脚本详细说明
 └── src/
-    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到
+    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v1 旧版, 待 v2 实测后并入删除)
+    ├── PTAutoCheckIn-v2.user.js              # PT 多站点自动签到 v2(批量+FAB+贴吧多吧, 2026.09.07.2)
     ├── BTSchoolHelper.user.js                # BTSchool 种子列表增强
     ├── BTSchoolTorrentsTableSample.html      # BTSchool 种子表格真实 HTML 样本（测试用）
     ├── BilibiliEnterFullscreen.user.js       # B 站 Enter 键全屏
@@ -34,7 +35,7 @@ TampermonkeyScripts/
 
 | 脚本 | 匹配站点 | run-at | grant | 核心能力 |
 |------|----------|--------|-------|----------|
-| `PTAutoCheckIn.user.js` | 19 个域名（PT 站 + 百度贴吧） | `document-start` | `GM_getValue` / `GM_setValue` / `GM_log` | 按站点配置自动点击签到，10 分钟最小激活间隔防重复 |
+| `PTAutoCheckIn-v2.user.js` | 19 域名(18 PT + 百度贴吧多吧) | `document-start` | `GM_getValue` / `GM_setValue` / `GM_log` | 被动签到 + 悬浮按钮批量接力签到 + 跨站结果面板; 单站 10min 间隔, 贴吧吧间 3s 缓冲; 详情见 `scripts/PTAutoCheckIn.md` |
 | `BTSchoolHelper.user.js` | `pt.btschool.club/torrents.php*` | `document-end` | 无 | 高亮 2xFree 种子、置顶种低亮、空格键跳转 |
 | `BilibiliEnterFullscreen.user.js` | `bilibili.com/video/*`、`/bangumi/*` | `document-body` | 无 | 进页面自动网页全屏；Enter 全屏 / Shift+Enter 网页全屏 |
 | `EnhanceVisitedLinks.user.js` | 全部站点 `*` | `document-start` | `GM_addStyle` | 紫色高亮 `a:visited` 并适配明/暗色模式 |
