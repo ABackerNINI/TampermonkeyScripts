@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.08.16
+// @version      2026.09.08.17
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -26,6 +26,7 @@
 // @match        *://*.muxuege.org/*
 // @match        *://*.m-team.cc/*
 // @match        *://*.hhanclub.net/*
+// @match        *://*.u2.dmhy.org/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -91,6 +92,9 @@ const K = {
     //     确认; 非落地页不检测(防其它区域同文本误报); 等价于只对该站启用受限版整页已签检测
     //   successDetect: 点击后成功检测列表(同页 AJAX 场景) [{type:'url'|'text'|'func', ...}], 任一命中即成功
     //   confirmManual: true 表示无可靠成功特征, 点击后记为 pending 待人工确认
+    //   detectOnly: true 表示"仅检测已签状态, 不自动签到"——签到需人工验证(验证码)的站(如 U2):
+    //     已签检测照常执行(命中即 success), 未签时不做任何动作(不点击/不写冷却/不记失败),
+    //     状态留待人工站内签到(面板提示"需人工签到"); 该站不参与批量(remainingCandidates 排除)
     //   batchDelayMs: 批量模式本站处理完后、跳转下一站前的缓冲(ms)
     //   enabled: 是否参与批量签到
     //   steps: 步骤数组(click_checkin/click/wait/check/function), 缺省为 [CLICK_CHECK_IN]
@@ -466,6 +470,14 @@ const K = {
                 },
                 CLICK_CHECK_IN
             ]
+        },
+
+        { // U2 特殊: showup.php 签到需人工输入验证码 → detectOnly 仅检测状态、不自动签到
+          id: 'u2', name: 'U2',
+          url: 'https://u2.dmhy.org/',
+          detectOnly: true, // 仅检测已签状态(未签不点/不记失败/不进批量), 由人工在站内完成签到
+          checkInSelector: 'a[href*="showup.php"]', // 不依赖 faqlink class(2026.09.07 批量去 class 教训)
+          alreadyCheckedInContent: '已签到', // 按钮文案: 立即签到(未签) → 已签到(已签), 待实测校准
         },
 
         // ============ 百度贴吧(多吧 group: 每个吧是独立签到单元) ============
@@ -980,6 +992,14 @@ const K = {
             warn(`已签到检测异常: ${e.message}`);
         }
 
+        // 2.5) 仅检测型站(detectOnly, 签到需人工验证如 U2): 第 2 步未命中已签 → 不做任何
+        //      动作(不点击/不写冷却/不记失败), 返回 skipped 提示人工; 状态保持无记录(面板
+        //      「— / 需人工签到」), 人工站内签到后下次访问检测自动命中 → success
+        if (unit.detectOnly) {
+            log('仅检测模式(需人工验证), 未检测到已签, 不自动签到');
+            return { status: 'skipped', msg: '需人工签到(验证码)', reason: 'detect_only' };
+        }
+
         // 3) 上次点击后落盘 pending 且未过冷却、且第 2 步仍检测不到已签
         //    → 说明上次点击确实未生效/无法确认, 记为失败(避免永久挂起)
         const prev = readStatus(unit.id);
@@ -1470,6 +1490,8 @@ const K = {
             if (todayHit && st) {
                 sub = `${esc(st.msg || '')}${st.ts ? ' · ' + formatTime(st.ts) : ''}`;
                 if (cool) sub += ' · 冷却中, 默认不参与批量';
+            } else if (unit.detectOnly && !todayHit) {
+                sub = '需人工签到(验证码), 不自动签'; // 仅检测型站: 未签时留待人工
             }
             const url = esc(unit.url);
             const fav = faviconSrc(unit);
@@ -1854,6 +1876,7 @@ const K = {
         const out = [];
         for (const u of UNITS) {
             if (u.enabled === false) continue;
+            if (u.detectOnly) continue; // 仅检测型站(人工验证, 如 U2)不参与批量
             if (isSuccessToday(u.id)) continue;
             const prev = readStatus(u.id);
             if (prev && prev.status === 'pending' && prev.date === todayStr()
