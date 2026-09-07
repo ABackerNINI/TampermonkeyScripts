@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.08.22
+// @version      2026.09.08.26
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -29,6 +29,9 @@
 // @match        *://*.digitalcore.club/*
 // @match        *://*.hd-space.org/*
 // @match        *://*.kufirc.com/*
+// @match        *://*.pt.521.best/*
+// @match        *://*.sportz247.bar/*
+// @match        *://*.nodeloc.com/*
 // @match        *://*.u2.dmhy.org/*
 // @run-at       document-start
 // @grant        GM_getValue
@@ -95,6 +98,14 @@ const K = {
     //     整页文本匹配、纯文本不绑 class(class 可能随改版变化), 供"落地页无签到详情/无按钮反馈"的站
     //     确认; 非落地页不检测(防其它区域同文本误报); 等价于只对该站启用受限版整页已签检测
     //   successDetect: 点击后成功检测列表(同页 AJAX 场景) [{type:'url'|'text'|'func', ...}], 任一命中即成功
+    //   stateSignals(可选, P25 重现检测的载体无关入口状态信号, .26): {checked:[信号], checkable:[信号]}
+    //     — 引擎不再假设入口状态只在按钮可见文本里; checked 任一命中=入口呈已签, checkable 任一命中=
+    //     可签(重现判定), checkable 不配=反向常驻按钮站(入口存在且非已签即可签); 信号项 {kind, ...}:
+    //     {kind:'text', contains}(visibleText 含) / {kind:'attr', name, contains?}(属性值含) /
+    //     {kind:'attrEq', name, eq}(属性值精确等于) / {kind:'class', name}(classList 含) /
+    //     {kind:'fn', fn}(自定义谓词) / {kind:'exists'}(元素存在即命中); 不配时旧文本字段自动翻译
+    //     (checked=[text alreadyCheckedInContent], checkable=有 checkInContent 则 [text checkInContent] 否则
+    //     null→反向站), 文本站零改动行为不变; 结构排除同旧: 无 checkInSelector 或无已签基准 → 无重现语义
     //   confirmManual: true 表示无可靠成功特征, 点击后记为 pending 待人工确认
     //   detectOnly: true 表示"仅检测已签状态, 不自动签到"——签到需人工验证(验证码)的站(如 U2):
     //     已签检测照常执行(命中即 success), 未签时不做任何动作(不点击/不写冷却/不记失败),
@@ -468,6 +479,69 @@ const K = {
                 }
             }]
         },
+        { // 凤凰PT: 2026.09.08 接入 — 同 MTeam 隐式签到型: 登录态访问首页即自动完成当日签到
+            //   (NexusPHP 传统中文站, 未登录 index.php 显示登录页)。成功特征 = 导航链接
+            //   a[href="torrents.php"][rel="sub-menu"](文案「种子」, 登录态导航菜单才有; 注意 href 为
+            //   相对路径不带前导斜杠, 且带 rel="sub-menu" 属性)。match 限定首页(根或 /index.php);
+            //   未登录 → 重定向登录页无该链接 → failed(需登录后脚本才会成功)。
+            //   无 checkInSelector/alreadyCheckedInContent → 按钮级/P25 重现检测自动跳过
+            id: 'fenghuang', name: '凤凰PT',
+            url: 'https://pt.521.best/index.php',
+            match: (href) => {
+                try {
+                    const u = new URL(href);
+                    const p = u.pathname.replace(/\/+$/, '');
+                    return u.hostname.replace(/^www\./, '') === 'pt.521.best'
+                        && (p === '' || p === '/index.php');
+                } catch (e) { return false; }
+            },
+            steps: [{ type: 'wait', ms: 3000, description: '等待页面渲染' }],
+            successDetect: [{
+                type: 'func',
+                fn: async () => {
+                    try {
+                        await waitForTrue(() => {
+                            for (const a of document.querySelectorAll('a[href="torrents.php"][rel="sub-menu"]')) {
+                                if (visibleText(a).includes('种子')) return true;
+                            }
+                            return null;
+                        }, 16000, 300, '种子导航链接');
+                        return true;
+                    } catch (e) { return false; }
+                }
+            }]
+        },
+        { // Sportz Bar(F1GP): 2026.09.08 接入 — 同 MTeam 隐式签到型: 登录态访问首页即自动完成
+            //   当日签到(xbtitFM 传统站, 未登录显示 Please Login 无导航菜单)。成功特征 = 导航链接
+            //   a.level1-a.drop[href="#"](文案 Torrent Menu, 登录态主导航下拉才有; href 为 "#" 锚点,
+            //   class 为 level1-a drop)。match 限定首页(根或 /index.php); 未登录 → 无该链接 → failed
+            //   (需登录后脚本才会成功)。无 checkInSelector/alreadyCheckedInContent → 按钮级/P25 重现检测自动跳过
+            id: 'sportz247', name: 'Sportz Bar',
+            url: 'https://sportz247.bar/index.php',
+            match: (href) => {
+                try {
+                    const u = new URL(href);
+                    const p = u.pathname.replace(/\/+$/, '');
+                    return u.hostname.replace(/^www\./, '') === 'sportz247.bar'
+                        && (p === '' || p === '/index.php');
+                } catch (e) { return false; }
+            },
+            steps: [{ type: 'wait', ms: 3000, description: '等待页面渲染' }],
+            successDetect: [{
+                type: 'func',
+                fn: async () => {
+                    try {
+                        await waitForTrue(() => {
+                            for (const a of document.querySelectorAll('a.level1-a.drop[href="#"]')) {
+                                if (visibleText(a).includes('Torrent Menu')) return true;
+                            }
+                            return null;
+                        }, 16000, 300, 'Torrent Menu 导航链接');
+                        return true;
+                    } catch (e) { return false; }
+                }
+            }]
+        },
         { // HHCLUB: 2026.09.08 接入 — 签到入口藏在头像下拉菜单: 先点 img#user-avatar 展开菜单,
             //   再点菜单内 a[href="attendance.php"](文案[签到得憨豆])→ 跳 attendance.php; 落地页渲染
             //   当月日历 <p id="date-display">(内容为动态 yyyy-mm, 如 2026-09)→ 判已签。
@@ -562,6 +636,81 @@ const K = {
           checkInSelector: 'a[href*="showup.php"]', // 不依赖 faqlink class(2026.09.07 批量去 class 教训)
           checkInContent: '立即签到', // 未签文案: 兼作「按钮重现提醒」正向判定基准(P25)
           alreadyCheckedInContent: '已签到', // 按钮文案: 立即签到(未签) → 已签到(已签), 待实测校准
+        },
+
+        { // NodeLoc: 2026.09.08 接入 — Discourse 论坛按钮签到站: 首页「每日签到」图标按钮
+            //   (button.checkin-button, no-text 无可见文本——只有 svg 图标; 可签态 title/aria-label=
+            //   「每日签到」; 点击后同页变 class 含 checked-in + title/aria-label=「您今天已经签到过了」)。
+            //   引擎按钮通道(click_checkin/按钮级已签)依赖 visibleText → 此按钮可见文本为空, 故已签判定
+            //   走 alreadyCheck 自定义(class/title 属性), 点击走 function 步骤, 成功走 func successDetect;
+            //   P25 重现检测经 stateSignals(class/attr 载体信号)纳入(.26 通用化改造): checked=class 含
+            //   checked-in 或 title/aria-label 含「已经签到过」, checkable=title/aria-label 含「每日签到」
+            //   (该词同时作为已签态与可签态区分, 两态互斥不误判)。match 限首页根路径(排除话题/节点页
+            //   防无按钮误报 failed 污染当日状态)
+            id: 'nodeloc', name: 'NodeLoc',
+            url: 'https://www.nodeloc.com/',
+            match: (href) => {
+                try {
+                    const u = new URL(href);
+                    const p = u.pathname.replace(/\/+$/, '');
+                    return u.hostname.replace(/^www\./, '') === 'nodeloc.com' && p === '';
+                } catch (e) { return false; }
+            },
+            // 入口(供 P25 重现检测 readEntryState 定位; 仅首页根路径有, match 已保证)
+            checkInSelector: 'button.checkin-button',
+            // 载体无关已签/可签信号(P25 重现检测用; 无文本 → 走 class/attr 载体)
+            stateSignals: {
+                // 已签: Discourse 点击后按钮 class 加 checked-in, title/aria-label=「您今天已经签到过了」
+                checked: [
+                    { kind: 'class', name: 'checked-in' },
+                    { kind: 'attr', name: 'title', contains: '已经签到过' },
+                    { kind: 'attr', name: 'aria-label', contains: '已经签到过' }
+                ],
+                // 可签(重现判定): 未签态 title/aria-label=「每日签到」
+                checkable: [
+                    { kind: 'attr', name: 'title', contains: '每日签到' },
+                    { kind: 'attr', name: 'aria-label', contains: '每日签到' }
+                ]
+            },
+            // 已签判定(自定义, 供 detectAlreadyCheckedIn 第 1 通道): 按钮 class 含 checked-in 或
+            // title/aria-label 含「已经签到过」(Discourse 点击后已签态); 未登录页无按钮 → false
+            alreadyCheck: async () => {
+                try {
+                    const btn = document.querySelector('button.checkin-button');
+                    if (!btn) return false;
+                    if (btn.classList.contains('checked-in')) return true;
+                    const label = btn.getAttribute('title') || btn.getAttribute('aria-label') || '';
+                    return /已经签到过/.test(label);
+                } catch (e) { return false; }
+            },
+            steps: [{
+                type: 'function',
+                description: '点击每日签到按钮(未签才点)',
+                func: async () => {
+                    const btn = await waitForElement('button.checkin-button', 10000);
+                    if (!btn) return;
+                    if (btn.classList.contains('checked-in')) return; // 已签不点
+                    const label = btn.getAttribute('title') || btn.getAttribute('aria-label') || '';
+                    if (/已经签到过/.test(label)) return; // 双保险
+                    console.log(`${ScriptName} [NodeLoc] 点击每日签到按钮`);
+                    btn.click();
+                }
+            }],
+            successDetect: [{
+                type: 'func',
+                fn: async () => {
+                    try {
+                        await waitForTrue(() => {
+                            const btn = document.querySelector('button.checkin-button');
+                            if (!btn) return null;
+                            if (btn.classList.contains('checked-in')) return true;
+                            const label = btn.getAttribute('title') || btn.getAttribute('aria-label') || '';
+                            return /已经签到过/.test(label) ? true : null;
+                        }, 16000, 300, '按钮变已签到(checked-in)');
+                        return true;
+                    } catch (e) { return false; }
+                }
+            }]
         },
 
         // ============ 百度贴吧(多吧 group: 每个吧是独立签到单元) ============
@@ -1041,37 +1190,115 @@ const K = {
         return { hit: false };
     }
 
-    // ==================== 签到按钮重现检测(见 P25) ====================
-    // 前提: 今日记录已签(success)但页面按钮又呈可签态 → 返回按钮可见文本用于常驻提醒;
-    // 否则 null。两类站:
-    //  A) 正向按钮站(默认): 按钮文案在 [checkInContent]↔[alreadyCheckedInContent] 间翻转
-    //     (标准 NexusPHP 签到得魔力→签到已得、贴吧 签到→连签、U2 立即签到→已签到)
-    //  B) 常驻按钮站(无 checkInContent, 如蜂巢): 仅断言按钮存在且不含已签文案即可
-    //     (改版后按钮固定 data-slot=sidebar-user-check-in, 文案 签到↔已签到 翻转)
-    // 结构上自动排除无此语义的站: MTeam(无按钮/隐式签到)、HHCLUB(首页菜单链接文案不随
-    // 签到翻转, 且无 alreadyCheckedInContent)、HDBao/MuXueGe 等跳页站(按钮型翻转照常覆盖;
-    // 若首页链接不翻转则不会误报, 因为已签态下按钮要么文案含已签内容要么无按钮/非链接)。
-    function checkInButtonReappeared(unit) {
-        if (!unit.checkInSelector || !unit.alreadyCheckedInContent) return null;
-        let el;
-        try { el = document.querySelector(unit.checkInSelector); } catch (e) { return null; }
-        if (!el) return null; // 无按钮(如 BTSchool 已签按钮消失型): 不视为重现
-        const text = visibleText(el);
-        if (text.includes(unit.alreadyCheckedInContent)) return null; // 仍是已签文案
-        // 已签风味词否定守卫: 个别站已签文案不含配置的 alreadyCheckedInContent 却含可签内容
-        // 子串(如贴吧若显示「已签到」而配置 only 连签)→ 命中任一已签风味词即视为已签, 防误报
-        if (/(已签|已成功|连签|已得|已领|已完成)/.test(text)) return null;
-        if (unit.checkInContent && !text.includes(unit.checkInContent)) return null; // 正向: 非可签文案
-        return text.trim();
+    // ==================== 签到入口状态信号 ====================
+    // 载体无关的「入口当前签到态」读取(见 P25): 引擎不再假设状态只存在按钮可见文本里——
+    // 文本 / 元素属性(attr) / class / 自定义函数(fn) / 存在性(exists) 均可表达「已签」
+    // 与「可签」。站点用两种方式描述其签到入口:
+    //   A) 显式 stateSignals(推荐, 载体无关): checked 信号(任一命中=入口呈已签态) +
+    //      checkable 信号(任一命中=入口呈可签态, 用于重现判定); checkable 不配 = 反向
+    //      常驻按钮站(入口存在且非已签即可签, 如蜂巢 pting)。
+    //   B) 旧文本字段自动翻译(文本站零改动):
+    //      checked   = [{text alreadyCheckedInContent}](精确)
+    //      checkable = [{text checkInContent}] 或 null(无 checkInContent → 反向常驻站)
+    // 信号种类 kind: text(visibleText contains) / attr(属性值 contains) / attrEq(属性值
+    // 精确等于) / class(classList 含) / fn(自定义谓词) / exists(元素存在即命中)。
+    // 结构排除(与 P25 旧实现一致): 无 checkInSelector → 无入口可查(MTeam 等无按钮隐式站);
+    // 无已签基准(显式 stateSignals 无 checked 或旧字段无 alreadyCheckedInContent)→ 无法表达
+    // 「已签」→ 重现检测无意义(HHCLUB 菜单链接文案不随签到翻转, 已签靠动态落地页
+    // date-display, 无按钮级已签表达)。这两类 deriveStateSignals 返回 null。
+    const CHECKED_FLAVOR_WORDS = ['已签', '已成功', '连签', '已得', '已领', '已完成'];
+    function deriveStateSignals(unit) {
+        if (unit.stateSignals) {
+            // 显式信号: 调用方保证 checked 非空(无已签基准则无重现语义)
+            return (unit.stateSignals.checked && unit.stateSignals.checked.length) ? unit.stateSignals : null;
+        }
+        // 旧字段自动翻译(文本站零改动): 精确信号, 风味词守卫由调用方 flavor 选项另加
+        if (!unit.alreadyCheckedInContent) return null; // 无已签基准 → 无重现语义
+        return {
+            checked: [{ kind: 'text', contains: unit.alreadyCheckedInContent }],
+            checkable: unit.checkInContent ? [{ kind: 'text', contains: unit.checkInContent }] : null
+        };
     }
-    // 页面按钮/结构是否确认已签(用于清除提醒): 按钮文案含已签内容, 或 noButtonMeansCheckedIn
-    // 站已签按钮消失(无按钮即已签)
+    function signalHit(el, sig) {
+        try {
+            switch (sig.kind) {
+                case 'text': return !!sig.contains && visibleText(el).includes(sig.contains);
+                case 'attr': { const v = el.getAttribute(sig.name); return !!v && (!sig.contains || v.includes(sig.contains)); }
+                case 'attrEq': { const v = el.getAttribute(sig.name); return !!v && v === sig.eq; }
+                case 'class': return !!(el.classList && el.classList.contains(sig.name));
+                case 'fn': return !!sig.fn(el);
+                case 'exists': return true;
+                default: return false;
+            }
+        } catch (e) { return false; }
+    }
+    // 命中信号的友好证据(供 alert 展示 / 日志): 文本站=按钮文案, attr=匹配的属性值, ...
+    function signalEvidence(el, sig) {
+        try {
+            switch (sig.kind) {
+                case 'text': { const t = visibleText(el).trim(); return t || sig.contains || ''; }
+                case 'attr': {
+                    const v = el.getAttribute(sig.name) || '';
+                    return (sig.contains && v.includes(sig.contains)) ? sig.contains : (v || sig.name || '');
+                }
+                case 'attrEq': return sig.eq || '';
+                case 'class': return sig.name || '';
+                case 'exists': return visibleText(el).trim() || '入口存在';
+                case 'fn': return visibleText(el).trim() || '自定义判定';
+                default: return '';
+            }
+        } catch (e) { return ''; }
+    }
+    // 读入口当前签到态(载体无关):
+    //   {state:'checked', evidence}   = 入口呈已签(checked 信号命中 / noButton 站按钮消失 /
+    //     flavor=true 时文本命中已签风味词——仅文本载体站, 防已签变体文案误判为可签重现)
+    //   {state:'checkable', evidence} = 入口呈可签(checkable 信号命中 / 反向站存在即可签)
+    //   null = 无法判定(无入口配置 / 无已签基准 / 入口缺失非 noButton / 正向站文案非可签也非已签)
+    function readEntryState(unit, flavor) {
+        const sig = deriveStateSignals(unit);
+        if (!sig) return null;
+        let el = null;
+        try { el = unit.checkInSelector ? document.querySelector(unit.checkInSelector) : null; } catch (e) { el = null; }
+        if (!el) {
+            // 入口缺失: noButtonMeansCheckedIn 站已签后按钮消失 = 已签(BTSchool); 否则无法判定
+            return unit.noButtonMeansCheckedIn ? { state: 'checked', evidence: '入口消失(视为已签)' } : null;
+        }
+        for (const s of sig.checked) {
+            if (signalHit(el, s)) return { state: 'checked', evidence: signalEvidence(el, s) };
+        }
+        // 已签风味词否定守卫(flavor=true, 旧 P25 语义): 仅文本载体站有效——已签变体文案
+        // 不含配置的 alreadyCheckedInContent 却含可签内容子串时(如显示「已签到」而配置 only
+        // 连签), 命中任一风味词即视为已签, 防误报重现; 无文本的 attr/class 信号站不受影响
+        if (flavor && sig.checked.some((s) => s.kind === 'text')) {
+            const t = visibleText(el);
+            for (const w of CHECKED_FLAVOR_WORDS) {
+                if (t.includes(w)) return { state: 'checked', evidence: w };
+            }
+        }
+        // 无显式 checkable(反向常驻站, 如蜂巢): 入口存在且非已签 = 可签
+        if (!sig.checkable) {
+            const t = visibleText(el).trim();
+            return { state: 'checkable', evidence: t || '入口存在(可签)' };
+        }
+        for (const s of sig.checkable) {
+            if (signalHit(el, s)) return { state: 'checkable', evidence: signalEvidence(el, s) };
+        }
+        return null; // 正向站: 文案非可签也非已签(改版/未知文案)→ 不判重现
+    }
+    // ==================== 签到按钮重现检测(见 P25) ====================
+    // 前提: 今日记录已签(success)但签到入口又呈可签态 → 返回可签证据文本用于常驻提醒;
+    // 否则 null。基于通用 readEntryState(载体无关) + 风味词守卫, 覆盖: 文本翻转站
+    // (正向/反向常驻)、noButtonMeansCheckedIn 站、以及显式 stateSignals 的属性/class 信号站
+    // (NodeLoc)。结构排除仍适用: 无 checkInSelector(MTeam 等无按钮隐式站)或无已签基准的站。
+    function checkInButtonReappeared(unit) {
+        const st = readEntryState(unit, true); // flavor=true: 保留已签风味词否定守卫(旧语义)
+        return st && st.state === 'checkable' ? st.evidence : null;
+    }
+    // 入口是否确认已签(用于清除提醒 / suspect 恢复): 精确信号判定(旧 signedByButton 语义,
+    // 无风味词宽松匹配); noButtonMeansCheckedIn 站无按钮 = 已签
     function signedByButton(unit) {
-        if (!unit.checkInSelector || !unit.alreadyCheckedInContent) return false;
-        let el;
-        try { el = document.querySelector(unit.checkInSelector); } catch (e) { return false; }
-        if (el) return visibleText(el).includes(unit.alreadyCheckedInContent);
-        return !!unit.noButtonMeansCheckedIn;
+        const st = readEntryState(unit, false);
+        return !!(st && st.state === 'checked');
     }
 
     // ==================== 成功检测(点击后) ====================

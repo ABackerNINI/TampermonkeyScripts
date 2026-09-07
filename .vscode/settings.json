@@ -13,10 +13,12 @@
         "dmhy",
         "douban",
         "faqlink",
+        "fenghuang",
         "hdbao",
         "hdclone",
         "hdfans",
         "hdsky",
+        "hdspace",
         "hdtime",
         "hhanclub",
         "HHCLUB",
@@ -25,6 +27,7 @@
         "leechers",
         "mteam",
         "muxuege",
+        "nodeloc",
         "novahd",
         "pctdown",
         "ptac",
@@ -37,8 +40,10 @@
         "rowfollow",
         "Segoe",
         "segs",
+        "Sportz",
         "Tampermonkey",
         "tangpt",
-        "tieba"
+        "tieba",
+        "xbtit"
     ]
 }

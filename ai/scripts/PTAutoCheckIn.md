@@ -1,16 +1,16 @@
 # PTAutoCheckIn-v2.user.js — PT 多站点自动签到 v2
 
-> 源文件：`src/PTAutoCheckIn-v2.user.js` ｜ 版本 `2026.09.08.22`(升级时同步更新)
+> 源文件：`src/PTAutoCheckIn-v2.user.js` ｜ 版本 `2026.09.08.26`(升级时同步更新)
 > ⚠️ 状态：**v2 重构版, 待实测校准后并入正式版**。原 `src/PTAutoCheckIn.user.js`（v2026.08.30.1）暂保留；并入时改回 `@name PTAutoCheckIn` 并递增版本号, 删除旧文件。
 
 ## 功能概述
 
-覆盖 24 个 PT 站(含仅检测不自动签的 U2 与无按钮访问即签的 MTeam/DigitalCore/HD-Space/Kufirc)+ 百度贴吧(**多吧**, 每个吧为独立签到单元)。双模式：
+覆盖 27 个站点(含仅检测不自动签的 U2、无按钮访问即签的 MTeam/DigitalCore/HD-Space/Kufirc/凤凰PT/Sportz Bar、Discourse 论坛按钮签到站 NodeLoc)+ 百度贴吧(**多吧**, 每个吧为独立签到单元)。双模式：
 
 1. **被动模式**：访问匹配站点自动签到(同 v1)。
 2. **主动批量模式**：点击右下角悬浮按钮 → 面板「批量签到」→ **发起页常驻**, 由调度循环依次用 `GM_openInTab` 在**后台标签**打开各站执行签到, 发起页轮询 GM 状态逐个推进, 全部完成后停在发起页弹出完成面板。
 3. **结果查看**：FAB 面板展示**当日全量结果**(成功/失败/待确认/跳过), GM 存储跨域共享 → 任意已匹配站点打开面板看到的都是同一份数据。
-4. **签到按钮重现降级提醒**(2026.09.08 .18/.19/.20)：当日记录已签(success)但按钮又呈可签态(服务器重置/换账号/误报)→ **.20 状态降级**: 把当日状态改为 `suspect`, 面板该站 badge 显「**失败-待确认**」且不再计入今日成功(仍不自动重签、不进批量); 同时 **.19 页面级呈现**仍生效: 琥珀警示 toast 一次 + 按钮琥珀高亮描边+⚠ 徽标「已标失败-待确认(仅提醒)」+ 页面底部居中常驻横条(可 ✕ 圆钮关闭本页); FAB 琥珀角标/面板警示条/行标记(.18)保留。页面确认已签 → 状态自动恢复已成功 + 提醒消除; 次日自然作废(见 P25)。
+4. **签到按钮重现降级提醒**(2026.09.08 .18/.19/.20)：当日记录已签(success)但按钮又呈可签态(服务器重置/换账号/误报)→ **.20 状态降级**: 把当日状态改为 `suspect`, 面板该站 badge 显「**失败-待确认**」且不再计入今日成功(仍不自动重签、不进批量); 同时 **.19 页面级呈现**仍生效: 琥珀警示 toast 一次 + 按钮琥珀高亮描边+⚠ 徽标「已标失败-待确认(仅提醒)」+ 页面底部居中常驻横条(可 ✕ 圆钮关闭本页); FAB 琥珀角标/面板警示条/行标记(.18)保留。页面确认已签 → 状态自动恢复已成功 + 提醒消除; 次日自然作废(见 P25)。**2026.09.08 .26 通用化改造**: 判定从「纯按钮可见文本翻转」重构为**载体无关入口状态信号**(`stateSignals`/`readEntryState`, 文本/attr/class/fn/exists), 旧文本站自动翻译**行为逐位一致**, no-text 属性/class 态站(NodeLoc)由此纳入重现通道(显式 `checkInSelector`+`stateSignals`); MTeam 系六无按钮站与 HHCLUB(无已签基准)仍结构排除(见校准项 19)。
 
 核心设计不变：站点配置数据 + 通用执行引擎。**签到原子单位从「域名」细化为「页面入口 unit」**（解决贴吧多吧）。
 
@@ -42,6 +42,7 @@
 | `match` | **可选**——`RegExp` 或函数(传 href)显式决定页面归属; 缺省由 `url` 推导: host 相等(忽略 `www.` 前缀), 且 url 带 query 时逐参数一致(页面可带额外参数, 如贴吧 `kw`) |
 | `checkInSelector` / `checkInContent` | 签到按钮定位与文案校验 |
 | `alreadyCheckedInContent` | 已签到特征文本; **检测主通道=按钮文案**——每次访问页面都检测, 不受 10 分钟冷却限制(冷却只限"是否点击", 不限"是否检测") |
+| `stateSignals` | **可选(P25 重现检测载体无关信号, .26 通用化)**: 显式描述签到入口的已签/可签信号, 不再假设状态只存在按钮可见文本——文本/元素属性(attr)/class/自定义函数(fn)/存在性(exists) 均可。结构: `{ checked:[信号...], checkable:[信号...] }`, 任一 checked 命中=入口呈已签, 任一 checkable 命中=入口呈可签(重现判定); checkable 不配 = 反向常驻按钮站(入口存在且非已签即可签, 如蜂巢)。信号项: `{kind:'text', contains}`(visibleText 含) / `{kind:'attr', name, contains}`(属性值含) / `{kind:'attrEq', name, eq}`(属性值精确) / `{kind:'class', name}`(classList 含) / `{kind:'fn', fn}`(自定义谓词) / `{kind:'exists'}`(元素存在即命中)。**旧字段自动翻译, 文本站零改动**: 不配 stateSignals 时 checked=[text alreadyCheckedInContent]、checkable=[text checkInContent](无 checkInContent → 反向常驻站); 结构排除同旧: 无 `checkInSelector`(无按钮隐式站)或无已签基准(HHCLUB 等)→ 无重现语义(见 P25/.26) |
 | `alreadyCheck` | 可选函数, 自定义已签到判定 |
 | `noButtonMeansCheckedIn` | true: **找不到签到按钮即视为已签**(已签后签到按钮消失的站, 如 BTSchool); 仅当按钮确实会因已签而消失时启用 |
 | `alreadyPageCheck` | **默认 false(全部站点默认关闭整页文本检测**, 防页面其它区域误报); 仅特殊站显式 true(如跳页型落地页无签到按钮的 HDBao/MuXueGe) |
@@ -105,7 +106,7 @@
 - **失败且冷却中的站**(今日 `failed` + 10min 冷却未过): 整行降透明度 + 左侧琥珀竖条 + 副文案提示「冷却中, 默认不参与批量」; 批量候选**默认排除**此类站。常规「批量签到」按钮**右侧紧贴一个窄 chevron 图标钮**(拆分按钮组, 同色系+细分隔线) → 点击后琥珀色的 **「强制批量签到(n 站)」** 按钮从**按钮行上方浮出**(absolute 浮层不占文档流, 覆盖站点列表底部; 按钮与「批量签到」本体对齐), 浮出钮带详细 tooltip; 点击无视冷却强制重试(点击前仍重写冷却, 再失败进入新一轮冷却)。**全部签到完毕(无失败冷却站)或批量进行中隐藏图标钮**(此时「批量签到」恢复完整圆角); 图标钮 hover/展开态变琥珀色(图标不旋转); 强制按钮 tooltip 说明适用场景与风控风险。
 - 面板数据读 GM 存储, 任何已匹配站打开均为同一份(满足「任意已添加网站查看完成面板」)。
 
-## 已有站点一览(24 PT + 贴吧 2 吧)
+## 已有站点一览(27 站 + 贴吧 2 吧)
 
 > 2026.09.07 实测各站签到链接普遍不再带 `faqlink` class, 故所有 PT 站 `checkInSelector` 一律去掉 class 依赖(仅按 `href*="attendance.php"` 定位); PTTime 保留 `a.fcb`、Cyanbug 保留 `a.nav-btn`(非 faqlink, 实测仍有效)。站点 `url` 同步更新为当前有效入口(大多去掉 `www.` 前缀, 与 `match` 保持一致)。蜂巢为 shadcn/Radix 改版站(签到是按钮不是 attendance 链接), 例外按 `data-slot` 定位, 见下表。
 
@@ -133,6 +134,9 @@
 | DigitalCore | digitalcore.club | —(无按钮, 登录态访问首页即自动签到) | — / 导航链接 `a[href="/alltorrents"]`「All Torrents」 | 同 MTeam 隐式签到型: 显式 `match` 限首页(根或 `/index`, 排除详情/种子列表误触发); `successDetect` func 轮询该链接(16s); 未登录重定向无导航 → failed |
 | HD-Space | hd-space.org | —(无按钮, 登录态访问首页即自动签到) | — / 整页文本「Last access:」 | 同 MTeam 隐式签到型: 显式 `match` 限首页根路径; `successDetect` text 轮询「Last access:」(16s); 未登录重定向无该文本 → failed |
 | Kufirc | kufirc.com | —(无按钮, 登录态访问首页即自动签到) | — / 导航链接 `a[href="/torrents.php"]`「Torrents」 | 同 DigitalCore/HD-Space 隐式签到型: 显式 `match` 限首页根路径; `successDetect` func 轮询该链接(16s); 未登录页显示 Login/Reactivate 无该链接 → failed |
+| 凤凰PT | pt.521.best | —(无按钮, 登录态访问首页即自动签到) | — / 导航链接 `a[href="torrents.php"][rel="sub-menu"]`「种子」 | 同 MTeam 隐式签到型(NexusPHP 传统中文站): 显式 `match` 限首页(根或 `/index.php`); `successDetect` func 轮询该链接(16s, 相对路径无前导斜杠 + rel 属性); 未登录登录页无该链接 → failed |
+| Sportz Bar | sportz247.bar | —(无按钮, 登录态访问首页即自动签到) | — / 导航链接 `a.level1-a.drop[href="#"]`「Torrent Menu」 | 同 MTeam 隐式签到型(xbtitFM 传统站): 显式 `match` 限首页(根或 `/index.php`); `successDetect` func 轮询该链接(16s, href 为 `#` 锚点 + level1-a drop class); 未登录无导航菜单 → failed |
+| NodeLoc | nodeloc.com | `button.checkin-button`(no-text 图标钮, 点它签到) | —(按钮无可见文本) / class 含 `checked-in` + title/aria-label「您今天已经签到过了」 | Discourse 论坛: **no-text 按钮无文本 → 引擎文本通道不可用**, 已签判定走 `alreadyCheck` 自定义(class/title 属性), 点击走 function 步骤, 成功走 func `successDetect`(轮询 checked-in 16s); 显式 `match` 限首页根路径; 无 `checkInContent`/`alreadyCheckedInContent`, 但配 `checkInSelector` + `stateSignals`(class/attr 载体: checked=checked-in/含「已经签到过」, checkable=含「每日签到」)→ **P25 重现检测已纳入**(.26 通用化改造, 待实测) |
 | HHCLUB | hhanclub.net | 先点 `img#user-avatar` 展开菜单, 再点 `a[href*="attendance.php"]` | `[签到得憨豆]` / 落地页 `#date-display` 当月 `yyyy-mm` | `alreadyCheck` 自定义函数(动态算当月); **头像点-验-重试函数步骤**(点击后验签到链接可见, 最多3次) + `successDetect` 同页确认(轮询变 attendance.php 且当月日历 8s)双通道; 2026.09.08 修复普通触发偶发失败 |
 | U2 | u2.dmhy.org | `a[href*="showup.php"]` | `立即签到` / `已签到` | **仅检测型** `detectOnly:true`(签到需人工输入验证码 → 不自动点击/不进批量); 未签面板提示「需人工签到」; 按钮文案变已签即判 success(2026.09.08 接入, 待实测) |
 | pt吧 | tieba f?kw=pt | `.button-wrapper.operate-btn.follow-sign` | `签到` / `连签` | `batchDelayMs:3000` |
@@ -146,8 +150,9 @@
 - **HDBao / MuXueGe**(跳页式): `attendanceUrl` 直达 `attendance.php` → 点「立即签到」提交 → 页面刷新显示结果; `alreadyPageCheck:true` 用整页文本判定已签; 兜底 `click_checkin` 带 `ignoreError`。
 - **蜂巢**(对话框式, 2026.09.07 站方改版为 shadcn/Radix 风格): 签到按钮固定 `data-slot="sidebar-user-check-in"`, 已签时文案为「已签到」→ 按钮级已签检测自动命中(步骤 2 前置 detect 与步骤内 `click_checkin` 双保险), 不再依赖旧「文本含签到不含已」函数选择器; 未签时点同一按钮; 等待 5s(站点限制, 3s 不够) → `click_checkin` → 对话框「签到/关闭」两步降级为**可选**(`ignoreError` + 2s 超时, 改版后是否仍弹对话框待实测, 无则自动跳过)。**2026.09.08 实测点击成功后按钮即时变「已签到」→ 弃 `confirmManual`(否则成功却卡 pending 待人工确认), 改 `successDetect:[{type:'text', selector: 同按钮, text:'已签到', timeout:5000}]`** → 点击后按钮变已签即 success, 5s 未变走通用回退(再等 2.5s)后记 failed(不再卡 pending; 若响应慢于 7.5s 会误报 failed, 实测暂稳)。
 - **MTeam**(无按钮访问即签型, 2026.09.08 接入): 站方新站 `kp.m-team.cc` **没有签到按钮/页面**, 登录态访问主页 `/index` 即自动完成当日签到(隐式签到)。→ 建模: **显式 `match` 只认 kp 子域 `/index`**(详情页/其它子域不触发, 防把浏览页误当签到动作、详情页无卡片误报 failed 污染当日状态); 无 `checkInSelector`/`alreadyCheckedInContent`(无按钮可检可点); 步骤仅 `wait 3000` 等 SPA 渲染; 成功靠 `successDetect:[{type:'func', fn: 轮询 .ant-card-head-title 含「站点数据」或「站點數據」(16s)}]`(antd Card 标题, 简/繁双文本防 locale; 未登录被重定向登录页 → 无卡片 → failed, 需登录后脚本才会成功)。
-- **DigitalCore / HD-Space / Kufirc**(无按钮访问即签型, 2026.09.08 接入, 同 MTeam 模板): 三站同样**无签到按钮/页面**, 登录态访问首页即自动完成签到。DigitalCore(SPA, iconify 导航)成功特征 = `a[href="/alltorrents"]` 文本含 All Torrents; HD-Space(传统站)成功特征 = 整页文本含「Last access:」; Kufirc(Luminance 传统站, 未登录显示 Login/Reactivate)成功特征 = `a[href="/torrents.php"]` 文本含 Torrents。→ `match` 均限首页(根路径; DigitalCore 另容 `/index`); 无按钮字段; 步骤仅 `wait 3000`; `successDetect` 轮询特征(16s)。未登录 → 重定向/无特征 → failed。
+- **DigitalCore / HD-Space / Kufirc / 凤凰PT / Sportz Bar**(无按钮访问即签型, 2026.09.08 接入, 同 MTeam 模板): 各站同样**无签到按钮/页面**, 登录态访问首页即自动完成签到。DigitalCore(SPA, iconify 导航)成功特征 = `a[href="/alltorrents"]` 文本含 All Torrents; HD-Space(传统站)成功特征 = 整页文本含「Last access:」; Kufirc(Luminance 传统站, 未登录显示 Login/Reactivate)成功特征 = `a[href="/torrents.php"]` 文本含 Torrents; 凤凰PT(NexusPHP 传统中文站)成功特征 = `a[href="torrents.php"][rel="sub-menu"]` 文本含「种子」(相对路径 + rel 属性, 无前导斜杠); Sportz Bar(xbtitFM 传统站)成功特征 = `a.level1-a.drop[href="#"]` 文本含 Torrent Menu。→ `match` 均限首页(根路径; DigitalCore 另容 `/index`, 凤凰PT/Sportz Bar 另容 `/index.php`); 无按钮字段; 步骤仅 `wait 3000`; `successDetect` 轮询特征(16s)。未登录 → 重定向/无特征 → failed。
 - **HHCLUB**(菜单展开 + 动态落地页型, 2026.09.08 接入): 签到入口藏在头像下拉菜单: 先点 `img#user-avatar` 展开 → 再点菜单内 `a[href*="attendance.php"]`(`[签到得憨豆]`)→ 跳 `attendance.php`; 落地页渲染当月日历 `<p id="date-display">`(内容为**动态 `yyyy-mm`** 如 2026-09, 静态 `landingCheckedInContent` 字符串匹配不适用)→ 用 `alreadyCheck` 自定义 async 函数(非 attendance.php 落地页不判; 落地页上 `#date-display` 含**动态算出的当月前缀**才命中)→ 挂统一 `detectAlreadyCheckedIn` → 被动/批量/落地结算三路径自动共用。**2026.09.08 实测普通触发偶发「未检测到成功特征」+「整流程超时」, 强制重试即成功 → 点击后导航不稳定(SPA 路由/慢导航/首访点击无效)→ 修复双保险**: ① 头像改**点-验-重试函数步骤**: 点 avatar 后轮询签到链接**可见**(`getClientRects()>0`——菜单链接可能常驻 DOM 但 display:none, 隐藏元素程序化 `.click()` 不触发导航), 未现则再点(点击是 toggle), 最多 3 次; ② 补 `successDetect:[{type:'func', fn: 轮询 location.pathname 变 attendance.php 且 #date-display 含当月(8s)}]` → SPA 路由/800ms 后才跳转(无 pagehide)时同页也能确认, 不再秒判 failed; 整页跳转仍走落地结算(两通道并存)。已签当日菜单内容不变(无按钮级已签特征)。
+- **NodeLoc**(no-text 图标按钮站, 2026.09.08 接入): Discourse 论坛, 首页有「每日签到」真实按钮 `button.checkin-button`(class 含 `btn no-text btn-icon icon btn-flat checkin-button`, **内部只有 svg 图标无可见文本**, title/aria-label=「每日签到」)。点击后同页变化(class 加 `checked-in`、title/aria-label 变「您今天已经签到过了」)→ **引擎按钮级文本通道(click_checkin 已签判定 / checkInContent 文案匹配)依赖 visibleText, 对 no-text 按钮不可用** → 建模: ① 已签判定 = `alreadyCheck` 自定义函数(detectAlreadyCheckedIn 第 1 通道): 按钮存在且 class 含 `checked-in` 或 title/aria-label 含「已经签到过」→ 未登录无按钮返回 false; ② 点击 = steps 里 function 步骤(`waitForElement` 找到按钮, 已签 class/title 守卫后才 `click()`); ③ 成功后 = `successDetect:[{type:'func', fn: 轮询按钮 class 含 checked-in / title 已签(16s)}]`。显式 `match` 限首页根路径(排除话题/节点页——非首页可能有其它按钮或无此按钮, 防误点/无按钮误报 failed)。**P25 重现检测(.26 通用化改造后已纳入)**: no-text 无文本 → 引擎原按钮级重现(纯 visibleText 翻转判定)结构上排除 → 补 `checkInSelector` + `stateSignals`(载体无关信号): checked=[class `checked-in`, attr title/aria-label 含「已经签到过」], checkable=[attr title/aria-label 含「每日签到」] → `readEntryState` 直接读 class/attr, 已签/可签两态互斥(已签 title 不含「每日签到」, 可签 title 不含「已经签到过」)不误判。引擎文本站行为不变(旧字段自动翻译)。
 - **贴吧吧页**: `match` 用函数解析 `?kw=` 精确归属(同域多个吧互不误签); 已关注吧才有签到按钮(未关注按失败提示)。
 
 ## 主流程(v2)
@@ -175,7 +180,7 @@ boot()
 1. 贴吧：已签特征文案(现配 `连签`)、点击后成功文案(现配 body 含 `签到成功`)、未关注吧时按钮缺失的行为。
 2. 蜂巢：已签检测已启用(改版后按钮 `data-slot="sidebar-user-check-in"` 文案「已签到」, 实测命中); **2026.09.08 已实测点击后按钮即时变「已签到」→ 已弃 confirmManual 改 `successDetect`(按钮文案 5s 轮询)** → 待实测: 点击后按钮变已签稳定可靠(数日观察无 "未检测到成功特征" failed); 未签时点击后是否仍弹对话框(步骤已做可选兼容)。
 3. HDBao / MuXueGe：`attendanceUrl` 落地页的整页已签文案检测是否误报/漏报(**全部站点默认关闭整页检测, 仅这两站显式开启**; 注意站内其他区域是否含 `签到已得` 字样)。
-4. 其余 15 个 PT 站(普通按钮级自动签站, 不含蜂巢/HDBao/MuXueGe/MTeam/HHCLUB/DigitalCore/HD-Space/Kufirc 八个特殊站与仅检测的 U2):按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。BTSchool 特例(`noButtonMeansCheckedIn`): 未签页按钮在→能点; 已签页按钮消失→判 success, 需实测确认按钮确实随已签消失、且不会在无签到入口的其它页面误判。PTTime 落地页无反馈问题见上 `landingCheckedInContent`(已配 `总签到记录`, 待实测确认落地页文本稳定; 若其它站同问题参照配置)。
+4. 其余 15 个 PT 站(普通按钮级自动签站, 不含蜂巢/HDBao/MuXueGe/MTeam/HHCLUB/DigitalCore/HD-Space/Kufirc/凤凰PT/Sportz Bar/NodeLoc 十一个特殊站与仅检测的 U2):按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。BTSchool 特例(`noButtonMeansCheckedIn`): 未签页按钮在→能点; 已签页按钮消失→判 success, 需实测确认按钮确实随已签消失、且不会在无签到入口的其它页面误判。PTTime 落地页无反馈问题见上 `landingCheckedInContent`(已配 `总签到记录`, 待实测确认落地页文本稳定; 若其它站同问题参照配置)。
 5. 批量调度(重点)：发起页停留不动, 后台标签逐个打开签到并自动关闭; 模拟单站断网/无法访问 → 50s 窗口后写 failed 自动跳过继续下一站(不再死链); 点击跳转型站落地页结算写 success; 调度中途关闭发起页 → 其它站横幅提示「恢复批量」一键续跑。
 6. 深浅色主题切换、批量完成面板在任意站打开的一致性(完成后面板停留发起页, 其它站打开面板数据一致)。
 7. 新增 UI 交互: 点击站点名 → 新标签打开该站; 失败且冷却中的站被排除且行有特殊样式(琥珀竖条+降透明度); 常规批量按钮右侧紧贴的 chevron 图标钮 → 点击从按钮行上方浮出琥珀色「强制批量签到」按钮(带 tooltip, 不占文档流), 点它把失败冷却站纳入并强制点击(注意反爬风险, 谨慎使用); 全部完成/批量中图标钮隐藏、批量按钮恢复完整圆角; 站点图标: 各站名前显示 favicon(路过收集 → 根路径兜底 → 加载失败隐藏, 不影响布局)。
@@ -189,6 +194,10 @@ boot()
 13. **签到按钮重现降级提醒(2026.09.08 .18/.19/.20, 待实测)**: ① 正常日零打扰——已签站反复刷新不应出现提醒(按钮为已签文案/消失), 状态保持已成功; ② 模拟「记录已签但按钮可签」(重置服务器态/另一账号未签)→ 触发一次提醒且**状态降级**: 面板该站 badge 变「失败-待确认」、今日成功数减一; 页面反馈= 琥珀警示 toast(渐变底白字)4s + 页面按钮琥珀描边呼吸+旁插「⚠ 按钮重现, 已标失败-待确认(仅提醒)」徽标 + 页面底部居中常驻横条列站名+按钮文案; FAB 琥珀角标 + 面板警示条/行标记亦应同步; ③ 同一站不同页面/多次访问不重复提醒也不重复降级(每天至多一次——降级后状态即 suspect, 不再满足降级条件, 幂等); **升级当天 .18/.19 已提醒过(on/off 残留)的站再触发重现也应降级**(降级闸门与 alert 写入解耦, 不依赖当天首写——修复实测「状态仍为已成功」); ④ 用户站内人工补签后再访问 → 页面确认已签 → 状态恢复「已成功」, 高亮/横条/角标全部消除; ⑤ 跨天后再访问 → 降级自然作废, 恢复正常未签流程(不再是 suspect); ⑥ 横条 ✕ 关闭仅隐藏本页会话, 刷新后若 alert 仍 on 应重新显示; ⑦ suspect 站**不出现**在普通/强制批量列表, 也不被自动点击(确认无点击/冷却日志); ⑧ 蜂巢(反向判定)、HDBao/MuXueGe(若首页链接随签到翻转即覆盖)实测按钮态; ⑨ 今日有 failed 站时 FAB 角标被失败红标占据属预期(页面级高亮/横条仍可见); ⑩ 后台标签/批量场景不误写提醒(批量本就只开未签站)。
 14. **DigitalCore / HD-Space(2026.09.08 .21 接入, 待实测)**: ① 登录态打开 https://digitalcore.club/(确认实际首页 path 是根还是 `/index`, 若非两者需改 `match`)→ 面板该站应转绿 success(16s 内), 无点击/冷却日志(无按钮站, 访问即签); ② HD-Space 打开 https://hd-space.org/ → 整页「Last access:」出现即 success; ③ 未登录访问 → 应 failed(重定向登录页无特征), 登录后再试 success; ④ 详情页/种子列表/论坛等非首页不应触发(不写状态); ⑤ 次日刷新重复访问 → 各自再判 success(访问即签语义); ⑥ 两站不出现「按钮重现提醒」(无按钮站, P25 结构上排除, 无需测)。
 15. **Kufirc(2026.09.08 .22 接入, 待实测)**: ① 登录态打开 https://kufirc.com/ → 面板该站转绿 success(16s 内): 导航链接 `a[href="/torrents.php"]` 文本含 Torrents 出现(确认实际首页 path 是根路径; Luminance 站登录态导航栏才有此链接, 若已登录首页无则需改特征/放宽 match); ② 未登录访问(显示 Login/Reactivate)→ 应 failed(无 Torrents 链接), 登录后再试 success; ③ 种子详情/浏览等非首页不触发(不写状态); ④ 次日刷新重复访问 → 再判 success(访问即签语义); ⑤ 不出现「按钮重现提醒」(无按钮站, P25 结构上排除)。
+16. **凤凰PT(2026.09.08 .23 接入, 待实测)**: ① 登录态打开 https://pt.521.best/(确认实际首页 path 是根还是 `/index.php`, 若非两者需改 `match`)→ 面板该站转绿 success(16s 内): 导航链接 `a[href="torrents.php"][rel="sub-menu"]` 文本含「种子」出现(若 href 实际带前导斜杠或属性不同需校正 selector); ② 未登录访问(登录页)→ 应 failed(无该链接), 登录后再试 success; ③ 种子详情/浏览等非首页不触发(不写状态); ④ 次日刷新重复访问 → 再判 success(访问即签语义); ⑤ 不出现「按钮重现提醒」(无按钮站, P25 结构上排除)。
+17. **Sportz Bar(2026.09.08 .24 接入, 待实测)**: ① 登录态打开 https://sportz247.bar/(确认实际首页 path 是根还是 `/index.php`, 若非两者需改 `match`)→ 面板该站转绿 success(16s 内): 导航链接 `a.level1-a.drop[href="#"]` 文本含 Torrent Menu 出现(若 class/结构不同需校正 selector); ② 未登录访问(Please Login)→ 应 failed(无该链接), 登录后再试 success; ③ 种子详情/浏览等非首页不触发(不写状态); ④ 次日刷新重复访问 → 再判 success(访问即签语义); ⑤ 不出现「按钮重现提醒」(无按钮站, P25 结构上排除)。
+18. **NodeLoc(2026.09.08 .25 接入, 待实测)**: ① 登录态打开 https://www.nodeloc.com/ 首页 → 面板该站未签时应**点击**签到按钮(console 有「点击每日签到按钮」日志), 点击后 class 变 checked-in → 16s 内转绿 success; ② 已签当日再刷新/访问 → 应直接 success(alreadyCheck 命中 checked-in/标题已签), **无第二次点击**; ③ 未登录首页 → 无按钮 → failed(需登录); ④ 话题/节点详情等**非首页路径不触发**(match 限定根路径); ⑤ 已签态下按钮 title/class 如与假设不符 → 校正 `stateSignals` 信号与 `alreadyCheck`(两者判定同源: class `checked-in` / title·aria-label 含「已经签到过」); ⑥ 次日再访问 → 重新点击签到(新一天按钮复位); ⑦ 若按钮实际出现在非首页/全站 → 改 match 放宽并确认不会在无按钮页误报; ⑧ 若点击后按钮不是立即变 checked-in(有弹窗/跳转)→ 按实际反馈形态改成功检测。
+19. **重现检测通用化(.26 引擎重构, 待实测)**: 引擎按钮重现检测从「纯按钮可见文本翻转」(P25)重构为**载体无关入口状态信号** `deriveStateSignals`/`readEntryState`——文本站由旧字段自动翻译(**行为应逐位一致, 零回归**), NodeLoc 等 no-text 属性/class 态站由显式 `stateSignals` 纳入。待实测: ① 文本站回归抽查(任意 2-3 个: 已签态反复刷新不误报重现; 模拟按钮重现 → 降级 suspect + 提醒; 补签后恢复)——旧行为不变; ② NodeLoc 首次获得重现通道: 已签当日若按钮**又呈可签态**(title=每日签到)→ 应降级 suspect + toast/高亮/横条; 若按钮仍呈已签(checked-in/title 已签到)→ 保持已成功零打扰; ③ NodeLoc 补签恢复: 人工补签后再访问 → 状态从 suspect 恢复 success + 提醒消除; ④ MTeam 系六站/HHCLUB 仍无重现语义(无入口/无已签基准), 不应出现提醒; ⑤ 蜂巢(反向常驻)、BTSchool(noButton)不受影响(回归抽查)。
 
 ## 修改与扩展指南
 
