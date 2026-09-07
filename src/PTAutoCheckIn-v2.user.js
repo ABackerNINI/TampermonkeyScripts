@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.08.26
+// @version      2026.09.08.27
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -744,6 +744,54 @@ const K = {
                 {
                     id: 'tieba_test', name: 'test吧',
                     url: 'https://tieba.baidu.com/f?kw=test',
+                    checkInSelector: '.button-wrapper.operate-btn.follow-sign',
+                    checkInContent: '签到',
+                    alreadyCheckedInContent: '连签',
+                    successDetect: [
+                        { type: 'text', selector: 'body', text: '签到成功', timeout: 3000 }
+                    ],
+                    batchDelayMs: 3000,
+                    steps: [CLICK_CHECK_IN]
+                },
+                {
+                    id: 'tieba_dst', name: '饥荒吧',
+                    url: 'https://tieba.baidu.com/f?kw=饥荒',
+                    checkInSelector: '.button-wrapper.operate-btn.follow-sign',
+                    checkInContent: '签到',
+                    alreadyCheckedInContent: '连签',
+                    successDetect: [
+                        { type: 'text', selector: 'body', text: '签到成功', timeout: 3000 }
+                    ],
+                    batchDelayMs: 3000,
+                    steps: [CLICK_CHECK_IN]
+                },
+                {
+                    id: 'tieba_wows', name: '战舰世界吧',
+                    url: 'https://tieba.baidu.com/f?kw=战舰世界',
+                    checkInSelector: '.button-wrapper.operate-btn.follow-sign',
+                    checkInContent: '签到',
+                    alreadyCheckedInContent: '连签',
+                    successDetect: [
+                        { type: 'text', selector: 'body', text: '签到成功', timeout: 3000 }
+                    ],
+                    batchDelayMs: 3000,
+                    steps: [CLICK_CHECK_IN]
+                },
+                {
+                    id: 'tieba_subnautica', name: '深海迷航吧',
+                    url: 'https://tieba.baidu.com/f?kw=深海迷航',
+                    checkInSelector: '.button-wrapper.operate-btn.follow-sign',
+                    checkInContent: '签到',
+                    alreadyCheckedInContent: '连签',
+                    successDetect: [
+                        { type: 'text', selector: 'body', text: '签到成功', timeout: 3000 }
+                    ],
+                    batchDelayMs: 3000,
+                    steps: [CLICK_CHECK_IN]
+                },
+                {
+                    id: 'tieba_oni', name: '缺氧吧',
+                    url: 'https://tieba.baidu.com/f?kw=缺氧',
                     checkInSelector: '.button-wrapper.operate-btn.follow-sign',
                     checkInContent: '签到',
                     alreadyCheckedInContent: '连签',
