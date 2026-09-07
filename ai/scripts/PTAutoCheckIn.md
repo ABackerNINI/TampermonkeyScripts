@@ -126,7 +126,7 @@
 | Cyanbug | cyanbug.net | `a.nav-btn[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | HDBao | hdbao.cc | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 跳页; `attendanceUrl` 直达; `alreadyPageCheck:true` |
 | MuXueGe | pt.muxuege.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 同上 |
-| 蜂巢 | pting.club | `button[data-slot="sidebar-user-check-in"]` | — / `已签到` | 对话框式(改版后已签检测启用, 对话框步骤可选); `confirmManual:true` |
+| 蜂巢 | pting.club | `button[data-slot="sidebar-user-check-in"]` | — / `已签到` | 对话框式(改版后已签检测启用, 对话框步骤可选); `successDetect` 按钮变已签 5s |
 | pt吧 | tieba f?kw=pt | `.button-wrapper.operate-btn.follow-sign` | `签到` / `连签` | `batchDelayMs:3000` |
 | hdsky吧 | tieba f?kw=hdsky | 同上 | 同上 | 同上 |
 
@@ -136,7 +136,7 @@
 
 - **PTTime**(落地页无反馈型, 2026.09.08): 点击签到按钮整页跳到 `attendance.php`, 该落地页**不显示**「签到详情/签到已得」类按钮或文案(判定会卡 pending)→ 改用**落地页标记** `landingCheckedInContent: '总签到记录'`: 签到成功落地后页内出现「总签到记录」记录表头(`<p class="mt10 fwb">`, class 可能改版变化故**纯文本匹配不绑 class**)即判 success; 落地页判定**不写死 attendance.php**——由签到按钮 href 自动推导(`isLandingPageOf`: 解析 `checkInSelector` 的 href / `attendanceUrl` 优先), 同款语义站(NexusPHP 落地无反馈)照配 `landingCheckedInContent` 即可, 落地页叫 attendance.php/sign.php/... 都能识别(非落地页不检测防误报)。
 - **HDBao / MuXueGe**(跳页式): `attendanceUrl` 直达 `attendance.php` → 点「立即签到」提交 → 页面刷新显示结果; `alreadyPageCheck:true` 用整页文本判定已签; 兜底 `click_checkin` 带 `ignoreError`。
-- **蜂巢**(对话框式, 2026.09.07 站方改版为 shadcn/Radix 风格): 签到按钮固定 `data-slot="sidebar-user-check-in"`, 已签时文案为「已签到」→ 按钮级已签检测自动命中(步骤 2 前置 detect 与步骤内 `click_checkin` 双保险), 不再依赖旧「文本含签到不含已」函数选择器; 未签时点同一按钮; 等待 5s(站点限制, 3s 不够) → `click_checkin` → 对话框「签到/关闭」两步降级为**可选**(`ignoreError` + 2s 超时, 改版后是否仍弹对话框待实测, 无则自动跳过); 无可靠成功特征, `confirmManual:true` 记 pending。
+- **蜂巢**(对话框式, 2026.09.07 站方改版为 shadcn/Radix 风格): 签到按钮固定 `data-slot="sidebar-user-check-in"`, 已签时文案为「已签到」→ 按钮级已签检测自动命中(步骤 2 前置 detect 与步骤内 `click_checkin` 双保险), 不再依赖旧「文本含签到不含已」函数选择器; 未签时点同一按钮; 等待 5s(站点限制, 3s 不够) → `click_checkin` → 对话框「签到/关闭」两步降级为**可选**(`ignoreError` + 2s 超时, 改版后是否仍弹对话框待实测, 无则自动跳过)。**2026.09.08 实测点击成功后按钮即时变「已签到」→ 弃 `confirmManual`(否则成功却卡 pending 待人工确认), 改 `successDetect:[{type:'text', selector: 同按钮, text:'已签到', timeout:5000}]`** → 点击后按钮变已签即 success, 5s 未变走通用回退(再等 2.5s)后记 failed(不再卡 pending; 若响应慢于 7.5s 会误报 failed, 实测暂稳)。
 - **贴吧吧页**: `match` 用函数解析 `?kw=` 精确归属(同域多个吧互不误签); 已关注吧才有签到按钮(未关注按失败提示)。
 
 ## 主流程(v2)
@@ -162,7 +162,7 @@ boot()
 ## 实测校准清单(并入正式版前逐项验证)
 
 1. 贴吧：已签特征文案(现配 `连签`)、点击后成功文案(现配 body 含 `签到成功`)、未关注吧时按钮缺失的行为。
-2. 蜂巢：已签检测已启用(改版后按钮 `data-slot="sidebar-user-check-in"` 文案「已签到」, 实测命中)→ 待实测: 未签时点击同一按钮后是否仍弹对话框(步骤已做可选兼容)、点击后按钮是否即时变「已签到」(若稳定可改 successDetect, 摆脱 confirmManual)。
+2. 蜂巢：已签检测已启用(改版后按钮 `data-slot="sidebar-user-check-in"` 文案「已签到」, 实测命中); **2026.09.08 已实测点击后按钮即时变「已签到」→ 已弃 confirmManual 改 `successDetect`(按钮文案 5s 轮询)** → 待实测: 点击后按钮变已签稳定可靠(数日观察无 "未检测到成功特征" failed); 未签时点击后是否仍弹对话框(步骤已做可选兼容)。
 3. HDBao / MuXueGe：`attendanceUrl` 落地页的整页已签文案检测是否误报/漏报(**全部站点默认关闭整页检测, 仅这两站显式开启**; 注意站内其他区域是否含 `签到已得` 字样)。
 4. 其余 15 个 PT 站：按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。BTSchool 特例(`noButtonMeansCheckedIn`): 未签页按钮在→能点; 已签页按钮消失→判 success, 需实测确认按钮确实随已签消失、且不会在无签到入口的其它页面误判。PTTime 落地页无反馈问题见上 `landingCheckedInContent`(已配 `总签到记录`, 待实测确认落地页文本稳定; 若其它站同问题参照配置)。
 5. 批量调度(重点)：发起页停留不动, 后台标签逐个打开签到并自动关闭; 模拟单站断网/无法访问 → 50s 窗口后写 failed 自动跳过继续下一站(不再死链); 点击跳转型站落地页结算写 success; 调度中途关闭发起页 → 其它站横幅提示「恢复批量」一键续跑。

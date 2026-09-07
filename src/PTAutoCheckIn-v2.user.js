@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.08.12
+// @version      2026.09.08.13
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -282,12 +282,16 @@ const K = {
         { // 蜂巢: 2026.09.07 站方改版为 shadcn/Radix 风格 UI, 签到按钮固定
             //   data-slot="sidebar-user-check-in", 已签时按钮文案为「已签到」→ 按钮级已签检测已启用;
             //   未签时点击同一按钮; 改版后是否仍弹对话框待实测, 故对话框两步降级为可选(找不到自动跳过);
-            //   无可靠成功特征, 点击后仍 confirmManual 记 pending 待人工确认
+            //   2026.09.08 实测: 点击签到成功后按钮即时变「已签到」= 可靠成功特征 → 弃 confirmManual(否则
+            //   明明成功却记 pending 待人工确认), 改 successDetect 轮询按钮文案 5s: 变已签 → success;
+            //   5s 仍未变(响应慢/未成功) → 走通用回退后记 failed(不再卡 pending, 语义见 detectSuccess)
             id: 'pting', name: '蜂巢',
             url: 'https://pting.club/',
             checkInSelector: 'button[data-slot="sidebar-user-check-in"]',
             alreadyCheckedInContent: '已签到',
-            confirmManual: true,
+            successDetect: [
+                { type: 'text', selector: 'button[data-slot="sidebar-user-check-in"]', text: '已签到', timeout: 5000 }
+            ],
             steps: [
                 {
                     type: 'wait',
