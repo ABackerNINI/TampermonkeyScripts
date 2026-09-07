@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.08.17
+// @version      2026.09.08.20
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -54,7 +54,8 @@ const K = {
     cooldown: (uid) => `ptac_cooldown_${uid}`, // 上次触发时间戳(ms)
     favicon: (uid) => `ptac_favicon_${uid}`,   // 路过收集的站点真实 icon URL(面板列表图标用)
     skin: 'ptac_skin',                          // FAB 外观皮肤: chameleon|number|signal|ring
-    task: 'ptac_task'                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
+    task: 'ptac_task',                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
+    alert: (uid) => `ptac_alert_${uid}`        // 签到按钮重现提醒 {date, btnText, ts, state:'on'|'off'}(见 P25)
 };
 
 (function () {
@@ -477,6 +478,7 @@ const K = {
           url: 'https://u2.dmhy.org/',
           detectOnly: true, // 仅检测已签状态(未签不点/不记失败/不进批量), 由人工在站内完成签到
           checkInSelector: 'a[href*="showup.php"]', // 不依赖 faqlink class(2026.09.07 批量去 class 教训)
+          checkInContent: '立即签到', // 未签文案: 兼作「按钮重现提醒」正向判定基准(P25)
           alreadyCheckedInContent: '已签到', // 按钮文案: 立即签到(未签) → 已签到(已签), 待实测校准
         },
 
@@ -698,6 +700,49 @@ const K = {
         return { success, failed, total: UNITS.length };
     }
 
+    // ---------- 签到按钮重现提醒(与当日状态联动降级, 见 P25) ----------
+    // 语义: 引擎曾把某站判为「今日已签 success」, 但后续访问发现签到按钮又呈可签态
+    // (服务器重置/换账号/上次 success 误报)→ 写常驻提醒供前台页面显示(FAB 琥珀角标/
+    // 面板警示条/行标记); 同时把当日 status 降级为 suspect(面板显示「失败-待确认」),
+    // 避免用户误以为今日已完成。纯提醒不自动重签(真已签时误点有重复签到/风控风险)。
+    // 转正: 该站页面再次确认已签(按钮为已签文案 / noButtonMeansCheckedIn 站无按钮 /
+    // 页面级已签通道)→ 状态恢复 success + 清提醒(alert 置 off)。
+    // 节流: 提醒每站每天至多写一次 on(state:'on' 期间不重写; 页面确认已签 clearAlert 置
+    // off 后当天不再复写提醒)。**降级与提醒解耦**: 闸门 = 当日状态仍 success 且按钮重现
+    // → 直接降级 suspect(与 alert 当天是否已写/off 无关, 修复 .18/.19 旧残留导致当天
+    // 永不再降级); 每天至多降级一次由状态转换幂等天然保证(success→suspect 后不再满足
+    // 条件), 跨页/刷新不重复降级。off 仅代表「曾确认已签」, 不冻结状态轴。
+    function readAlert(unitId) {
+        const a = gmGet(K.alert(unitId), null);
+        if (!a || a.date !== todayStr()) {
+            if (a) gmSet(K.alert(unitId), null); // 顺带清理跨天过期记录
+            return null;
+        }
+        return a.state === 'on' ? a : null;
+    }
+    // 返回 true=本次新写入提醒(当天首次); false=当天已提醒过/已人工确认置 off(不重写)
+    function writeAlert(unitId, btnText) {
+        const a = gmGet(K.alert(unitId), null);
+        if (a && a.date === todayStr()) return false; // 今天已提醒过(无论 on/off), 防同站跨页刷屏
+        gmSet(K.alert(unitId), { date: todayStr(), btnText, ts: Date.now(), state: 'on' });
+        return true;
+    }
+    function clearAlert(unitId) {
+        const a = gmGet(K.alert(unitId), null);
+        if (a && a.date === todayStr() && a.state === 'on') {
+            gmSet(K.alert(unitId), Object.assign({}, a, { state: 'off' }));
+        }
+    }
+    // 今日有效提醒列表(面板警示条/FAB 角标用): 保持站点顺序
+    function alertUnits() {
+        const out = [];
+        for (const u of UNITS) {
+            const a = readAlert(u.id);
+            if (a) out.push({ unit: u, alert: a });
+        }
+        return out;
+    }
+
     // ---------- 冷却(防高频触发) ----------
     function readCooldown(unitId) {
         return gmGet(K.cooldown(unitId), 0);
@@ -914,6 +959,39 @@ const K = {
         return { hit: false };
     }
 
+    // ==================== 签到按钮重现检测(见 P25) ====================
+    // 前提: 今日记录已签(success)但页面按钮又呈可签态 → 返回按钮可见文本用于常驻提醒;
+    // 否则 null。两类站:
+    //  A) 正向按钮站(默认): 按钮文案在 [checkInContent]↔[alreadyCheckedInContent] 间翻转
+    //     (标准 NexusPHP 签到得魔力→签到已得、贴吧 签到→连签、U2 立即签到→已签到)
+    //  B) 常驻按钮站(无 checkInContent, 如蜂巢): 仅断言按钮存在且不含已签文案即可
+    //     (改版后按钮固定 data-slot=sidebar-user-check-in, 文案 签到↔已签到 翻转)
+    // 结构上自动排除无此语义的站: MTeam(无按钮/隐式签到)、HHCLUB(首页菜单链接文案不随
+    // 签到翻转, 且无 alreadyCheckedInContent)、HDBao/MuXueGe 等跳页站(按钮型翻转照常覆盖;
+    // 若首页链接不翻转则不会误报, 因为已签态下按钮要么文案含已签内容要么无按钮/非链接)。
+    function checkInButtonReappeared(unit) {
+        if (!unit.checkInSelector || !unit.alreadyCheckedInContent) return null;
+        let el;
+        try { el = document.querySelector(unit.checkInSelector); } catch (e) { return null; }
+        if (!el) return null; // 无按钮(如 BTSchool 已签按钮消失型): 不视为重现
+        const text = visibleText(el);
+        if (text.includes(unit.alreadyCheckedInContent)) return null; // 仍是已签文案
+        // 已签风味词否定守卫: 个别站已签文案不含配置的 alreadyCheckedInContent 却含可签内容
+        // 子串(如贴吧若显示「已签到」而配置 only 连签)→ 命中任一已签风味词即视为已签, 防误报
+        if (/(已签|已成功|连签|已得|已领|已完成)/.test(text)) return null;
+        if (unit.checkInContent && !text.includes(unit.checkInContent)) return null; // 正向: 非可签文案
+        return text.trim();
+    }
+    // 页面按钮/结构是否确认已签(用于清除提醒): 按钮文案含已签内容, 或 noButtonMeansCheckedIn
+    // 站已签按钮消失(无按钮即已签)
+    function signedByButton(unit) {
+        if (!unit.checkInSelector || !unit.alreadyCheckedInContent) return false;
+        let el;
+        try { el = document.querySelector(unit.checkInSelector); } catch (e) { return false; }
+        if (el) return visibleText(el).includes(unit.alreadyCheckedInContent);
+        return !!unit.noButtonMeansCheckedIn;
+    }
+
     // ==================== 成功检测(点击后) ====================
     // 返回 true/false; 仅当页面未发生跳转(同页 AJAX/SPA)时才有意义
     async function detectSuccess(unit) {
@@ -961,7 +1039,7 @@ const K = {
     // ==================== 单 unit 签到主流程 ====================
     /**
      * 返回结果 {status, msg, reason}
-     * status: success | failed | pending | skipped
+     * status: success | failed | pending | skipped | suspect(失败-待确认, 见 P25)
      */
     async function runUnit(unit, ctx = {}) {
         const log = (msg) => console.log(`${ScriptName} [${unit.name}] ${msg}`);
@@ -973,10 +1051,84 @@ const K = {
             return { status: 'skipped', msg: '页面跨天, 刷新中', reason: 'day_roll' };
         }
 
-        // 1) 当日已签到成功 → 跳过(今日不再检测/点击)
-        if (isSuccessToday(unit.id)) {
-            log('今日已签到成功, 跳过');
-            return { status: 'skipped', msg: '今日已签到成功', reason: 'done_today' };
+        // 1) 今日已有当日结果(success 已成功 / suspect 失败-待确认)→ 跳过自动处理, 做
+        //    「签到按钮重现」复核(见 P25):
+        //    · 按钮再现可签(服务器重置/换账号/上次误报)→ 当日 success **降级为 suspect**
+        //      (面板不再显示已成功, 改显「失败-待确认”), 写常驻提醒 + 页面级呈现; 不点击、不写冷却;
+        //    · 页面确认已签(按钮已签文案 / noButton 已签型无按钮 / 页面级已签通道)→
+        //      suspect **恢复 success** + 清提醒(收掉高亮/横条);
+        //    suspect 非 success(不计今日成功), 但本分支拦截返回, 不会落入步骤 2+ 自动点击;
+        //    次日记录 date 不匹配自然作废, 恢复常态签到。
+        const todaySt = readStatus(unit.id);
+        const suspectToday = !!(todaySt && todaySt.status === 'suspect' && todaySt.date === todayStr());
+        if (isSuccessToday(unit.id) || suspectToday) {
+            log(suspectToday ? '今日失败-待确认(suspect), 复核中' : '今日已签到成功, 复核中');
+            let downgraded = suspectToday;
+            try {
+                let confirmedSigned = signedByButton(unit); // 按钮已签文案 / noButton 已签型无按钮
+                log(`复核: signedByButton=${confirmedSigned}, 按钮=${(function(){ try { const el = document.querySelector(unit.checkInSelector); return el ? JSON.stringify(visibleText(el).trim()) : '无(noButton:' + !!unit.noButtonMeansCheckedIn + ')'; } catch (e) { return 'err'; } })()}`);
+                if (!confirmedSigned) {
+                    const btnText = checkInButtonReappeared(unit); // 非 null = 按钮呈可签态(重现)
+                    log(`复核: checkInButtonReappeared=${btnText === null ? 'null(未重现)' : JSON.stringify(btnText)}`);
+                    if (btnText) {
+                        // 状态降级(.20 用户需求): 当日记录仍 success(尚未降级)且按钮重现 →
+                        // 降级 suspect。闸门 = 「状态轴事实」, 与 alert 是否已写/已 off 完全解耦:
+                        // 修复 .18/.19 旧版残留(当天已写 on/off 提醒但状态仍是 success)导致
+                        // writeAlert 返回 false 而永不降级、面板永远显示「已成功」的问题;
+                        // 降级每天至多一次由状态转换天然保证(success→suspect 后不再满足条件),
+                        // 跨页/刷新不会重复降级(见 P25)。off 仅用于「不写新提醒、不打扰」。
+                        const a = gmGet(K.alert(unit.id), null);
+                        const offToday = !!(a && a.date === todayStr() && a.state === 'off');
+                        const firstWrite = writeAlert(unit.id, btnText); // 当天已有记录(含 off)不重写
+                        if (!suspectToday && todaySt && todaySt.status === 'success') {
+                            writeStatus(unit.id, 'suspect', '已改为失败-待确认(补签后自动恢复)');
+                            warn(`检测到签到按钮重现(${btnText}) → 状态已改为失败-待确认(不自动重签)`);
+                            log(`降级执行: alert=${JSON.stringify(a)}, offToday=${offToday}, firstWrite=${firstWrite}`);
+                            downgraded = true;
+                            // 本次触发页即时反馈: 高亮按钮 + 重建横条(off 时不清提醒则不重建 on 记录,
+                            // 但本次页面仍 toast/高亮一次直达用户); 已降级过不再 toast
+                            if (uiActive()) {
+                                highlightReappearedBtn(unit);
+                                renderPageAlertBar();
+                                UI.toast(`⚠ ${unit.name} 签到按钮重现(${btnText}) → 已标失败-待确认`, 4000, 'warn');
+                            }
+                        } else if (suspectToday) {
+                            // 已是 suspect(刷新/跨页重访本分支): 重建页面装饰(高亮/横条), 不重复降级
+                            if (uiActive()) {
+                                highlightReappearedBtn(unit);
+                                renderPageAlertBar();
+                            }
+                        }
+                        // 其余(offToday 已人工确认 / firstWrite=false 当天已提醒过 on): 不打扰、不重复
+                    } else {
+                        // 无按钮重现迹象: 页面级已签通道确认(整页文案/落地页标记/自定义判定),
+                        // 覆盖「补签完成但按钮通道未覆盖」场景(如跳页落地页无按钮)
+                        try {
+                            const already = await detectAlreadyCheckedIn(unit);
+                            confirmedSigned = already.hit;
+                        } catch (e) { /* 忽略 */ }
+                    }
+                }
+                if (confirmedSigned) {
+                    if (suspectToday) {
+                        writeStatus(unit.id, 'success', '页面确认已签(解除失败-待确认)');
+                        log('页面确认已签, 状态恢复已成功');
+                    }
+                    if (readAlert(unit.id)) {
+                        clearAlert(unit.id);
+                        log('清除签到按钮重现提醒');
+                        clearReappearedBtn(unit);
+                        renderPageAlertBar(); // 同步收掉页面高亮/横条
+                    }
+                }
+            } catch (e) {
+                warn(`按钮重现复核异常: ${e.message}`);
+            }
+            return {
+                status: 'skipped',
+                msg: downgraded ? '失败-待确认, 不自动重签' : '今日已签到成功',
+                reason: downgraded ? 'suspect' : 'done_today'
+            };
         }
 
         // 2) 已签到检测 —— 每次访问都执行, 不受冷却限制(检测 ≠ 点击, 无封号风险)
@@ -1338,6 +1490,15 @@ const K = {
             align-items: center; gap: 8px; flex-shrink: 0; font-size: 12px; line-height: 1.5;
         }
         .banner.warn { background: rgba(217, 119, 6, 0.15); color: var(--pend); }
+        /* 按钮重现提醒警示条(面板列表顶部, 常驻直至页面确认已签/次日自然作废) */
+        .alert-bar {
+            margin: 0 0 8px; padding: 8px 10px; border-radius: 10px;
+            background: rgba(217, 119, 6, 0.12); border: 1px solid rgba(217, 119, 6, 0.35);
+            color: var(--text); font-size: 11px; line-height: 1.5;
+        }
+        .alert-bar b { color: var(--pend); margin-right: 4px; }
+        .alert-bar span { color: var(--muted); display: block; }
+        .alert-bar .alert-names { margin-top: 2px; color: var(--pend); word-break: break-all; }
         .banner button {
             border: none; cursor: pointer; border-radius: 999px; padding: 3px 12px;
             background: var(--pend); color: #fff; font-size: 12px; font-weight: 600;
@@ -1382,6 +1543,8 @@ const K = {
         .row-sub { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .row.cool { opacity: 0.72; box-shadow: inset 3px 0 0 var(--pend); }
         .row.cool .row-sub { color: var(--pend); }
+        .row.alert { box-shadow: inset 3px 0 0 var(--pend); }
+        .row.alert .row-sub { color: var(--pend); font-weight: 600; }
         .badge {
             flex-shrink: 0; font-size: 11px; font-weight: 600;
             padding: 3px 8px; border-radius: 999px; white-space: nowrap;
@@ -1457,6 +1620,11 @@ const K = {
             pointer-events: none;
         }
         .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.warn {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff; border-color: transparent;
+            font-weight: 600; box-shadow: 0 4px 18px rgba(217, 119, 6, 0.45);
+        }
     `;
 
     const UI = (function () {
@@ -1475,6 +1643,7 @@ const K = {
             switch (status) {
                 case 'success': return { label: '已成功', cls: 'ok' };
                 case 'failed': return { label: '失败', cls: 'err' };
+                case 'suspect': return { label: '失败-待确认', cls: 'pend' }; // 签到按钮重现降级(见 P25)
                 case 'pending': return { label: '待确认', cls: 'pend' };
                 case 'skipped': return { label: '已跳过', cls: 'skip' };
                 default: return { label: '—', cls: 'none' };
@@ -1486,6 +1655,7 @@ const K = {
             const todayHit = st && st.date === todayStr();
             const meta = statusMeta(todayHit ? st.status : '');
             const cool = isFailedInCooldown(unit.id);
+            const alert = readAlert(unit.id); // 按钮重现提醒(常驻标记)
             let sub = '今日未处理';
             if (todayHit && st) {
                 sub = `${esc(st.msg || '')}${st.ts ? ' · ' + formatTime(st.ts) : ''}`;
@@ -1493,9 +1663,13 @@ const K = {
             } else if (unit.detectOnly && !todayHit) {
                 sub = '需人工签到(验证码), 不自动签'; // 仅检测型站: 未签时留待人工
             }
+            if (alert) {
+                // 重现提醒存在即当日已降级 suspect(失败-待确认): 前置警示按钮文案, 后附降级说明
+                sub = `⚠ 签到按钮重现: ${esc(alert.btnText || '')}${sub && sub !== '今日未处理' ? ' · ' + sub : ''}`;
+            }
             const url = esc(unit.url);
             const fav = faviconSrc(unit);
-            return `<div class="row${cool ? ' cool' : ''}">`
+            return `<div class="row${cool ? ' cool' : ''}${alert ? ' alert' : ''}">`
                 + `<div class="row-main"><div class="row-name" data-url="${url}" title="新标签打开 ${url}">`
                 + (fav ? `<img class="fav" src="${esc(fav)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '')
                 + `<span class="nm">${esc(unit.name)}</span><span class="ext">↗</span></div>`
@@ -1636,9 +1810,9 @@ const K = {
             render();
         }
 
-        // 按当前皮肤与今日汇总刷新 FAB(c: countToday 结果)
+        // 按当前皮肤与今日汇总刷新 FAB(c: countToday 结果; alertN: 按钮重现提醒站数)
         // 语义统一: 全部完成 vs 有站点未签到 必须有明显差异, 四种皮肤各按自身语言表达
-        function applyFabSkin(c) {
+        function applyFabSkin(c, alertN = 0) {
             fab.classList.remove('ok', 'warn', 'err', 'ring', 'chameleon');
             if (skin !== 'ring') fab.querySelectorAll('.ring-rays').forEach((el) => el.remove()); // 切走 ring 时移除 DOM 光芒(样式挂在 .fab.ring 下, 不清理会残留裸元素)
             const left = c.total - c.success;       // 未成功站数(含失败/pending/skipped/未处理)
@@ -1707,6 +1881,9 @@ const K = {
                     else setFabBadge(left, 'err');
                 }
             }
+            // 按钮重现提醒优先角标: 存在告警且今日无失败(失败红标语义更紧急, 保持不动)时,
+            // 琥珀 warn 角标改显告警站数, 提示用户开面板查看(面板内警示条/行标记常驻)
+            if (alertN > 0 && c.failed === 0) setFabBadge(alertN, 'warn');
             if (skinBtns) skinBtns.forEach((b) => b.classList.toggle('active', b.dataset.skin === skin));
         }
         function setFabBadge(n, cls) {
@@ -1725,8 +1902,14 @@ const K = {
             if (!host) return;
             const c = countToday();
             summaryEl.textContent = `今日 ${c.success}/${c.total} 已成功`;
-            applyFabSkin(c);
+            const alerts = alertUnits(); // 按钮重现提醒(今日有效, 跨站持久)
+            applyFabSkin(c, alerts.length);
             let html = '';
+            if (alerts.length) {
+                html += `<div class="alert-bar"><b>⚠ 签到按钮重现 ${alerts.length} 站</b>`
+                    + `<span>记录显示今日已签但检测到可签按钮 → 已标「失败-待确认」; 不自动重签, 页面确认已签后自动恢复已成功并消除, 次日自然作废</span>`
+                    + `<div class="alert-names">${alerts.map((a) => `${esc(a.unit.name)}(${esc(a.alert.btnText || '')})`).join('、')}</div></div>`;
+            }
             for (const g of GROUPS) {
                 const isMulti = g.units.length > 1;
                 if (isMulti) html += `<div class="g-head">${esc(g.name)}</div>`;
@@ -1848,11 +2031,14 @@ const K = {
         }
 
         // ---------- toast ----------
-        function toast(msg) {
+        // cls: 可选样式类('warn' = 琥珀警示底/白字, 用于按钮重现等提醒; 普通消息不带类)
+        function toast(msg, ms = 2600, cls = '') {
+            toastEl.classList.remove('warn'); // 清上次残留, 防普通/警示交替时样式串
             toastEl.textContent = msg;
+            if (cls) toastEl.classList.add(cls);
             toastEl.classList.add('show');
             clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+            toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms);
         }
 
         return {
@@ -1862,6 +2048,150 @@ const K = {
             showBanner, hideBanner
         };
     })();
+
+    // ==================== 页面级呈现: 签到按钮重现(按钮高亮 / 页面常驻横条) ====================
+    // .18 教训(P25): alert 只呈现在 Shadow 面板/FAB 内时, 用户不打开面板就毫无感知 —— 用户
+    // 盯着的是页面上的签到按钮. 故 .19 增加页面 light DOM 级反馈, 生命周期与 ptac_alert_* 同源:
+    //  ① 按钮高亮: 该站按钮加琥珀描边 + 呼吸光晕 + 旁插 ⚠ 徽标(常驻到已签清除/次日作废/无按钮)
+    //  ② 页面底部居中常驻横条: 列出当日全部 alert 站(可 ✕ 关闭本页会话; 刷新后若仍 on 会重现)
+    //  ③ 即时琥珀警示 toast 一次(4s, 由 runUnit 重现分支触发)
+    // 仅普通前台页(UI 已注入)执行; 后台任务标签无 UI 不处理。
+    function uiActive() {
+        return !!document.getElementById('ptac-root-v2');
+    }
+    function ensurePageCss() {
+        let st = document.getElementById('ptac-page-style'); // 幂等: 已存在也覆写最新样式, 防旧 style 残留旧版位置/外观
+        if (!st) {
+            st = document.createElement('style');
+            st.id = 'ptac-page-style';
+            (document.head || document.documentElement).appendChild(st);
+        }
+        st.textContent = `
+        .ptac-hl {
+            outline: 2px solid #f59e0b !important; outline-offset: 2px;
+            animation: ptacHlPulse 1.8s ease-in-out infinite;
+        }
+        @keyframes ptacHlPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5); }
+            50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+        }
+        .ptac-hl-badge {
+            display: inline-flex; align-items: center; margin-left: 8px; padding: 2px 8px;
+            font: 600 11px/1.6 -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+            color: #92400e !important; background: #fef3c7 !important;
+            border: 1px solid #f59e0b !important; border-radius: 999px;
+            cursor: default; vertical-align: middle; white-space: nowrap;
+        }
+        .ptac-page-alert {
+            position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 2147483646;
+            display: flex; align-items: center; gap: 8px;
+            max-width: min(720px, calc(100vw - 24px));
+            padding: 8px 10px 8px 16px; border-radius: 12px;
+            background: #fff7ed; border: 1px solid #f59e0b;
+            color: #7c2d12; font: 500 12px/1.5 -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            box-shadow: 0 6px 24px rgba(217, 119, 6, 0.28);
+        }
+        .ptac-page-alert b { color: #b45309; flex-shrink: 0; }
+        .ptac-page-alert span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ptac-page-alert .ptac-alert-close {
+            flex-shrink: 0; cursor: pointer;
+            width: 22px; height: 22px; padding: 0; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            border: 1px solid rgba(217, 119, 6, 0.5); background: #fff;
+            color: #b45309; font: 700 11px/1 -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+        }
+        .ptac-page-alert .ptac-alert-close:hover {
+            background: #b45309; color: #fff; transform: scale(1.1);
+        }
+        `;
+    }
+    function highlightReappearedBtn(unit) {
+        if (!unit.checkInSelector) return;
+        let el;
+        try { el = document.querySelector(unit.checkInSelector); } catch (e) { return; }
+        if (!el) return;
+        ensurePageCss();
+        if (el.classList.contains('ptac-hl')) return; // 本页已高亮过
+        el.classList.add('ptac-hl');
+        el.style.outline = '2px solid #f59e0b'; // 内联兜底(style 注入被站点清理时描边仍可见)
+        el.style.outlineOffset = '2px';
+        const holder = el.parentElement;
+        if (holder && holder.querySelector(`.ptac-hl-badge[data-uid="${unit.id}"]`)) return;
+        const badge = document.createElement('span');
+        badge.className = 'ptac-hl-badge';
+        badge.dataset.uid = unit.id;
+        badge.textContent = '⚠ 按钮重现, 已标失败-待确认(仅提醒)';
+        badge.title = '脚本记录今日已签, 但此按钮又呈可签态 → 已把当日状态改为失败-待确认; 不自动重签, 请确认是否需重新签到(补签后自动恢复已成功)';
+        // 内联兜底(与 .ptac-hl-badge 同值): 页面级 style 注入偶被站点清理时形态仍正确
+        badge.style.cssText = 'display:inline-flex;align-items:center;margin-left:8px;padding:2px 8px;' +
+            'font:600 11px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;' +
+            'color:#92400e;background:#fef3c7;border:1px solid #f59e0b;border-radius:999px;' +
+            'cursor:default;vertical-align:middle;white-space:nowrap;';
+        el.insertAdjacentElement('afterend', badge);
+    }
+    function clearReappearedBtn(unit) {
+        let el = null;
+        try { el = document.querySelector(unit.checkInSelector); } catch (e) { el = null; }
+        if (el) el.classList.remove('ptac-hl');
+        const holder = el && el.parentElement;
+        if (holder) {
+            const b = holder.querySelector(`.ptac-hl-badge[data-uid="${unit.id}"]`);
+            if (b) b.remove();
+        }
+    }
+    let pageAlertDismissed = false; // 本页会话内用户已 ✕ 关闭横条(刷新后若 alert 仍 on 会重新显示)
+    function renderPageAlertBar() {
+        if (!uiActive()) return;
+        const alerts = alertUnits();
+        const existing = document.getElementById('ptac-alert-bar-root');
+        if (!alerts.length) {
+            if (existing) existing.remove();
+            return;
+        }
+        if (pageAlertDismissed) return;
+        ensurePageCss();
+        if (existing) existing.remove();
+        const root = document.createElement('div');
+        root.id = 'ptac-alert-bar-root';
+        root.className = 'ptac-page-alert';
+        // 关键样式全部内联兜底(不依赖 style 注入): 任何情况下都呈「底部居中琥珀卡片 + 圆钮关闭」
+        root.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);' +
+            'z-index:2147483646;display:flex;align-items:center;gap:8px;' +
+            'max-width:min(720px,calc(100vw - 24px));padding:8px 10px 8px 16px;border-radius:12px;' +
+            'background:#fff7ed;border:1px solid #f59e0b;color:#7c2d12;' +
+            'font:500 12px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;' +
+            'box-shadow:0 6px 24px rgba(217,119,6,0.28);';
+        const b = document.createElement('b');
+        b.textContent = `⚠ 签到按钮重现 ${alerts.length} 站:`;
+        b.style.cssText = 'color:#b45309;flex-shrink:0;';
+        const span = document.createElement('span');
+        span.textContent = alerts.map((a) => `${a.unit.name}(${a.alert.btnText || ''})`).join('、');
+        span.title = '记录显示今日已签, 但检测到可签按钮; 仅提醒不自动重签, 页面确认已签后自动消除, 次日自然作废';
+        span.style.cssText = 'flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'ptac-alert-close';
+        close.textContent = '✕';
+        close.title = '本页关闭(按钮恢复已签或次日不再提示)';
+        close.style.cssText = 'flex-shrink:0;cursor:pointer;width:22px;height:22px;padding:0;border-radius:50%;' +
+            'display:inline-flex;align-items:center;justify-content:center;' +
+            'border:1px solid rgba(217,119,6,0.5);background:#fff;color:#b45309;' +
+            'font:700 11px/1 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;' +
+            'transition:background 0.15s ease,color 0.15s ease,transform 0.1s ease;';
+        close.addEventListener('click', () => {
+            pageAlertDismissed = true;
+            const bar = document.getElementById('ptac-alert-bar-root');
+            if (bar) bar.remove();
+        });
+        // hover 形态用事件驱动(不依赖 style 表, 与内联同保底)
+        close.addEventListener('mouseenter', () => { close.style.background = '#b45309'; close.style.color = '#fff'; });
+        close.addEventListener('mouseleave', () => { close.style.background = '#fff'; close.style.color = '#b45309'; });
+        root.appendChild(b);
+        root.appendChild(span);
+        root.appendChild(close);
+        document.body.insertBefore(root, document.body.firstChild);
+    }
 
     // ==================== 批量任务引擎(常驻发起页 + 后台标签串行调度) ====================
     // 方案: 发起页(用户停留页)建任务后不开导航, 由调度循环逐个:
@@ -1879,6 +2209,8 @@ const K = {
             if (u.detectOnly) continue; // 仅检测型站(人工验证, 如 U2)不参与批量
             if (isSuccessToday(u.id)) continue;
             const prev = readStatus(u.id);
+            // 失败-待确认(suspect, 签到按钮重现降级): 不自动重签 → 不进普通/强制批量
+            if (prev && prev.status === 'suspect' && prev.date === todayStr()) continue;
             if (prev && prev.status === 'pending' && prev.date === todayStr()
                 && Date.now() - prev.ts < MIN_INTERVAL) continue;
             if (!force && isFailedInCooldown(u.id)) continue;
@@ -2105,6 +2437,7 @@ const K = {
 
         // 普通访问页
         UI.init();
+        renderPageAlertBar(); // 展示既有「签到按钮重现」提醒(跨站 GM 持久, 页面顶部横条)
         if (task) {
             const curUnitId = task.list && task.list[task.index];
             const curUnit = curUnitId ? UNIT_MAP.get(curUnitId) : null;
@@ -2133,6 +2466,7 @@ const K = {
             await runPassiveMode();
         }
         UI.render();
+        renderPageAlertBar(); // 刷新提醒横条(runUnit 期间可能新增/清除)
     }
 
     (async function boot() {
