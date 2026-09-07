@@ -42,7 +42,7 @@ const cells = row.querySelectorAll(':scope > td');   // 只取直接子单元格
 **原因**：`click_checkin` 依赖 `checkInContent`（应含文案）与 `alreadyCheckedInContent`（已签到特征）做判断，站点文案一旦变化（繁简、改版）即失效。
 **正确做法**：
 - 新增/失效站点排查顺序：`未匹配到任何站点规则` → `match` 正则；`未找到签到按钮…(已签到?)` → `checkInSelector`；`签到按钮内容不匹配` → `checkInContent`。
-- 蜂巢（pting.club）需注意按钮文本长度 < 4 且不含「已」，否则点错元素。
+- 蜂巢（pting.club）2026.09.07 改版为 shadcn 风格后改按 `button[data-slot="sidebar-user-check-in"]` 精确定位：文案含「已签到」用于已签检测（不再排除「已」）；对话框按钮（若仍有）继续用文本 <4 且含「签到」过滤，其结构若再有变需按 HTML 复查。
 
 ## P6. 签到防重复机制的坑（10 分钟间隔）
 
@@ -58,7 +58,7 @@ const origResolve = resolve;
 resolve = (value) => { clearTimeout(timer); origResolve(value); };
 ```
 - 覆盖 `resolve` 仅为**在命中时清除超时定时器**，属合法但易被误读；重构时勿删掉 `clearTimeout`，否则元素在超时前命中后定时器仍会触发 `reject`（Promise 已定型，无副作用但浪费）。
-- 函数选择器每次轮询都会执行，需保证**无副作用、可重复调用**（蜂巢按钮查找函数即为此模式）。
+- 函数选择器每次轮询都会执行，需保证**无副作用、可重复调用**（蜂巢对话框查找函数即为此模式）。
 
 ## P8. 键盘快捷键误触输入框
 

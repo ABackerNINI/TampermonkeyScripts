@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.4
+// @version      2026.09.07.5
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -280,10 +280,15 @@ const K = {
                 }
             ]
         },
-        { // 对话框式签到, 无可靠的成功特征, 点击后记为 pending 待人工确认(实测校准项)
+        { // 蜂巢: 2026.09.07 站方改版为 shadcn/Radix 风格 UI, 签到按钮固定
+            //   data-slot="sidebar-user-check-in", 已签时按钮文案为「已签到」→ 按钮级已签检测已启用;
+            //   未签时点击同一按钮; 改版后是否仍弹对话框待实测, 故对话框两步降级为可选(找不到自动跳过);
+            //   无可靠成功特征, 点击后仍 confirmManual 记 pending 待人工确认
             id: 'pting', name: '蜂巢',
             url: 'https://pting.club/',
             match: /^https?:\/\/pting\.club\//,
+            checkInSelector: 'button[data-slot="sidebar-user-check-in"]',
+            alreadyCheckedInContent: '已签到',
             confirmManual: true,
             steps: [
                 {
@@ -292,18 +297,8 @@ const K = {
                     description: '等待5秒'
                 },
                 {
-                    type: 'click',
-                    selector: () => { // 外层"签到"按钮
-                        const btns = document.querySelectorAll('button:has(> svg):not([title])');
-                        for (const btn of btns) {
-                            const text = btn.textContent;
-                            if (text && text.includes('签到') && !text.includes('已') && text.length < 4) {
-                                return btn;
-                            }
-                        }
-                        return null;
-                    },
-                    description: '点击外层"签到"按钮',
+                    type: 'click_checkin',
+                    description: '点击侧栏"签到"按钮(文案含"已签到"则识别为已签, 不点击)',
                     timeout: 5000
                 },
                 {
@@ -311,9 +306,11 @@ const K = {
                     ms: 1000,
                     description: '等待1秒'
                 },
-                {
+                { // 对话框"签到"按钮 — 可选步骤: 若改版后已无对话框则超时自动跳过
                     type: 'click',
-                    selector: () => { // 对话框"签到"按钮
+                    ignoreError: true,
+                    timeout: 2000,
+                    selector: () => {
                         const btns = document.querySelectorAll('span > button[data-slot="button"][type="button"]:not([title])');
                         for (const btn of btns) {
                             if (btn.textContent && btn.textContent.includes('签到') && btn.textContent.length < 4) {
@@ -322,17 +319,18 @@ const K = {
                         }
                         return null;
                     },
-                    description: '点击对话框"签到"按钮',
-                    timeout: 5000
+                    description: '点击对话框"签到"按钮(可选)'
                 },
                 {
                     type: 'wait',
-                    ms: 1000,
-                    description: '等待1秒'
+                    ms: 800,
+                    description: '等待0.8秒'
                 },
-                {
+                { // 对话框"关闭"按钮 — 可选步骤
                     type: 'click',
-                    selector: () => { // 对话框"关闭"按钮
+                    ignoreError: true,
+                    timeout: 2000,
+                    selector: () => {
                         const btns = document.querySelectorAll('div > button[data-slot="dialog-close"][type="button"]:not([title])');
                         for (const btn of btns) {
                             if (btn.textContent === '关闭') {
@@ -341,8 +339,7 @@ const K = {
                         }
                         return null;
                     },
-                    description: '点击对话框"关闭"按钮',
-                    timeout: 5000
+                    description: '点击对话框"关闭"按钮(可选)'
                 }
             ]
         },
