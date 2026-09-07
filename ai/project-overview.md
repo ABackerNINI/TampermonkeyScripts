@@ -24,7 +24,7 @@ TampermonkeyScripts/
 │   └── scripts/                  # 各脚本详细说明
 └── src/
     ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v1 旧版, 待 v2 实测后并入删除)
-    ├── PTAutoCheckIn-v2.user.js              # PT 多站点自动签到 v2(批量+FAB+贴吧多吧, 2026.09.07.5)
+    ├── PTAutoCheckIn-v2.user.js              # PT 多站点自动签到 v2(批量+FAB+贴吧多吧, 2026.09.07.6)
     ├── BTSchoolHelper.user.js                # BTSchool 种子列表增强
     ├── BTSchoolTorrentsTableSample.html      # BTSchool 种子表格真实 HTML 样本（测试用）
     ├── BilibiliEnterFullscreen.user.js       # B 站 Enter 键全屏

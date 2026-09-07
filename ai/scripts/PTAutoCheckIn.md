@@ -1,6 +1,6 @@
 # PTAutoCheckIn-v2.user.js — PT 多站点自动签到 v2
 
-> 源文件：`src/PTAutoCheckIn-v2.user.js` ｜ 版本 `2026.09.07.5`(升级时同步更新)
+> 源文件：`src/PTAutoCheckIn-v2.user.js` ｜ 版本 `2026.09.07.6`(升级时同步更新)
 > ⚠️ 状态：**v2 重构版, 待实测校准后并入正式版**。原 `src/PTAutoCheckIn.user.js`（v2026.08.30.1）暂保留；并入时改回 `@name PTAutoCheckIn` 并递增版本号, 删除旧文件。
 
 ## 功能概述
@@ -42,6 +42,7 @@
 | `checkInSelector` / `checkInContent` | 签到按钮定位与文案校验 |
 | `alreadyCheckedInContent` | 已签到特征文本; **检测主通道=按钮文案**——每次访问页面都检测, 不受 10 分钟冷却限制(冷却只限"是否点击", 不限"是否检测") |
 | `alreadyCheck` | 可选函数, 自定义已签到判定 |
+| `noButtonMeansCheckedIn` | true: **找不到签到按钮即视为已签**(已签后签到按钮消失的站, 如 BTSchool); 仅当按钮确实会因已签而消失时启用 |
 | `alreadyPageCheck` | **默认 false(全部站点默认关闭整页文本检测**, 防页面其它区域误报); 仅特殊站显式 true(如跳页型落地页无签到按钮的 HDBao/MuXueGe) |
 | `successDetect` | 点击后成功检测(同页 AJAX 场景) `[{type:'url'\|'text'\|'func',...}]`, 任一命中即成功 |
 | `confirmManual` | true: 无可靠成功特征, 点击后记 pending 待人工确认 |
@@ -62,7 +63,7 @@
 ```
 1. 当日 success                    → skipped(今日已完成)
 2. 已签到检测 —— 每次访问都执行, 不受冷却限制(检测≠点击, 无封号风险):
-   按钮文案命中 / (仅显式 alreadyPageCheck 的站)整页文案命中 → success
+   按钮文案命中 / (noButtonMeansCheckedIn 站)找不到签到按钮 / (仅显式 alreadyPageCheck 的站)整页文案命中 → success
 3. 上次 pending 未确认且未过冷却、且第 2 步仍无已签证据 → failed(上次点击确实未生效)
 4. 冷却中(<10min)                  → skipped(冷却只防重复点击, 不阻止检测)
 5. 执行 steps                      → 点击前先写 cooldown(即使跳页丢页面, 冷却也已落盘)
@@ -107,7 +108,7 @@
 | PTZone | ptzone.xyz | `a[href*="attendance.php"]` | `[簽到得魔力]`(繁) / `簽到已得` | — |
 | PTSBao | ptsbao.club | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | HDClone | pt.hdclone.top | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
-| BTSchool | pt.btschool.club | `a[href*="index.php?action=addbonus"] > font` | `每日签到` / `签到已得` | — |
+| BTSchool | pt.btschool.club | `a[href*="index.php?action=addbonus"] > font` | `每日签到` / `签到已得` | 已签后按钮消失; `noButtonMeansCheckedIn:true` |
 | 大香蕉 | pt.daxiangjiao.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | NovaHD | pt.novahd.top | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | PTFans | ptfans.cc | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
@@ -155,7 +156,7 @@ boot()
 1. 贴吧：已签特征文案(现配 `连签`)、点击后成功文案(现配 body 含 `签到成功`)、未关注吧时按钮缺失的行为。
 2. 蜂巢：已签检测已启用(改版后按钮 `data-slot="sidebar-user-check-in"` 文案「已签到」, 实测命中)→ 待实测: 未签时点击同一按钮后是否仍弹对话框(步骤已做可选兼容)、点击后按钮是否即时变「已签到」(若稳定可改 successDetect, 摆脱 confirmManual)。
 3. HDBao / MuXueGe：`attendanceUrl` 落地页的整页已签文案检测是否误报/漏报(**全部站点默认关闭整页检测, 仅这两站显式开启**; 注意站内其他区域是否含 `签到已得` 字样)。
-4. 其余 15 个 PT 站：按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。
+4. 其余 15 个 PT 站：按钮级已签检测为主(落地页/首页按钮文案变已签即可判定 success)——到站刷新两次验证: 首次触发签到, 10 分钟内第二次显示冷却跳过、但已签检测仍每次执行。若仍有站报"步骤失败: 等待元素...超时"且实际已签到, 按其页面 HTML 复查 `checkInSelector` 是否仍匹配(2026.09.07 已批量去掉 faqlink class 依赖)。BTSchool 特例(`noButtonMeansCheckedIn`): 未签页按钮在→能点; 已签页按钮消失→判 success, 需实测确认按钮确实随已签消失、且不会在无签到入口的其它页面误判。
 5. 批量调度(重点)：发起页停留不动, 后台标签逐个打开签到并自动关闭; 模拟单站断网/无法访问 → 50s 窗口后写 failed 自动跳过继续下一站(不再死链); 点击跳转型站落地页结算写 success; 调度中途关闭发起页 → 其它站横幅提示「恢复批量」一键续跑。
 6. 深浅色主题切换、批量完成面板在任意站打开的一致性(完成后面板停留发起页, 其它站打开面板数据一致)。
 

@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.5
+// @version      2026.09.07.6
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -74,6 +74,8 @@ const K = {
     //     → 已签到检测以按钮文案为准, 每次访问页面都会检测, 不受 10 分钟冷却限制
     //       (冷却只限制"是否点击", 不限制"是否检测")
     //   alreadyCheck: 可选函数, 自定义"已签到"判定(返回 bool)
+    //   noButtonMeansCheckedIn: true 时"找不到签到按钮即视为已签"(适用于已签后签到按钮消失的站, 如 BTSchool);
+    //     注意仅当按钮确实会因已签而消失时启用, 避免在无签到入口的其它页面误判
     //   alreadyPageCheck: 默认 false — 全部站点默认关闭整页文本检测(防页面其它区域误报);
     //     仅特殊站点显式置 true 才启用整页文本级"已签到"检测(如跳页型落地页无签到按钮的站)
     //   successDetect: 点击后成功检测列表(同页 AJAX 场景) [{type:'url'|'text'|'func', ...}], 任一命中即成功
@@ -146,6 +148,7 @@ const K = {
             checkInSelector: 'a[href*="index.php?action=addbonus"] > font',
             checkInContent: '每日签到',
             alreadyCheckedInContent: '签到已得',
+            noButtonMeansCheckedIn: true, // 实测: 已签后签到按钮消失, 找不到即视为已签
             steps: [CLICK_CHECK_IN]
         },
         {
@@ -631,6 +634,13 @@ const K = {
             const el = document.querySelector(unit.checkInSelector);
             if (el && visibleText(el).includes(unit.alreadyCheckedInContent)) {
                 return { hit: true, source: `按钮文案(${visibleText(el).trim()})` };
+            }
+        }
+        // 2.5) 无按钮即视为已签 — 仅显式开启的站(已签后签到按钮消失, 如 BTSchool)
+        if (unit.noButtonMeansCheckedIn && unit.checkInSelector) {
+            const el = document.querySelector(unit.checkInSelector);
+            if (!el) {
+                return { hit: true, source: '未找到签到按钮(视为已签)' };
             }
         }
         // 3) 整页文本判定 — 仅显式开启的站(如跳页型落地页无签到按钮的 HDBao/MuXueGe)

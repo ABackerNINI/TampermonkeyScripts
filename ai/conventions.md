@@ -135,7 +135,7 @@
 
 新增 PTAutoCheckIn-v2 站点（或贴吧加吧）：
 - [ ] 在 `@match` 增加域名（贴吧加吧无需，同域多个吧时 `match` 用函数按参数区分）；
-- [ ] `SITES` 增加配置：简单站加单站对象（`name` / `id` / `url` / `match` / `checkInSelector` / `checkInContent` / `alreadyCheckedInContent` / `steps`）；同站多入口加 group，入口列表加进该 group 的 `units`；
+- [ ] `SITES` 增加配置：简单站加单站对象（`name` / `id` / `url` / `match` / `checkInSelector` / `checkInContent` / `alreadyCheckedInContent` / `steps`；若已签后签到按钮消失, 加 `noButtonMeansCheckedIn: true`）；同站多入口加 group，入口列表加进该 group 的 `units`；
 - [ ] 对照站点页面的真实 DOM（非网络截图）核对选择器与文案；
 - [ ] 实测：未签到页能点、已签到页不重复点、10 分钟内刷新不重复触发、贴吧各吧独立触发；
 - [ ] 递增版本号 + 更新 `ai/scripts/PTAutoCheckIn.md` 站点表。
