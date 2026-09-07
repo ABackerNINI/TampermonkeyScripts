@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.08.20
+// @version      2026.09.08.22
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -26,6 +26,9 @@
 // @match        *://*.muxuege.org/*
 // @match        *://*.m-team.cc/*
 // @match        *://*.hhanclub.net/*
+// @match        *://*.digitalcore.club/*
+// @match        *://*.hd-space.org/*
+// @match        *://*.kufirc.com/*
 // @match        *://*.u2.dmhy.org/*
 // @run-at       document-start
 // @grant        GM_getValue
@@ -381,6 +384,85 @@ const K = {
                             }
                             return null;
                         }, 16000, 300, '站点数据卡片');
+                        return true;
+                    } catch (e) { return false; }
+                }
+            }]
+        },
+        { // DigitalCore: 2026.09.08 接入 — 与 MTeam 同型「无按钮/隐式签到」站: 登录态访问
+            //   首页即自动完成当日签到(无签到按钮可点); 成功特征 = 页面渲染出导航链接
+            //   a[href="/alltorrents"](文案 All Torrents, 登录态导航栏才有)。显式 match 限定
+            //   首页(根路径或 /index——DigitalCore 同 MTeam 为 SPA 型导航; 排除详情页/种子列表
+            //   等, 防把浏览当签到动作误报; 未登录重定向登录页 → 无导航 → failed, 需登录后脚本
+            //   才会成功)。无 checkInSelector/alreadyCheckedInContent → 按钮级/P25 重现检测自动跳过
+            id: 'digitalcore', name: 'DigitalCore',
+            url: 'https://digitalcore.club/',
+            match: (href) => {
+                try {
+                    const u = new URL(href);
+                    const p = u.pathname.replace(/\/+$/, '');
+                    return u.hostname.replace(/^www\./, '') === 'digitalcore.club'
+                        && (p === '' || p === '/index');
+                } catch (e) { return false; }
+            },
+            steps: [{ type: 'wait', ms: 3000, description: '等待页面渲染' }],
+            successDetect: [{
+                type: 'func',
+                fn: async () => {
+                    try {
+                        await waitForTrue(() => {
+                            for (const a of document.querySelectorAll('a[href="/alltorrents"]')) {
+                                if (visibleText(a).includes('All Torrents')) return true;
+                            }
+                            return null;
+                        }, 16000, 300, 'All Torrents 导航链接');
+                        return true;
+                    } catch (e) { return false; }
+                }
+            }]
+        },
+        { // HD-Space: 2026.09.08 接入 — 同 MTeam「访问首页即签到」隐式签到型: 登录态访问首页
+            //   自动完成当日签到; 成功特征 = 页面出现「Last access:」文本(整页文本检测; 该行随
+            //   登录态首页渲染, 记录最近访问/签到时间)。match 限定首页根路径(排除种子/详情/论坛
+            //   等页面误触发); 未登录被重定向 → 无该文本 → failed(需登录后脚本才会成功)。
+            //   无 checkInSelector/alreadyCheckedInContent → 按钮级/P25 重现检测自动跳过
+            id: 'hdspace', name: 'HD-Space',
+            url: 'https://hd-space.org/',
+            match: (href) => {
+                try {
+                    const u = new URL(href);
+                    const p = u.pathname.replace(/\/+$/, '');
+                    return u.hostname.replace(/^www\./, '') === 'hd-space.org' && p === '';
+                } catch (e) { return false; }
+            },
+            steps: [{ type: 'wait', ms: 3000, description: '等待页面渲染' }],
+            successDetect: [{ type: 'text', text: 'Last access:', timeout: 16000 }]
+        },
+        { // Kufirc: 2026.09.08 接入 — 同 DigitalCore/HD-Space 隐式签到型: 登录态访问首页即自动
+            //   完成当日签到; 成功特征 = 导航链接 a[href="/torrents.php"](文案 Torrents, 登录态导航栏
+            //   才有; 未登录页面显示 Login/Reactivate 无此链接)。match 限定首页根路径(排除种子/
+            //   详情等页面误触发); 未登录 → 无 Torrents 链接 → failed(需登录后脚本才会成功)。
+            //   无 checkInSelector/alreadyCheckedInContent → 按钮级/P25 重现检测自动跳过
+            id: 'kufirc', name: 'Kufirc',
+            url: 'https://kufirc.com/',
+            match: (href) => {
+                try {
+                    const u = new URL(href);
+                    const p = u.pathname.replace(/\/+$/, '');
+                    return u.hostname.replace(/^www\./, '') === 'kufirc.com' && p === '';
+                } catch (e) { return false; }
+            },
+            steps: [{ type: 'wait', ms: 3000, description: '等待页面渲染' }],
+            successDetect: [{
+                type: 'func',
+                fn: async () => {
+                    try {
+                        await waitForTrue(() => {
+                            for (const a of document.querySelectorAll('a[href="/torrents.php"]')) {
+                                if (visibleText(a).includes('Torrents')) return true;
+                            }
+                            return null;
+                        }, 16000, 300, 'Torrents 导航链接');
                         return true;
                     } catch (e) { return false; }
                 }
