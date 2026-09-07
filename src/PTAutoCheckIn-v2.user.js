@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn-v2
 // @name:zh-CN   PT多站点自动签到v2
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.07.2
+// @version      2026.09.07.3
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -28,6 +28,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_log
+// @grant        GM_openInTab
 // @license      GNU GPL-3.0
 // @tag          utilities
 // ==/UserScript==
@@ -36,15 +37,19 @@ const ScriptName = '[PTAutoCheckIn-v2]';
 const MIN_INTERVAL = 10 * 60 * 1000;           // 单站触发最小间隔, 防止高频触发导致封号
 const POST_CLICK_SETTLE = 800;                 // 点击后停留观察时长(ms), 判断是否发生页面跳转
 const WAIT_TEXT_TIMEOUT = 3000;                // 成功文案轮询默认超时(ms)
-const TASK_STALE_MS = 30 * 60 * 1000;          // 批量任务链条断连判定(ms), 超过视为中断并清理
+const TASK_STALE_MS = 30 * 60 * 1000;          // 批量任务总超时判定(ms): 超过视为过期并清理(调度页离开后的兜底)
 const UNIT_TOTAL_TIMEOUT = 25 * 1000;          // 单个站点整流程总超时(ms), 防卡死
 const DEFAULT_BATCH_DELAY_MS = 0;              // 默认站间缓冲(ms), 站点可自行配置覆盖
+const POLL_INTERVAL_MS = 1000;                 // 调度页轮询后台标签结果间隔(ms)
+const PER_UNIT_TIMEOUT_MS = 50 * 1000;         // 单站调度窗口上限(ms): 覆盖标签内整流程 + 落地页结算 + 网络慢
+const PENDING_GRACE_MS = 10 * 1000;            // 状态 pending 后观察窗口(ms): 等待落地页将其改写为 success/failed
+const HEARTBEAT_FRESH_MS = 15 * 1000;          // 调度页心跳保鲜判定(ms): 超过视为调度者已离开(断链/关页)
 
 // 存储 key 前缀(GM 存储按脚本共享, 跨域可读, 满足"任意站点查看同一份状态")
 const K = {
     status: (uid) => `ptac_status_${uid}`,     // {date:'YYYY-MM-DD', status:'success|failed|pending|skipped', msg, ts}
     cooldown: (uid) => `ptac_cooldown_${uid}`, // 上次触发时间戳(ms)
-    task: 'ptac_task'                          // 批量任务 {taskId, list:[unitId...], index, startedAt}
+    task: 'ptac_task'                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
 };
 
 (function () {
@@ -125,7 +130,7 @@ const K = {
         },
         {
             id: 'hdclone', name: 'HDClone',
-            url: 'https://www.pt.hdclone.top/',
+            url: 'https://pt.hdclone.top/',
             match: /^https?:\/\/pt\.hdclone\.top\//,
             checkInSelector: 'a.faqlink[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
@@ -901,8 +906,16 @@ const K = {
         .panel-close:hover { background: var(--surface-2); color: var(--text); }
         .banner {
             display: none; margin: 10px 14px 0; padding: 8px 12px; border-radius: 10px;
-            background: rgba(22, 163, 74, 0.12); color: var(--ok); font-weight: 600; flex-shrink: 0;
+            background: rgba(22, 163, 74, 0.12); color: var(--ok); font-weight: 600;
+            align-items: center; gap: 8px; flex-shrink: 0; font-size: 12px; line-height: 1.5;
         }
+        .banner.warn { background: rgba(217, 119, 6, 0.15); color: var(--pend); }
+        .banner button {
+            border: none; cursor: pointer; border-radius: 999px; padding: 3px 12px;
+            background: var(--pend); color: #fff; font-size: 12px; font-weight: 600;
+            font-family: var(--font); flex-shrink: 0; white-space: nowrap;
+        }
+        .banner button:hover { filter: brightness(1.08); }
         .batchbar {
             display: none; margin: 10px 14px 0; padding: 8px 10px; border-radius: 10px;
             background: var(--surface-2); font-size: 12px; align-items: center; gap: 8px; flex-shrink: 0;
@@ -1139,17 +1152,35 @@ const K = {
             panel.classList.add('show');
             render();
         }
+        function showBanner(msg, variant, actionText, onAction) {
+            bannerEl.className = 'banner' + (variant ? ' ' + variant : '');
+            bannerEl.textContent = '';
+            const span = document.createElement('span');
+            span.textContent = msg;
+            bannerEl.appendChild(span);
+            if (actionText && onAction) {
+                const btn = document.createElement('button');
+                btn.textContent = actionText;
+                btn.addEventListener('click', onAction);
+                bannerEl.appendChild(btn);
+            }
+            bannerEl.style.display = 'flex';
+        }
+        function hideBanner() {
+            bannerEl.style.display = 'none';
+            bannerEl.textContent = '';
+            bannerEl.className = 'banner';
+        }
         function closePanel() {
             panel.classList.remove('show');
-            bannerEl.style.display = 'none';
+            hideBanner();
         }
         function showBatchDone() {
             endBatch();
             openPanel();
-            bannerEl.textContent = '\u2713 批量签到完成';
-            bannerEl.style.display = 'block';
+            showBanner('\u2713 批量签到完成', '', null, null);
             toast('批量签到完成');
-            setTimeout(() => { bannerEl.style.display = 'none'; }, 8000);
+            setTimeout(hideBanner, 8000);
         }
 
         // ---------- toast ----------
@@ -1163,13 +1194,17 @@ const K = {
         return {
             init, render, toast, togglePanel, openPanel, closePanel,
             showBatch, updateBatchResult, updateBatchText, countdown,
-            endBatch, isCancelled, requestCancel, armCancel
+            endBatch, isCancelled, requestCancel, armCancel, showBatchDone,
+            showBanner, hideBanner
         };
     })();
 
-    // ==================== 批量任务引擎 ====================
-    // 采用"当前标签页接力导航"的串行方案: 每站签完跳下一站,
-    // 天然低频 + 站间可配缓冲, 全程单标签, 不并行不弹窗
+    // ==================== 批量任务引擎(常驻发起页 + 后台标签串行调度) ====================
+    // 方案: 发起页(用户停留页)建任务后不开导航, 由调度循环逐个:
+    //   GM_openInTab 后台开新标签执行签到 → 标签页将结果写入 GM 状态 → 发起页轮询读取
+    // 优点: 站点无法访问/打开超时不会"断链"(接力导航死在浏览器错误页), 调度页始终
+    // 存活, 单站失败/超时由调度窗口兜底自动跳过, 全部完成后停在发起页弹完成面板。
+    // 全程低频(单站 1 次点击) + 站间可配缓冲, 不并行; 后台标签用完即关。
 
     // 待处理候选: enabled 且非今日成功且非"待确认(pending)未过期"
     function remainingCandidates() {
@@ -1185,7 +1220,7 @@ const K = {
         return out;
     }
 
-    // 发起页开始批量: 建任务 → 立即接力到第一个候选站点(在用户点击手势内导航)
+    // 发起页开始批量: 建任务并立即启动调度循环(本页不导航)
     function startBatch() {
         const list = remainingCandidates();
         if (list.length === 0) {
@@ -1193,33 +1228,110 @@ const K = {
             return;
         }
         const taskId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-        const task = { taskId, list, index: 0, startedAt: Date.now() };
+        const task = { taskId, list, index: 0, startedAt: Date.now(), hb: Date.now() };
         saveTask(task);
-        const first = UNIT_MAP.get(list[0]);
         console.log(`${ScriptName} 批量任务已创建: ${list.join(', ')}`);
         UI.toast(`批量开始, 共 ${list.length} 个站点`);
-        // 稍延迟让 toast 可见, 再导航
-        setTimeout(() => location.replace(buildTaskUrl(first, taskId)), 300);
+        runBatchScheduler(task); // async, 发起页停留展示进度
     }
 
-    // 任务模式页面主流程(每个接力页调用一次, 处理完本站后导航到下一站或收尾)
-    async function runBatchOnCurrentPage(task) {
-        const unit = UNIT_MAP.get(task.list[task.index]);
-        // 安全校验: 任务指向的 unit 必须存在, 且当前页面确实命中该 unit(防 URL 参数被篡改后跳转任意域)
-        if (!unit || !matchUnit(unit, location.href)) {
-            clearTask();
-            UI.toast('批量任务已失效(当前页面与任务不匹配)');
-            UI.render();
-            return;
-        }
-        UI.showBatch({ index: task.index + 1, total: task.list.length, unitName: unit.name });
-        UI.armCancel(); // 整个批量过程可取消(单站执行中也可点停止, 处理完当前站后中止)
-        const res = await runUnitWithTimeout(unit, { mode: 'batch' });
-        UI.updateBatchResult(unit.name, res);
+    // 后台打开目标站标签(签到任务由该页执行, 结果经 GM 状态回传)
+    function openTaskTab(unit, taskId) {
+        const tab = GM_openInTab(buildTaskUrl(unit, taskId), { active: false, insert: true });
+        return tab;
+    }
 
-        // 点击触发了整页跳转(如 NexusPHP 签到链 attendance.php): 本页即将卸载,
-        // 不在此推进任务 —— 落地页会自动续链结算本站(见 main 的自动续链分支)
-        if (res && res.reason === 'navigated') return;
+    // 刷新任务心跳: 证明调度页仍存活(其它页面据此区分"调度中"与"已中断"), 节流写入
+    function touchTask(task) {
+        const now = Date.now();
+        if (task._hb && now - task._hb < 4000) return; // 4s 内已写, 避免高频 GM 写入
+        task.hb = now;
+        task._hb = now;
+        saveTask(task);
+    }
+
+    // 调度循环(发起页常驻): 逐个后台标签执行, 轮询结果后推进
+    async function runBatchScheduler(task) {
+        UI.armCancel(); // 整个批量过程可取消(含单站调度窗口内)
+        UI.render();
+        while (task.index < task.list.length) {
+            const unit = UNIT_MAP.get(task.list[task.index]);
+            if (!unit || unit.enabled === false) {
+                task.index += 1;
+                saveTask(task);
+                continue;
+            }
+            // 该站可能已被其它页面/被动流程完成, 跳过
+            if (isSuccessToday(unit.id)) {
+                task.index += 1;
+                saveTask(task);
+                continue;
+            }
+            UI.showBatch({ index: task.index + 1, total: task.list.length, unitName: unit.name });
+            touchTask(task);
+
+            // 打开后台标签执行; 记录打开前该站状态时间戳, 用于识别"新写入"
+            const prevTs = (readStatus(unit.id) || { ts: 0 }).ts;
+            let tab = null;
+            try {
+                tab = openTaskTab(unit, task.taskId);
+            } catch (e) {
+                console.warn(`${ScriptName} [${unit.name}] 打开后台标签失败: ${e.message}`);
+                writeStatus(unit.id, 'failed', '打开后台标签失败');
+                task.index += 1;
+                saveTask(task);
+                UI.render();
+                continue;
+            }
+
+            // 调度窗口内轮询: 读到该站"今日且比打开前更新"的状态即结算
+            const deadline = Date.now() + PER_UNIT_TIMEOUT_MS;
+            let settle = null;
+            let pendingSince = 0;
+            while (Date.now() < deadline) {
+                if (UI.isCancelled()) break;
+                await sleep(POLL_INTERVAL_MS);
+                touchTask(task);
+                const st = readStatus(unit.id);
+                if (st && st.date === todayStr() && st.ts > prevTs) {
+                    if (st.status === 'pending') {
+                        // pending 需观察: 点击跳转型落地页稍后会改写 success/failed;
+                        // 若 PENDING_GRACE_MS 内未改写(如 confirmManual 站)则以 pending 结算
+                        if (!pendingSince) pendingSince = Date.now();
+                        else if (Date.now() - pendingSince > PENDING_GRACE_MS) { settle = st; break; }
+                        continue;
+                    }
+                    settle = st; // success / failed / skipped
+                    break;
+                }
+            }
+            // 收尾: 关闭后台标签
+            if (tab && typeof tab.close === 'function') {
+                try { tab.close(); } catch (e) { /* 标签已关闭则忽略 */ }
+            }
+            if (UI.isCancelled()) break;
+
+            if (!settle) {
+                // 调度窗口耗尽仍无回写: 站点无法访问/页面加载失败/脚本未运行 → 记为失败并跳过
+                writeStatus(unit.id, 'failed', '站点暂时无法访问或超时, 已跳过');
+                settle = { status: 'failed', msg: '站点暂时无法访问, 已跳过' };
+            }
+            UI.updateBatchResult(unit.name, settle);
+            UI.render();
+
+            // 推进到下一站
+            task.index += 1;
+            saveTask(task);
+            if (task.index >= task.list.length) break;
+            const next = UNIT_MAP.get(task.list[task.index]);
+            if (!next) break;
+            // 本站完成后按配置等待缓冲(如贴吧吧间防风控), 期间可取消
+            const delay = (unit.batchDelayMs != null ? unit.batchDelayMs : DEFAULT_BATCH_DELAY_MS) || 0;
+            if (delay > 0) {
+                const cancelled = await UI.countdown(delay, next.name);
+                if (cancelled) break;
+            }
+        }
 
         if (UI.isCancelled()) {
             clearTask();
@@ -1228,76 +1340,118 @@ const K = {
             UI.render();
             return;
         }
+        // 全部处理完: 停在发起页, 弹出完成面板
+        clearTask();
+        UI.endBatch();
+        UI.showBatchDone();
+    }
 
-        task.index += 1;
-        if (task.index >= task.list.length) {
-            // 全部处理完: 停在最后一站, 弹出完成面板
-            clearTask();
-            UI.endBatch();
-            UI.showBatchDone();
+    // ==================== 后台任务标签页(执行 + 落地结算) ====================
+    // 调度页 GM_openInTab 打开的标签: URL 带 ptacTask, 任务存在且本页命中任务当前
+    // unit → 执行单站签到并把结果写入 GM 状态(调度页轮询读取); 不在此推进任务。
+    // 注: 本函数不依赖 UI(FAB/面板), 标签页为后台打开, 不渲染以免打扰。
+    async function runBatchTabPage(task) {
+        const unit = UNIT_MAP.get(task.list[task.index]);
+        // 安全校验: 任务指向的 unit 必须存在, 且当前页面确实命中该 unit
+        if (!unit || !matchUnit(unit, location.href)) {
+            console.warn(`${ScriptName} 后台标签页与任务不匹配, 终止`);
             return;
         }
-        const next = UNIT_MAP.get(task.list[task.index]);
-        if (!next) {
-            clearTask();
-            UI.endBatch();
-            UI.showBatchDone();
-            return;
+        const res = await runUnitWithTimeout(unit, { mode: 'batch' });
+        console.log(`${ScriptName} [${unit.name}] 后台标签执行完成: ${res.status}(${res.reason || ''})`);
+        // runUnit 的 skipped(冷却中/今日成功)不落盘状态, 而调度页靠状态回写判定完成:
+        // 若今日尚无任何结果写入, 补写本次结果, 避免调度页等待到超时误判为"无法访问"
+        const st = readStatus(unit.id);
+        if (!st || st.date !== todayStr()) {
+            writeStatus(unit.id, res.status || 'skipped', res.msg || '');
         }
-        // 本站完成后按配置等待缓冲(如贴吧吧间防风控), 期间可取消
-        task.startedAt = Date.now();
-        saveTask(task);
-        const delay = (unit.batchDelayMs != null ? unit.batchDelayMs : DEFAULT_BATCH_DELAY_MS) || 0;
-        if (delay > 0) {
-            const cancelled = await UI.countdown(delay, next.name);
-            if (cancelled) {
-                clearTask();
-                UI.endBatch();
-                UI.toast('批量已取消, 停留在当前页面');
-                UI.render();
-                return;
+    }
+
+    // 落地页结算(调度中): 后台标签点击跳转到落地页(URL 无 ptacTask)时, 本页命中
+    // 任务当前 unit → 只检测已签并写成功(不推进任务, 由调度页轮询推进); 未命中已签
+    // 则不改写(保留 pending, 由调度页宽限观察后决定)
+    async function settleUnitOnLandingPage(unit) {
+        if (isSuccessToday(unit.id)) return;
+        try {
+            const already = await detectAlreadyCheckedIn(unit);
+            if (already.hit) {
+                writeStatus(unit.id, 'success', `落地页确认已签到(${already.source})`);
+                console.log(`${ScriptName} [${unit.name}] 落地页结算: ${already.source}`);
             }
+        } catch (e) {
+            console.warn(`${ScriptName} [${unit.name}] 落地页结算异常: ${e.message}`);
         }
-        location.replace(buildTaskUrl(next, task.taskId));
+    }
+
+    // 中断恢复: 调度页消失(hb 陈旧)后, 用户回到任意匹配页 → 提供横幅一键恢复调度
+    function offerBatchResume(task) {
+        const unit = UNIT_MAP.get(task.list[task.index]) || null;
+        const name = unit ? unit.name : (task.list[task.index] || '');
+        UI.openPanel(); // 横幅在面板内, 需先展开面板才能让用户看到恢复入口
+        UI.showBanner(
+            `检测到中断的批量任务(第 ${task.index + 1}/${task.list.length} 站「${name}」)`,
+            'warn', '恢复批量', async () => {
+                UI.hideBanner();
+                task.hb = Date.now(); // 接管调度: 刷新心跳
+                saveTask(task);
+                UI.openPanel();
+                await runBatchScheduler(task);
+            }
+        );
+        UI.render();
     }
 
     // ==================== 主流程 ====================
     async function main() {
-        UI.init();
-
         let task = loadTask();
         if (task && isTaskStale(task)) {
-            console.log(`${ScriptName} 清理过期批量任务(链条中断超过 ${TASK_STALE_MS / 60000} 分钟)`);
+            console.log(`${ScriptName} 清理过期批量任务(中断超过 ${TASK_STALE_MS / 60000} 分钟)`);
             clearTask();
             task = null;
         }
 
         const urlTaskId = readTaskIdFromUrl();
         if (urlTaskId) {
-            // 批量接力页: URL 带任务参数
+            // 后台任务标签页(调度页 GM_openInTab 打开): 执行本站并把结果写入状态;
+            // 不注入 UI(FAB/面板), 避免后台标签闪烁干扰
             if (task && task.taskId === urlTaskId) {
-                await runBatchOnCurrentPage(task);
-            } else {
-                clearTask();
-                UI.toast('批量任务已失效(已取消或已完成), 本次不处理');
+                const curUnitId = task.list && task.list[task.index];
+                const curUnit = curUnitId ? UNIT_MAP.get(curUnitId) : null;
+                if (curUnit && matchUnit(curUnit, location.href)) {
+                    console.log(`${ScriptName} 后台任务标签页, 执行站点: ${curUnit.name}`);
+                    await runBatchTabPage(task);
+                } else {
+                    console.warn(`${ScriptName} 后台标签页与任务当前位置不匹配, 跳过`);
+                }
             }
-            return;
+            return; // 任务标签页不初始化 UI
         }
 
         // 普通访问页
+        UI.init();
         if (task) {
-            // 存在进行中的批量任务: 若当前页正是任务当前位置站点
-            // (如签到点击后自动跳转的落地页 attendance.php, 无 URL 参数),
-            // 则自动续链: 在本页完成本站结算并推进到下一站
             const curUnitId = task.list && task.list[task.index];
             const curUnit = curUnitId ? UNIT_MAP.get(curUnitId) : null;
-            if (curUnit && matchUnit(curUnit, location.href)) {
-                console.log(`${ScriptName} 检测到进行中的批量任务, 当前页命中任务站点, 自动续链`);
-                await runBatchOnCurrentPage(task);
+            const curHit = !!(curUnit && matchUnit(curUnit, location.href));
+            const hbFresh = Date.now() - (task.hb || 0) < HEARTBEAT_FRESH_MS;
+            if (hbFresh) {
+                // 调度进行中(发起页存活): 本页命中任务当前站点则视为跳转落地页, 只结算不推进;
+                // 未命中则被动签到但跳过任务当前位置站点, 防并行重复触发
+                if (curHit) {
+                    console.log(`${ScriptName} 批量调度中, 当前页为任务站点落地页, 落地结算`);
+                    await settleUnitOnLandingPage(curUnit);
+                } else {
+                    console.log(`${ScriptName} 批量调度中, 被动模式跳过任务当前位置站点`);
+                    await runPassiveMode(curUnitId ? [curUnitId] : []);
+                }
             } else {
-                // 其它页面: 被动签到, 但跳过任务当前位置站点, 防并行重复触发
-                console.log(`${ScriptName} 存在进行中的批量任务, 将跳过与其当前位置冲突的站点`);
-                await runPassiveMode(curUnitId ? [curUnitId] : []);
+                // 调度者已中断(发起页被关/崩溃等): 提供恢复入口; 同时当前页仍正常被动
+                // 签到, 但跳过任务当前位置站点, 避免与"恢复批量"重复触发该站
+                console.log(`${ScriptName} 检测到中断的批量任务(调度心跳过期), 提供恢复入口`);
+                offerBatchResume(task);
+                if (!curHit) {
+                    await runPassiveMode(curUnitId ? [curUnitId] : []);
+                }
             }
         } else {
             await runPassiveMode();

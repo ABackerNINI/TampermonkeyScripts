@@ -10,7 +10,7 @@
 | [conventions.md](./conventions.md) | 铁律(计划不改码/等审核/版本号/知识库同步)、提交信息规范、测试与可测性约定、检查清单 |
 | [pitfalls.md](./pitfalls.md) | 已知易错点与坑（含现存 Bug 清单） |
 | [roadmap.md](./roadmap.md) | 路线图：待修 Bug / 近期功能 / 中期改进 / 远期构想 |
-| [scripts/PTAutoCheckIn.md](./scripts/PTAutoCheckIn.md) | PT 多站点自动签到 v2(批量接力+FAB 面板+贴吧多吧, 站点/单元配置驱动) |
+| [scripts/PTAutoCheckIn.md](./scripts/PTAutoCheckIn.md) | PT 多站点自动签到 v2(常驻调度批量+FAB 面板+贴吧多吧, 站点/单元配置驱动) |
 | [scripts/BTSchoolHelper.md](./scripts/BTSchoolHelper.md) | BTSchool 种子列表高亮 + 快捷键滚动脚本 |
 | [scripts/BilibiliEnterFullscreen.md](./scripts/BilibiliEnterFullscreen.md) | B 站 Enter 键全屏切换脚本 |
 | [scripts/EnhanceVisitedLinks.md](./scripts/EnhanceVisitedLinks.md) | 全局已访问链接样式增强脚本 |
