@@ -744,18 +744,6 @@ const K = {
                     steps: [CLICK_CHECK_IN]
                 },
                 {
-                    id: 'tieba_test', name: 'test吧',
-                    url: 'https://tieba.baidu.com/f?kw=test',
-                    checkInSelector: '.button-wrapper.operate-btn.follow-sign',
-                    checkInContent: '签到',
-                    alreadyCheckedInContent: '连签',
-                    successDetect: [
-                        { type: 'text', selector: 'body', text: '签到成功', timeout: 3000 }
-                    ],
-                    batchDelayMs: 3000,
-                    steps: [CLICK_CHECK_IN]
-                },
-                {
                     id: 'tieba_dst', name: '饥荒吧',
                     url: 'https://tieba.baidu.com/f?kw=饥荒',
                     checkInSelector: '.button-wrapper.operate-btn.follow-sign',
