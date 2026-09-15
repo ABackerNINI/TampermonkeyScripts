@@ -2,7 +2,7 @@
 
 > 按优先级分「待修 Bug → 近期功能 → 中期改进 → 远期构想」。
 > 每完成一项：勾选 + 在对应脚本文档/`@version` 中更新，并删除/降级本条目。
-> ⚠️ **铁律**：任何代码/元数据改动必须**同步递增 `@version` 并与代码同次提交**（纯注释、仅改 `ai/` 文档除外）。详见 `conventions.md` 第 1 节。
+> ⚠️ **铁律**：任何代码/元数据改动必须**同步递增 `@version` 并与代码同次提交**（纯注释、仅改 `memory-bank/` 文档除外）。详见 `conventions.md` 第 1 节。
 
 ## 🔴 待修 Bug（建议优先）
 
@@ -20,7 +20,7 @@
   - 待实测校准: 贴吧已签文案/签到成功文案、蜂巢改版后对话框是否仍存在(已签检测已按 data-slot 文案启用, 无成功特征仍 confirmManual)、BTSchool 无按钮即已签(noButtonMeansCheckedIn)、面板点站名打开/站点图标显示/图标钮浮出强制批量签到/FAB 四皮肤切换与两态差异、match 删除后 url 推导归属回归(含贴吧 kw 区分/批量后台标签/落地页结算)、HDBao/MuXueGe 落地页检测、15 个 PT 站回归(清单见 `scripts/PTAutoCheckIn.md`)。
   - 验证通过后: 合入 `PTAutoCheckIn.user.js`(改回 `@name`, 递增版本号), 删除 v1 旧文件。
 - [ ] **签到站点覆盖扩展**
-  - 按 `ai/conventions.md` 第 7 节清单继续补充新站（如遇新 PT 站、开放注册的站）。
+  - 按 `memory-bank/conventions.md` 第 7 节清单继续补充新站（如遇新 PT 站、开放注册的站）。
   - 探索「同源多入口」（顶部按钮 + 侧栏按钮）冗余选择器，提高站点改版容错。
 - [ ] **BTSchoolHelper 快捷键增强**
   - 空格行为已有；补充 `2xFree 下一个`（N）、`2xFree 上一个`（B）并支持循环边界提示（控制台日志）。

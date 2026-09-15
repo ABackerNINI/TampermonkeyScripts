@@ -15,7 +15,7 @@ TampermonkeyScripts/
 ├── LICENSE
 ├── README.md                     # 简短仓库说明
 ├── .vscode/settings.json         # cSpell 词典（站点域名等专有名词）
-├── ai/                           # AI 知识库（本目录）
+├── memory-bank/                           # AI 知识库（本目录）
 │   ├── README.md                 # 入口与索引
 │   ├── project-overview.md       # 本文档（仓库结构/脚本速查/工作流）
 │   ├── conventions.md            # 代码约定与新增站点/脚本检查清单
@@ -40,7 +40,7 @@ TampermonkeyScripts/
 | `BilibiliEnterFullscreen.user.js` | `bilibili.com/video/*`、`/bangumi/*` | `document-body` | 无 | 进页面自动网页全屏；Enter 全屏 / Shift+Enter 网页全屏 |
 | `EnhanceVisitedLinks.user.js` | 全部站点 `*` | `document-start` | `GM_addStyle` | 紫色高亮 `a:visited` 并适配明/暗色模式 |
 
-> 注：所有脚本元数据块中 `@version` 格式为 `YYYY.MM.DD.N`。**修改代码/元数据时必须同步递增版本号并与代码同次提交**（纯注释、仅改 `ai/` 文档除外），否则 Tampermonkey 不会向用户端推送更新。详见 `conventions.md` 第 1 节。
+> 注：所有脚本元数据块中 `@version` 格式为 `YYYY.MM.DD.N`。**修改代码/元数据时必须同步递增版本号并与代码同次提交**（纯注释、仅改 `memory-bank/` 文档除外），否则 Tampermonkey 不会向用户端推送更新。详见 `conventions.md` 第 1 节。
 
 ## 通用代码约定
 
@@ -83,7 +83,7 @@ PT 站大多基于同一套开源代码（NexusPHP 系），但**各站模板与
 
 1. 编辑 `src/*.user.js`。
 2. **递增版本号**：同一天多次修改用 `.N` 递增（`2026.08.30.1` → `2026.08.30.2`）；跨天修改为 `YYYY.MM.DD.1`。
-3. **同步更新 `ai/` 知识库**：受影响条目（脚本文档/约定/易错点/路线图）与代码同次提交（见 `conventions.md` 第 0.4 节）。
+3. **同步更新 `memory-bank/` 知识库**：受影响条目（脚本文档/约定/易错点/路线图）与代码同次提交（见 `conventions.md` 第 0.4 节）。
 4. **提交信息规范且详细**：首行概括 + 正文分条说明背景/要点/影响；一次提交只做一件事（见 `conventions.md` 第 1 节）。
 5. Tampermonkey 安装/更新脚本后，到目标站点页面按 F12 观察 console 日志验证。
 6. 推送后脚本可经 `@downloadURL`/`@updateURL` 更新（BilibiliEnterFullscreen 使用 Gitee 直链）。

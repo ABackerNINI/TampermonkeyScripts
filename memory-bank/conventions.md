@@ -26,12 +26,12 @@
 
 ### 0.4 更新代码/文档后必须同步更新知识库
 
-- 每次更新**代码**或**项目文档**（README、脚本头描述等）后，**必须同步更新 `ai/` 知识库**中受影响的条目，并与代码改动放入**同一次提交**。
+- 每次更新**代码**或**项目文档**（README、脚本头描述等）后，**必须同步更新 `memory-bank/` 知识库**中受影响的条目，并与代码改动放入**同一次提交**。
 - 检查顺序：
-  1. 行为/结构变化 → `ai/scripts/<脚本名>.md`；
-  2. 通用约定 / 新坑 → `ai/conventions.md` / `ai/pitfalls.md`；
-  3. 新脚本 / 新站点 / 新能力 → `ai/README.md` 索引与对应脚本表；
-  4. 完成/新增待办 → `ai/roadmap.md` 勾选或登记。
+  1. 行为/结构变化 → `memory-bank/scripts/<脚本名>.md`；
+  2. 通用约定 / 新坑 → `memory-bank/conventions.md` / `memory-bank/pitfalls.md`；
+  3. 新脚本 / 新站点 / 新能力 → `memory-bank/README.md` 索引与对应脚本表；
+  4. 完成/新增待办 → `memory-bank/roadmap.md` 勾选或登记。
 - 原则：**改了代码却不同步知识库，等同改动没做完**。
 
 ## 1. 版本管理
@@ -53,7 +53,7 @@
 | 修复 Bug / 新增功能 / 调整逻辑 | ✅ 必须 | 任何行为变化 |
 | 修改 `@match` / `@description` / `@grant` 等元数据 | ✅ 必须 | 影响匹配范围/权限/说明 |
 | 纯注释 / 代码格式化 | ⬜ 不必（建议不递增） | 不产生行为差异 |
-| 只改 `ai/` 知识库文档 | ⬜ 不必 | 不涉及脚本本体 |
+| 只改 `memory-bank/` 知识库文档 | ⬜ 不必 | 不涉及脚本本体 |
 
 ### 提交前自查
 
@@ -124,13 +124,13 @@
 
 ## 6. 文档与知识库同步（本项目特有）
 
-- **铁律见第 0.4 节**：任何代码/项目文档变更后，必须同步更新 `ai/` 知识库，并与代码同次提交。
+- **铁律见第 0.4 节**：任何代码/项目文档变更后，必须同步更新 `memory-bank/` 知识库，并与代码同次提交。
 - 同步检查表：
   1. 脚本头 `@version`（**必须**，见第 1 节铁律）+ `@description`（能力变化时）；
-  2. `ai/scripts/<脚本名>.md`：结构/字段/站点表/选择器变化时；
-  3. `ai/conventions.md` / `ai/pitfalls.md`：产生新的通用约定或坑时；
-  4. `ai/roadmap.md`：完成待办则勾选，新方向则登记；
-  5. 新脚本/新站点：`ai/README.md` 索引登记。
+  2. `memory-bank/scripts/<脚本名>.md`：结构/字段/站点表/选择器变化时；
+  3. `memory-bank/conventions.md` / `memory-bank/pitfalls.md`：产生新的通用约定或坑时；
+  4. `memory-bank/roadmap.md`：完成待办则勾选，新方向则登记；
+  5. 新脚本/新站点：`memory-bank/README.md` 索引登记。
 - 新站点/新规则上线前，先在真实页面控制台验证解析与点击日志，再提交。
 
 ## 7. 新增站点/脚本检查清单
@@ -140,12 +140,12 @@
 - [ ] `SITES` 增加配置：简单站加单站对象（`name` / `id` / `url` / `match` / `checkInSelector` / `checkInContent` / `alreadyCheckedInContent` / `steps`；若已签后签到按钮消失, 加 `noButtonMeansCheckedIn: true`）；同站多入口加 group，入口列表加进该 group 的 `units`；
 - [ ] 对照站点页面的真实 DOM（非网络截图）核对选择器与文案；
 - [ ] 实测：未签到页能点、已签到页不重复点、10 分钟内刷新不重复触发、贴吧各吧独立触发；
-- [ ] 递增版本号 + 更新 `ai/scripts/PTAutoCheckIn.md` 站点表。
+- [ ] 递增版本号 + 更新 `memory-bank/scripts/PTAutoCheckIn.md` 站点表。
 
 新增独立脚本：
 - [ ] 完整元数据头（见第 3 节）+ IIFE + `ScriptName`；
 - [ ] 参照 `project-overview.md` 速查表补充登记；
-- [ ] 创建 `ai/scripts/<name>.md` 并在 `ai/README.md` 索引登记；
+- [ ] 创建 `memory-bank/scripts/<name>.md` 并在 `memory-bank/README.md` 索引登记；
 - [ ] 递增 `@version` 并提交。
 
 ## 8. 测试与可测性约定
