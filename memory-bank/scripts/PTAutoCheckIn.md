@@ -1,7 +1,7 @@
-# PTAutoCheckIn-v2.user.js — PT 多站点自动签到 v2
+# PTAutoCheckIn.user.js — PT 多站点自动签到
 
-> 源文件：`src/PTAutoCheckIn-v2.user.js` ｜ 版本 `2026.09.08.28`(升级时同步更新)
-> ⚠️ 状态：**v2 重构版, 待实测校准后并入正式版**。原 `src/PTAutoCheckIn.user.js`（v2026.08.30.1）暂保留；并入时改回 `@name PTAutoCheckIn` 并递增版本号, 删除旧文件。
+> 源文件：`src/PTAutoCheckIn.user.js` ｜ 版本 `2026.09.16.1`(升级时同步更新)
+> ⚠️ 状态：**v2 已并入正式版**。原 `src/PTAutoCheckIn-v2.user.js`（v2026.09.15.1）内容已并入 `PTAutoCheckIn.user.js` 并改回 `@name PTAutoCheckIn`（递增版本号）；`-v2` 暂存文件与旧 v1（v2026.08.30.1）均已删除, 生产脚本合并为单一 `PTAutoCheckIn.user.js`。
 
 ## 功能概述
 
@@ -18,7 +18,7 @@
 ## 脚本元数据要点
 
 - `@run-at document-start`；`@grant GM_getValue / GM_setValue / GM_log / GM_openInTab`（GM 存储**按脚本共享、跨域可读**——跨站状态/任务依赖此特性; `GM_openInTab` 用于批量在后台标签打开各站, 不受弹窗拦截）。
-- `@name PTAutoCheckIn-v2`：与旧版共存, 避免 Tampermonkey 同名冲突(存储/更新互不干扰)。
+- `@name PTAutoCheckIn`：v2 已并入正式版, 改回正式脚本名（原 `-v2` 后缀为暂存共存期避免同名冲突, 现已移除）。
 - `@match` 覆盖全部目标域名；批量打开的后台标签 URL 全部来自配置白名单。
 - iframe 内直接退出(`window.top !== window.self`)。
 

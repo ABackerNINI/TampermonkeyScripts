@@ -37,7 +37,7 @@ flowchart TD
 | [conventions.md](./conventions.md) | 铁律（计划不改码/等审核/版本号/知识库同步）、提交信息规范、测试约定、检查清单、开发与发布工作流 |
 | [pitfalls.md](./pitfalls.md) | 已知易错点与坑（含现存 Bug 清单，症状→原因→对策） |
 | [tasks/_index.md](./tasks/_index.md) | 任务清单（按状态分类，路线图角色由此承担） |
-| [scripts/PTAutoCheckIn.md](./scripts/PTAutoCheckIn.md) | PT 多站点自动签到 v2（常驻调度批量 + FAB 面板 + 贴吧多吧，站点/单元配置驱动） |
+| [scripts/PTAutoCheckIn.md](./scripts/PTAutoCheckIn.md) | PT 多站点自动签到（常驻调度批量 + FAB 面板 + 贴吧多吧，站点/单元配置驱动，v2 已并入正式版） |
 | [scripts/BTSchoolHelper.md](./scripts/BTSchoolHelper.md) | BTSchool 种子列表高亮 + 快捷键滚动脚本 |
 | [scripts/BilibiliEnterFullscreen.md](./scripts/BilibiliEnterFullscreen.md) | B 站 Enter 键全屏切换脚本 |
 | [scripts/EnhanceVisitedLinks.md](./scripts/EnhanceVisitedLinks.md) | 全局已访问链接样式增强脚本 |

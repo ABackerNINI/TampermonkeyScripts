@@ -4,7 +4,7 @@
 
 ## 当前工作焦点
 
-**PTAutoCheckIn v2（`src/PTAutoCheckIn-v2.user.js`，当前 `2026.09.08.28`）——待实测校准后并入正式版**。核心引擎与站点建模已完成，正处在「逐站实测校准 → 修 Bug → 并入 v1」的收敛阶段。主要近期改动集中在：跨天守卫、仅检测型站（U2）、无按钮访问即签站（MTeam 系六站）、no-text 按钮站（NodeLoc）、按钮重现降级提醒（P25）、行内单站强制重试（.28）。
+**PTAutoCheckIn（`src/PTAutoCheckIn.user.js`，当前 `2026.09.16.1`）——v2 已并入正式版**。核心引擎与站点建模已完成，v2（批量+FAB+贴吧多吧）已合并为单一生产脚本 `PTAutoCheckIn.user.js`（改回 `@name PTAutoCheckIn`，递增版本号），`-v2` 暂存文件与旧 v1 均已删除。收敛阶段的主要近期改动集中在：跨天守卫、仅检测型站（U2）、无按钮访问即签站（MTeam 系六站）、no-text 按钮站（NodeLoc）、按钮重现降级提醒（P25）、行内单站强制重试（.28）。
 
 ## 最近改动时间线（2026.09.07–09.08）
 
@@ -19,13 +19,13 @@
 
 ## 活跃决策与考量
 
-- **PTAutoCheckIn v2 并入策略**：v2 实测校准通过后合入 `PTAutoCheckIn.user.js`（改回 `@name PTAutoCheckIn`，递增版本号），删除 v1 旧文件。当前 v1（`2026.08.30.1`）暂保留。
+- **PTAutoCheckIn 已并入正式版**：v2 实测校准已通过，合入 `PTAutoCheckIn.user.js`（改回 `@name PTAutoCheckIn`，递增版本号 `2026.09.16.1`），删除旧 v1 与 `-v2` 暂存文件。当前单一生产脚本为 `PTAutoCheckIn.user.js`。
 - **P25 重现检测**：suspect（失败-待确认）不自动重签、不进批量，人工补签后任意访问自动转回 success。
 - **「强制批量签到」「行内重试」有风控风险**：无视冷却重试站点，仅今日失败站提供，谨慎使用（见 P5/P19）。
 
 ## 下一步（按优先级）
 
-1. **逐项实测 PTAutoCheckIn v2 校准清单**（见 `scripts/PTAutoCheckIn.md` 第 184 行起 20 项）：
+1. **PTAutoCheckIn 并入后收尾**：生产脚本已合入 `PTAutoCheckIn.user.js`，确认用户端更新脚本名/版本号后状态迁移正常（GM 存储按脚本共享，同 key 前缀跨域可读, 旧 v2 数据沿用）。后续按需继续实测校准清单（见 `scripts/PTAutoCheckIn.md` 第 183 行起 20 项）：
    - 贴吧四吧（中文 kw 匹配、吧间互不误签）
    - 蜂巢 `successDetect`（按钮变已签稳定）
    - MTeam 系六站（实际首页 path、特征 16s 内出现、未登录 failed）

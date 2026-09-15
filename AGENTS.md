@@ -25,7 +25,7 @@
 
 | 脚本 | 作用 |
 |------|------|
-| `src/PTAutoCheckIn-v2.user.js` | PT 多站点自动签到 v2（被动 + 批量 + FAB 面板 + 贴吧多吧） |
+| `src/PTAutoCheckIn.user.js` | PT 多站点自动签到（被动 + 批量 + FAB 面板 + 贴吧多吧，v2 已并入正式版） |
 | `src/BTSchoolHelper.user.js` | BTSchool 种子列表高亮 + 快捷键滚动 |
 | `src/BilibiliEnterFullscreen.user.js` | B 站 Enter 键全屏切换 |
 | `src/EnhanceVisitedLinks.user.js` | 全局已访问链接样式增强 |

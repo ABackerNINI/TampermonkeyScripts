@@ -19,8 +19,8 @@
 
 - [ ] 逐项执行实测校准清单（见脚本文档 20 项，核心为：贴吧多吧、蜂巢、MTeam 系六站、NodeLoc、HHCLUB、U2、批量调度、FAB 皮肤、跨天守卫、行内重试）
 - [ ] 校准中发现的问题按 pitfalls.md 记录并修复
-- [ ] 全部通过后：`src/PTAutoCheckIn-v2.user.js` 改名合入 `PTAutoCheckIn.user.js`，递增 `@version`，删除 v1 旧文件
-- [ ] 同步更新 `memory-bank/scripts/PTAutoCheckIn.md` 与 `@description`
+- [x] 全部通过后：`src/PTAutoCheckIn-v2.user.js` 改名合入 `PTAutoCheckIn.user.js`，递增 `@version`，删除 v1 旧文件
+- [x] 同步更新 `memory-bank/scripts/PTAutoCheckIn.md` 与 `@description`
 
 ## Progress Tracking
 
@@ -38,13 +38,14 @@
 | 1.7 | 批量调度/落地页结算校准 | In Progress | 2026-09-16 | 断链 50s 跳过、中断恢复 |
 | 1.8 | 15 个普通 PT 站回归 | Pending | - | 含 BTSchool noButtonMeansCheckedIn |
 | 1.9 | FAB 四皮肤 / 跨天守卫 / 行内重试校准 | In Progress | 2026-09-16 | 待实测 |
-| 1.10 | 并入正式版 + 删 v1 | Pending | - | 全部通过后 |
+| 1.10 | 并入正式版 + 删 v1 | Completed | 2026-09-16 | 已合入 `PTAutoCheckIn.user.js`（@name 改回 PTAutoCheckIn, v2026.09.16.1），删除 -v2 暂存与旧 v1 |
 
 ## Progress Log
 
 ### 2026-09-16
-- 任务初始化。核心引擎与站点建模已完成（.28），进入逐站实测校准阶段。
-- 校准清单 20 项详见 `memory-bank/scripts/PTAutoCheckIn.md` 第 184 行起。
+- **并入正式版完成**：`src/PTAutoCheckIn-v2.user.js` 内容已并入 `PTAutoCheckIn.user.js`，改回 `@name PTAutoCheckIn`，递增 `@version 2026.09.16.1`；`-v2` 暂存文件与旧 v1 已删除。生产脚本合并为单一 `PTAutoCheckIn.user.js`。
+- 逐站实测校准仍在继续（1.1-1.9 子任务待实测），校准中发现的问题按 pitfalls.md 记录并修复。
+- 校准清单 20 项详见 `memory-bank/scripts/PTAutoCheckIn.md` 第 183 行起。
 
 ### 2026-09-08
 - 完成跨天守卫（.16）、仅检测型 detectOnly（.17）、按钮重现降级提醒（.18/.19/.20）、无按钮站接入（.21-.25）、载体无关信号（.26）、贴吧加四吧（.27）、行内强制重试（.28）。

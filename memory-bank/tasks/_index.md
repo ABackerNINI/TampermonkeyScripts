@@ -5,7 +5,7 @@
 
 ## In Progress（进行中）
 
-- [TASK001] PTAutoCheckIn v2 实测校准并入正式版 — 逐站实测校准中（核心主线）
+- [TASK001] PTAutoCheckIn v2 实测校准并入正式版 — **已并入正式版**（1.10 完成），其余逐站实测校准继续（核心主线）
 - [TASK002] 修复 BTSchoolHelper 时魔数值恒为 0（P2）— 待实施
 - [TASK003] 修复 BTSchoolHelper 命名不一致（P10）— 待实施，N 键前置
 

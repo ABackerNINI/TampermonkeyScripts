@@ -4,7 +4,7 @@
 
 ## 总体架构
 
-无构建、无依赖、无服务端。每个脚本是一个自包含的 `.user.js`，注入用户浏览器（Tampermonkey）。按「**配置数据 + 通用执行引擎**」模式组织（尤其 PTAutoCheckIn-v2）：
+无构建、无依赖、无服务端。每个脚本是一个自包含的 `.user.js`，注入用户浏览器（Tampermonkey）。按「**配置数据 + 通用执行引擎**」模式组织（尤其 PTAutoCheckIn）：
 
 ```text
 src/*.user.js
@@ -18,7 +18,7 @@ src/*.user.js
 
 ## 关键技术决策
 
-1. **配置与逻辑分离**：站点/规则配置集中为数据（如 `SITES` 数组——PTAutoCheckIn-v2 为 group+unit 两级配置、`TorrentState` 映射），引擎只写一套（`executeStep`、`runUnit`、`parseTorrentTable`）。新增站点/单元时**只改配置不改引擎**。
+1. **配置与逻辑分离**：站点/规则配置集中为数据（如 `SITES` 数组——PTAutoCheckIn 为 group+unit 两级配置、`TorrentState` 映射），引擎只写一套（`executeStep`、`runUnit`、`parseTorrentTable`）。新增站点/单元时**只改配置不改引擎**。
 2. **签到原子单位 = 页面入口 unit**：从 v1 的「按域名」细化为「按页面入口 unit」（解决贴吧多吧），每个 unit 独立冷却/状态/存储 key。
 3. **被动检测 + 冷却分离**：每次访问都执行已签检测（不受冷却限制），冷却只防「重复点击」，避免风控/封号。
 4. **GM 存储跨域共享**：PTAutoCheckIn 用 `GM_*` 按脚本共享、跨域可读，实现跨站 FAB 面板同一份数据。
@@ -37,7 +37,7 @@ src/*.user.js
 | 载体无关信号 | `.26` 起按钮状态判定抽象为 `stateSignals`/`readEntryState`（text/attr/class/fn/exists），旧文本站自动翻译 |
 | 常驻调度 + 后台标签 | 批量签到 = 发起页常驻 + `GM_openInTab` 后台标签串行 + 轮询 GM 状态推进 + 单站超时自动跳过 |
 
-## 组件关系（PTAutoCheckIn-v2 为例）
+## 组件关系（PTAutoCheckIn 为例）
 
 ```text
 boot() → main()
