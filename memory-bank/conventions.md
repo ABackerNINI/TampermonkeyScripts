@@ -31,7 +31,7 @@
   1. 行为/结构变化 → `memory-bank/scripts/<脚本名>.md`；
   2. 通用约定 / 新坑 → `memory-bank/conventions.md` / `memory-bank/pitfalls.md`；
   3. 新脚本 / 新站点 / 新能力 → `memory-bank/README.md` 索引与对应脚本表；
-  4. 完成/新增待办 → `memory-bank/roadmap.md` 勾选或登记。
+  4. 完成/新增待办 → `memory-bank/tasks/_index.md` 登记。
 - 原则：**改了代码却不同步知识库，等同改动没做完**。
 
 ## 1. 版本管理
@@ -129,7 +129,7 @@
   1. 脚本头 `@version`（**必须**，见第 1 节铁律）+ `@description`（能力变化时）；
   2. `memory-bank/scripts/<脚本名>.md`：结构/字段/站点表/选择器变化时；
   3. `memory-bank/conventions.md` / `memory-bank/pitfalls.md`：产生新的通用约定或坑时；
-  4. `memory-bank/roadmap.md`：完成待办则勾选，新方向则登记；
+  4. `memory-bank/tasks/_index.md`：完成/新增待办登记到对应任务文件或 `_index.md`；
   5. 新脚本/新站点：`memory-bank/README.md` 索引登记。
 - 新站点/新规则上线前，先在真实页面控制台验证解析与点击日志，再提交。
 
@@ -144,7 +144,7 @@
 
 新增独立脚本：
 - [ ] 完整元数据头（见第 3 节）+ IIFE + `ScriptName`；
-- [ ] 参照 `project-overview.md` 速查表补充登记；
+- [ ] 参照 `README.md` 脚本速查表补充登记；
 - [ ] 创建 `memory-bank/scripts/<name>.md` 并在 `memory-bank/README.md` 索引登记；
 - [ ] 递增 `@version` 并提交。
 
@@ -169,3 +169,30 @@
 - 测试失败先排查：**测试自身**（断言/样本/环境）是否有误 → 生产代码是否存在**真实缺陷**；
 - 不得为了让测试变绿而：弱化/删除断言、跳过分支、写死返回值、或让生产代码迎合测试期望；
 - 修改生产代码必须以「修复真实问题 / 符合真实行为」为前提；若测试与真实行为冲突，**以真实行为为准**并修正测试。
+
+## 9. 站点适配注意（PT/表格解析类）
+
+PT 站大多基于同一套开源代码（NexusPHP 系），但**各站模板与签到交互存在差异**：
+
+- 通用签到入口多为 `a.faqlink[href*="attendance.php"]`，按钮文案如 `[签到得魔力]`。
+- 部分站点点击签到会**跳转新页面**（HDBao、慕雪阁），需要多步骤：先点"立即签到"提交表单 → 等待 → 再在新页面点签到。
+- 部分站点使用**对话框签到**（蜂巢 pting.club），需依次点击外层按钮、对话框按钮、关闭按钮。
+- BTSchool 站种子表格结构特殊（详见 `scripts/BTSchoolHelper.md`）。
+- 完整站点表与各站入口/特征见 `scripts/PTAutoCheckIn.md`「已有站点一览」。
+
+## 10. 开发与发布工作流
+
+1. 编辑 `src/*.user.js`。
+2. **递增版本号**：同一天多次修改用 `.N` 递增（`2026.08.30.1` → `2026.08.30.2`）；跨天修改为 `YYYY.MM.DD.1`。
+3. **同步更新 `memory-bank/` 知识库**：受影响条目（脚本文档/约定/易错点/任务）与代码同次提交（见第 0.4 节）。
+4. **提交信息规范且详细**：首行概括 + 正文分条说明背景/要点/影响；一次提交只做一件事（见第 1 节）。
+5. Tampermonkey 安装/更新脚本后，到目标站点页面按 F12 观察 console 日志验证。
+6. 推送后脚本可经 `@downloadURL`/`@updateURL` 更新（BilibiliEnterFullscreen 使用 Gitee 直链）。
+7. 测试纪律：可设计易测代码，但不为测试留后门、不为过测试改生产代码（见第 8 节）。
+
+### 修改脚本时注意
+
+- 不要改动脚本头部 `@match` 之外无法访问的站点逻辑（仅限已授权域名）。
+- BTSchoolHelper 与 PTAutoCheckIn 都有 `SITES`/解析逻辑依赖真实页面结构，改动后建议对照 `src/BTSchoolTorrentsTableSample.html` 验证。
+- 若站点改版导致选择器失效，优先观察控制台 warn 日志定位是哪一步失效。
+- 新站点/新规则上线前，先在真实页面控制台验证解析与点击日志，再提交。

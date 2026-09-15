@@ -40,11 +40,11 @@
   - `parseFileSizeInBytes(sizeStr)` —— `"8.15GB"` → 字节数（1024 进制，支持 K/M/G/T/P）
   - `waitForElement(selector, timeout)` —— 轮询/`MutationObserver` 等待元素（支持函数选择器）
 
-## 发布与更新流程（详见 project-overview.md / conventions.md）
+## 发布与更新流程（详见 conventions.md 第 10 节）
+
+完整工作流见 [conventions.md](./conventions.md) 第 10 节「开发与发布工作流」，此处仅列技术要点：
 
 1. 编辑 `src/*.user.js`。
 2. 递增版本号（跨天重置 `N`）。
 3. 同步更新 `memory-bank/` 记忆库（受影响条目同次提交）。
-4. 提交信息规范且详细（首行概括 + 正文分条，一次提交一件事）。
-5. 到目标站点 F12 看 console 验证。
-6. 推送后脚本可经 `@downloadURL`/`@updateURL` 更新。
+4. 推送后脚本可经 `@downloadURL`/`@updateURL` 更新。

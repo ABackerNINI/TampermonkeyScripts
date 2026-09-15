@@ -1,7 +1,7 @@
 # 任务索引（Tasks Index）
 
 > 记忆库任务系统主清单：所有任务按状态分类。每条任务有独立文件 `TASK<ID>-<name>.md`。
-> 任务来源：`roadmap.md` 路线图。任务状态与 `roadmap.md`、`progress.md` 保持同步。
+> 任务来源：`progress.md` 待办方向与 `pitfalls.md` 现存 Bug。任务状态与 `progress.md` 保持同步。
 
 ## In Progress（进行中）
 

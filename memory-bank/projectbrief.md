@@ -1,6 +1,29 @@
 # 项目简介（Project Brief）
 
-> 记忆库基石文档：定义项目范围、核心需求与目标。其他文件在此之上构建。详细仓库结构/脚本速查见 [project-overview.md](./project-overview.md)。
+> 记忆库基石文档：定义项目范围、核心需求与目标。其他文件在此之上构建。详细脚本速查见 [README.md](./README.md)，代码约定见 [conventions.md](./conventions.md)。
+
+## 仓库结构
+
+```
+TampermonkeyScripts/
+├── LICENSE
+├── README.md                     # 简短仓库说明
+├── .vscode/settings.json         # cSpell 词典（站点域名等专有名词）
+├── memory-bank/                           # AI 知识库（本目录）
+│   ├── README.md                 # 入口与索引
+│   ├── projectbrief.md           # 本文档（范围/目标/基石）
+│   ├── conventions.md            # 代码约定与新增站点/脚本检查清单
+│   ├── pitfalls.md               # 易错点与坑（含现存 Bug 清单）
+│   ├── tasks/                    # 任务清单（按状态分类）
+│   └── scripts/                  # 各脚本详细说明
+└── src/
+    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v1 旧版, 待 v2 实测后并入删除)
+    ├── PTAutoCheckIn-v2.user.js              # PT 多站点自动签到 v2(批量+FAB+贴吧多吧, 2026.09.08.28)
+    ├── BTSchoolHelper.user.js                # BTSchool 种子列表增强
+    ├── BTSchoolTorrentsTableSample.html      # BTSchool 种子表格真实 HTML 样本（测试用）
+    ├── BilibiliEnterFullscreen.user.js       # B 站 Enter 键全屏
+    └── EnhanceVisitedLinks.user.js           # 全局已访问链接样式增强
+```
 
 ## 项目定位
 
@@ -11,9 +34,11 @@
 
 ## 现有脚本清单
 
+> 完整站点表/行为细节见各脚本文档（`memory-bank/scripts/*.md`）。下表为速览。
+
 | 脚本 | 匹配站点 | run-at | grant | 核心能力 |
 |------|----------|--------|-------|----------|
-| `src/PTAutoCheckIn-v2.user.js` | 27 站 + 百度贴吧多吧 | `document-start` | `GM_getValue` / `GM_setValue` / `GM_log` / `GM_openInTab` | 被动签到 + 批量调度 + 跨站结果面板 |
+| `src/PTAutoCheckIn-v2.user.js` | 27 站 + 百度贴吧 6 吧 | `document-start` | `GM_getValue` / `GM_setValue` / `GM_log` / `GM_openInTab` | 被动签到 + 批量调度 + 跨站 FAB 结果面板 + 贴吧多吧 + 按钮重现降级 + 行内重试（详见 `scripts/PTAutoCheckIn.md`） |
 | `src/BTSchoolHelper.user.js` | `pt.btschool.club/torrents.php*` | `document-end` | 无 | 高亮 2xFree 种子、置顶种低亮、空格键跳转 |
 | `src/BilibiliEnterFullscreen.user.js` | `bilibili.com/video/*`、`/bangumi/*` | `document-body` | 无 | 进页面自动网页全屏；Enter 全屏 / Shift+Enter 网页全屏 |
 | `src/EnhanceVisitedLinks.user.js` | 全部站点 `*` | `document-start` | `GM_addStyle` | 紫色高亮 `a:visited` 并适配明/暗色模式 |

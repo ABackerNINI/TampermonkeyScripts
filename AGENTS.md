@@ -15,7 +15,7 @@
 7. `memory-bank/progress.md` —— 已实现 / 待办 / 现状 / 已知问题
 8. `memory-bank/tasks/_index.md` —— 任务清单（按状态分类）
 
-> 深度参考文档（记忆库允许的「附加上下文」）按需阅读：`memory-bank/conventions.md`（代码约定）、`memory-bank/pitfalls.md`（易错点）、`memory-bank/roadmap.md`（路线图）、`memory-bank/scripts/*.md`（各脚本详解）。
+> 深度参考文档（记忆库允许的「附加上下文」）按需阅读：`memory-bank/conventions.md`（代码约定）、`memory-bank/pitfalls.md`（易错点）、`memory-bank/scripts/*.md`（各脚本详解）。
 
 ## 项目速览
 
@@ -45,13 +45,13 @@
 - **修改某个脚本**：读 `memory-bank/scripts/<脚本名>.md` + 源文件（`src/*.user.js`）。
 - **动手写代码前**：读 `memory-bank/conventions.md`（约定）与 `memory-bank/pitfalls.md`（易错点），避免重踩历史 Bug。
 - **排障/查现状**：优先查 `memory-bank/pitfalls.md` 的症状→原因对照表；其次看脚本内 `[ScriptName]` 日志。
-- **规划改动**：参考 `memory-bank/roadmap.md` 与 `memory-bank/tasks/` 中已登记的待办与方向。
+- **规划改动**：参考 `memory-bank/tasks/` 中已登记的待办与方向。
 - **更新记忆库**：被要求「更新记忆库」时，须复查 `memory-bank/` 全部文件，重点更新 `activeContext.md`、`progress.md` 与 `tasks/_index.md`。
 
 ## 记忆库维护规则
 
 - 发现新的项目模式、关键决策、用户偏好时，记录到 `memory-bank/activeContext.md` 与 `memory-bank/conventions.md`（学习日志）。
 - 新任务建立时在 `memory-bank/tasks/` 创建任务文件并登记到 `_index.md`；进度变更时同步更新任务文件的 subtask 表与进度日志。
-- 任务完成/状态变更后同步更新 `memory-bank/progress.md` 与 `memory-bank/roadmap.md`。
+- 任务完成/状态变更后同步更新 `memory-bank/progress.md` 与 `memory-bank/tasks/`。
 
 详见 `memory-bank/conventions.md` 完整约定与 `memory-bank/scripts/` 各脚本文档。

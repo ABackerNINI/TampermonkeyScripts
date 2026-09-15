@@ -40,5 +40,5 @@
 
 ## 待办追踪
 
-- 完整任务清单见 [tasks/_index.md](./tasks/_index.md)；路线图见 [roadmap.md](./roadmap.md)。
+- 完整任务清单见 [tasks/_index.md](./tasks/_index.md)；现存 Bug 清单见 [pitfalls.md](./pitfalls.md)。
 - 现存 Bug 清单见 [pitfalls.md](./pitfalls.md)（P2、P10 为未修复的现存 Bug）。

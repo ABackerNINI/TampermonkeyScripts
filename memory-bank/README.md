@@ -22,7 +22,7 @@ flowchart TD
 
 | 文件 | 内容 |
 |------|------|
-| [projectbrief.md](./projectbrief.md) | 项目范围、目标与基石（源：`project-overview.md` 提炼） |
+| [projectbrief.md](./projectbrief.md) | 项目范围、目标与基石（含仓库结构） |
 | [productContext.md](./productContext.md) | 项目为何存在、解决什么问题、如何工作、用户体验目标 |
 | [activeContext.md](./activeContext.md) | **当前工作焦点**、最近改动、下一步、活跃决策 |
 | [systemPatterns.md](./systemPatterns.md) | 系统架构、关键技术决策、设计模式、组件关系 |
@@ -34,10 +34,9 @@ flowchart TD
 
 | 文档 | 内容 |
 |------|------|
-| [project-overview.md](./project-overview.md) | 仓库结构、脚本速查、开发与发布工作流（详细版） |
-| [conventions.md](./conventions.md) | 铁律（计划不改码/等审核/版本号/知识库同步）、提交信息规范、测试约定、检查清单 |
+| [conventions.md](./conventions.md) | 铁律（计划不改码/等审核/版本号/知识库同步）、提交信息规范、测试约定、检查清单、开发与发布工作流 |
 | [pitfalls.md](./pitfalls.md) | 已知易错点与坑（含现存 Bug 清单，症状→原因→对策） |
-| [roadmap.md](./roadmap.md) | 路线图：待修 Bug / 近期功能 / 中期改进 / 远期构想 |
+| [tasks/_index.md](./tasks/_index.md) | 任务清单（按状态分类，路线图角色由此承担） |
 | [scripts/PTAutoCheckIn.md](./scripts/PTAutoCheckIn.md) | PT 多站点自动签到 v2（常驻调度批量 + FAB 面板 + 贴吧多吧，站点/单元配置驱动） |
 | [scripts/BTSchoolHelper.md](./scripts/BTSchoolHelper.md) | BTSchool 种子列表高亮 + 快捷键滚动脚本 |
 | [scripts/BilibiliEnterFullscreen.md](./scripts/BilibiliEnterFullscreen.md) | B 站 Enter 键全屏切换脚本 |
@@ -45,11 +44,11 @@ flowchart TD
 
 ## 如何阅读
 
-- **首次接触项目**：先读 `projectbrief.md` 与 `project-overview.md`，了解目录结构与脚本概览；再按需阅读对应脚本文档。
+- **首次接触项目**：先读 `projectbrief.md`，了解项目范围与仓库结构；再按需阅读对应脚本文档。
 - **修改某个脚本**：直接阅读该脚本的文档页（`memory-bank/scripts/*.md`）+ 源文件（`src/*.user.js`）。
 - **动手写代码前**：阅读 `conventions.md`（约定）与 `pitfalls.md`（易错点），避免重踩历史 Bug。
 - **排障/查现状**：优先查 `pitfalls.md` 的症状→原因对照表，其次看脚本内 `[ScriptName]` 日志。
-- **规划改动**：参考 `roadmap.md` 与 `tasks/` 中已登记的待办与方向。
+- **规划改动**：参考 `tasks/_index.md` 中已登记的待办与方向。
 - **新增脚本**：参考 `conventions.md` 第 7 节检查清单，完成后在本文档与知识库中补充登记。
 - **需要真实页面 HTML**：`src/BTSchoolTorrentsTableSample.html` 是 BTSchool 种子表格的真实 HTML 样本，用于验证解析逻辑。
 
