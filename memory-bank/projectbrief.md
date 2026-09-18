@@ -16,10 +16,14 @@ TampermonkeyScripts/
 │   ├── pitfalls.md               # 易错点与坑（含现存 Bug 清单）
 │   ├── tasks/                    # 任务清单（按状态分类）
 │   └── scripts/                  # 各脚本详细说明
+├── tests/                        # 开发期测试与校验工具（非 userscript, 无 @version 头, 零依赖）
+│   ├── README.md                 # 测试约定：如何运行 / 命名 / 纪律 / 可测性技法
+│   ├── run-all.js                # 极简零依赖运行器（自动发现并逐个跑 tests/ 下的测试）
+│   └── check-ptac-budget.js      # PTAutoCheckIn 超时预算/状态阶梯静态校验（见 P28）
 └── src/
-    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v2 并入正式版: 批量+FAB+贴吧多吧, 2026.09.16.1)
+    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v2 并入正式版: 批量+FAB+贴吧多吧, 2026.09.18.1)
     ├── BTSchoolHelper.user.js                # BTSchool 种子列表增强
-    ├── BTSchoolTorrentsTableSample.html      # BTSchool 种子表格真实 HTML 样本（测试用）
+    ├── BTSchoolTorrentsTableSample.html      # BTSchool 种子表格真实 HTML 样本（测试用 fixture）
     ├── BilibiliEnterFullscreen.user.js       # B 站 Enter 键全屏
     └── EnhanceVisitedLinks.user.js           # 全局已访问链接样式增强
 ```
@@ -48,7 +52,8 @@ TampermonkeyScripts/
 2. **版本驱动更新**：所有脚本元数据 `@version YYYY.MM.DD.N`，修改代码/元数据必须同步递增，否则 Tampermonkey 不会向用户端推送更新。
 3. **文档与代码同步**：任何代码/项目文档变更后，必须同步更新 `memory-bank/` 记忆库，并与代码同次提交。
 4. **保守扩展**：个人脚本以稳定为先，新增能力默认关闭或可配置，避免未经请求改变用户浏览行为。
-5. **防封号/防风控**：PT/贴吧签到类脚本把「每次访问都检测、冷却只防重复点击」作为核心安全设计。
+5. **防封号/防风控**：PT/贴吧签到类脚本把「每次访问都检测、冷却只防重复点击」作为核心安全设计；**冷却期内绝不重复点击**（含"自动重试"——只复检状态、不重复写操作）。
+6. **慢不等于坏**：签到结果必须区分「确定失败」与「未确认（超时/无信号，可重试）」，且**超时不得覆写已给出的结论**；单站内部超时必须装进整流程预算（预算不变式 + 自动校验，见 `pitfalls.md` P28）。
 
 ## 项目边界
 

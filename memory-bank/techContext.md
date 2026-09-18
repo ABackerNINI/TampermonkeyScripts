@@ -7,7 +7,7 @@
 - **语言**：JavaScript（ES6+，`const`/`let`，禁止 `var`）
 - **运行时**：浏览器 + Tampermonkey（Greasemonkey API）
 - **脚本格式**：`.user.js`（单文件，含 UserScript 元数据头）
-- **测试**：无自动化框架；用真实页面 HTML 样本（`src/BTSchoolTorrentsTableSample.html`）+ 浏览器 F12 console 手动验证
+- **测试**：**无测试框架**（刻意保持：无 `package.json` / 无 npm / 无构建），但已有 `tests/` 开发期测试区 —— 约定为「`tests/*.js` 顶层每个文件 = 一个可独立运行的测试，**以退出码表达结果**」，`node tests/run-all.js` 一次跑完（极简零依赖运行器）。现有测试：`tests/check-ptac-budget.js`（PTAutoCheckIn 超时预算 / 状态阶梯 / 不透明成本声明 / `computeUnitBudget` 自测，见 P28）。另有真实页面 HTML 样本（`src/BTSchoolTorrentsTableSample.html`）+ 浏览器 F12 console 手动验证。测试约定与「如何测 userscript」技法见 `tests/README.md`。
 - **版本管理**：git（远程 GitHub + Gitee 镜像）
 
 ## 开发环境与设置
@@ -15,6 +15,7 @@
 - 工作目录：`D:\Projects\TampermonkeyScripts`
 - `.vscode/settings.json` 配置 cSpell 词典（站点域名等专有名词拼写白名单）
 - 无 package.json / 无 npm / 无构建步骤。直接编辑 `src/*.user.js`。
+- 测试用 Node 直接跑（无需 `npm install`）：`node tests/run-all.js`（全部）或 `node tests/<某测试>.js`（单个）；语法检查 `node --check src/*.user.js`。
 
 ## UserScript 元数据约定（见 conventions.md 第 3 节）
 

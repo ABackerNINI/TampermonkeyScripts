@@ -50,6 +50,7 @@ flowchart TD
 - **排障/查现状**：优先查 `pitfalls.md` 的症状→原因对照表，其次看脚本内 `[ScriptName]` 日志。
 - **规划改动**：参考 `tasks/_index.md` 中已登记的待办与方向。
 - **新增脚本**：参考 `conventions.md` 第 7 节检查清单，完成后在本文档与知识库中补充登记。
+- **写/跑测试**：读 `tests/README.md`（约定 + 「如何测 userscript」技法 + 现有测试清单 + 待铺的路），运行 `node tests/run-all.js`。
 - **需要真实页面 HTML**：`src/BTSchoolTorrentsTableSample.html` 是 BTSchool 种子表格的真实 HTML 样本，用于验证解析逻辑。
 
 ## 快速提醒
@@ -62,3 +63,4 @@ flowchart TD
 6. **标点**：注释/日志用中文但统一**英文标点**。
 7. **解析易错**：BTSchool 表格用 `tbody > tr:has(> td.rowfollow)` 定位行、`:scope > td` 取列；浮点属性（时魔）不可用整数解析函数。
 8. **自测**：改动后在真实站点页面 F12 看 console；详尽的症状/原因/对策见 `pitfalls.md`。
+9. **测试**：`tests/` 是开发期测试区（零依赖，无测试框架）——顶层 `tests/*.js` 每个文件 = 一个测试，以退出码表达结果；`node tests/run-all.js` 一次跑完全部。改 PTAutoCheckIn 后必跑 `node tests/check-ptac-budget.js`（校验超时预算不变式 + 状态阶梯结构 + 不透明步骤的 `budgetMs` 声明），必须全绿；新增 `function` 步骤/自定义 `alreadyCheck` 时**必须**声明 `budgetMs` / `alreadyCheckBudgetMs`（同步判定写 `0`）。测试约定与「如何测 userscript」技法见 `tests/README.md`，原理见 `pitfalls.md` P28。
