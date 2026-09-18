@@ -1,11 +1,11 @@
 # PTAutoCheckIn.user.js — PT 多站点自动签到
 
-> 源文件：`src/PTAutoCheckIn.user.js` ｜ 版本 `2026.09.18.1`(升级时同步更新)
+> 源文件：`src/PTAutoCheckIn.user.js` ｜ 版本 `2026.09.19.3`(升级时同步更新)
 > ⚠️ 状态：**v2 已并入正式版**。原 `src/PTAutoCheckIn-v2.user.js`（v2026.09.15.1）内容已并入 `PTAutoCheckIn.user.js` 并改回 `@name PTAutoCheckIn`（递增版本号）；`-v2` 暂存文件与旧 v1（v2026.08.30.1）均已删除, 生产脚本合并为单一 `PTAutoCheckIn.user.js`。
 
 ## 功能概述
 
-覆盖 27 个站点(含仅检测不自动签的 U2、无按钮访问即签的 MTeam/DigitalCore/HD-Space/Kufirc/凤凰PT/Sportz Bar、Discourse 论坛按钮签到站 NodeLoc)+ 百度贴吧(**多吧**, 每个吧为独立签到单元)。双模式：
+覆盖 28 个站点(含仅检测不自动签的 U2、无按钮访问即签的 MTeam/DigitalCore/HD-Space/Kufirc/凤凰PT/Sportz Bar、Discourse 论坛按钮签到站 NodeLoc、已签后入口变纯文本的 HDHome)+ 百度贴吧(**多吧**, 每个吧为独立签到单元)。双模式：
 
 1. **被动模式**：访问匹配站点自动签到(同 v1)。
 2. **主动批量模式**：点击右下角悬浮按钮 → 面板「批量签到」→ **发起页常驻**, 由调度循环依次用 `GM_openInTab` 在**后台标签**打开各站执行签到, 发起页轮询 GM 状态逐个推进, 全部完成后停在发起页弹出完成面板。
@@ -170,7 +170,7 @@ success      -> suspect
 - **失败且冷却中的站**(今日 `failed` + 10min 冷却未过): 整行降透明度 + 左侧琥珀竖条 + 副文案提示「冷却中, 默认不参与批量」; 批量候选**默认排除**此类站。常规「批量签到」按钮**右侧紧贴一个窄 chevron 图标钮**(拆分按钮组, 同色系+细分隔线) → 点击后琥珀色的 **「强制批量签到(n 站)」** 按钮从**按钮行上方浮出**(absolute 浮层不占文档流, 覆盖站点列表底部; 按钮与「批量签到」本体对齐), 浮出钮带详细 tooltip; 点击无视冷却强制重试(点击前仍重写冷却, 再失败进入新一轮冷却)。**全部签到完毕(无失败冷却站)或批量进行中隐藏图标钮**(此时「批量签到」恢复完整圆角); 图标钮 hover/展开态变琥珀色(图标不旋转); 强制按钮 tooltip 说明适用场景与风控风险。**行内重试入口(.28)**: 今日失败站的 badge 悬停变琥珀「↻ 重试」(cursor pointer + 风控 title 提示), 点击 → 前台新标签 `?ptacRetry=<uid>` 单站强制重试(无视冷却、完成不关标签; 一次性剥参 + 30s 跨标签互斥锁防并发; 与批量调度互斥)。
 - 面板数据读 GM 存储, 任何已匹配站打开均为同一份(满足「任意已添加网站查看完成面板」)。
 
-## 已有站点一览(27 站 + 贴吧 6 吧)
+## 已有站点一览(28 站 + 贴吧 6 吧)
 
 > 2026.09.07 实测各站签到链接普遍不再带 `faqlink` class, 故所有 PT 站 `checkInSelector` 一律去掉 class 依赖(仅按 `href*="attendance.php"` 定位); PTTime 保留 `a.fcb`、Cyanbug 保留 `a.nav-btn`(非 faqlink, 实测仍有效)。站点 `url` 同步更新为当前有效入口(大多去掉 `www.` 前缀, 与 `match` 保持一致)。蜂巢为 shadcn/Radix 改版站(签到是按钮不是 attendance 链接), 例外按 `data-slot` 定位, 见下表。
 
@@ -189,6 +189,7 @@ success      -> suspect
 | CarPT | carpt.net | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | HDTime | hdtime.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | HDFans | hdfans.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
+| HDHome | hdhome.org | `a[href*="attendance.php"]` | `签到得魔力`(**无方括号**) / `签到已得`(已签后入口消失, 原地变纯文本) | `alreadyCheck`(入口消失**且**登录态证据) + `alreadyPageCheck:true`; **不用** `noButtonMeansCheckedIn`(见 P31) |
 | CrabPT | crabpt.vip | `a[href*="attendance.php"]` | `[签到得蟹币]` / `签到已得` | — |
 | Cyanbug | cyanbug.net | `a.nav-btn[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | HDBao | hdbao.cc | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 跳页; `attendanceUrl` 直达; `alreadyPageCheck:true` |
@@ -221,6 +222,32 @@ success      -> suspect
 - **DigitalCore / HD-Space / Kufirc / 凤凰PT / Sportz Bar**(无按钮访问即签型, 2026.09.08 接入, 同 MTeam 模板): 各站同样**无签到按钮/页面**, 登录态访问首页即自动完成签到。DigitalCore(SPA, iconify 导航)成功特征 = `a[href="/alltorrents"]` 文本含 All Torrents; HD-Space(传统站)成功特征 = 整页文本含「Last access:」; Kufirc(Luminance 传统站, 未登录显示 Login/Reactivate)成功特征 = `a[href="/torrents.php"]` 文本含 Torrents; 凤凰PT(NexusPHP 传统中文站)成功特征 = `a[href="torrents.php"][rel="sub-menu"]` 文本含「种子」(相对路径 + rel 属性, 无前导斜杠); Sportz Bar(xbtitFM 传统站)成功特征 = `a.level1-a.drop[href="#"]` 文本含 Torrent Menu。→ `match` 均限首页(根路径; DigitalCore 另容 `/index`, 凤凰PT/Sportz Bar 另容 `/index.php`); 无按钮字段; 步骤仅 `wait 3000`; `successDetect` 轮询特征(16s)。未登录 → 重定向/无特征 → failed。
 - **HHCLUB**(菜单展开 + 动态落地页型, 2026.09.08 接入): 签到入口藏在头像下拉菜单: 先点 `img#user-avatar` 展开 → 再点菜单内 `a[href*="attendance.php"]`(`[签到得憨豆]`)→ 跳 `attendance.php`; 落地页渲染当月日历 `<p id="date-display">`(内容为**动态 `yyyy-mm`** 如 2026-09, 静态 `landingCheckedInContent` 字符串匹配不适用)→ 用 `alreadyCheck` 自定义 async 函数(非 attendance.php 落地页不判; 落地页上 `#date-display` 含**动态算出的当月前缀**才命中)→ 挂统一 `detectAlreadyCheckedIn` → 被动/批量/落地结算三路径自动共用。**2026.09.08 实测普通触发偶发「未检测到成功特征」+「整流程超时」, 强制重试即成功 → 点击后导航不稳定(SPA 路由/慢导航/首访点击无效)→ 修复双保险**: ① 头像改**点-验-重试函数步骤**: 点 avatar 后轮询签到链接**可见**(`getClientRects()>0`——菜单链接可能常驻 DOM 但 display:none, 隐藏元素程序化 `.click()` 不触发导航), 未现则再点(点击是 toggle), 最多 3 次; ② 补 `successDetect:[{type:'func', fn: 轮询 location.pathname 变 attendance.php 且 #date-display 含当月(8s)}]` → SPA 路由/800ms 后才跳转(无 pagehide)时同页也能确认, 不再秒判 failed; 整页跳转仍走落地结算(两通道并存)。已签当日菜单内容不变(无按钮级已签特征)。
 - **NodeLoc**(no-text 图标按钮站, 2026.09.08 接入): Discourse 论坛, 首页有「每日签到」真实按钮 `button.checkin-button`(class 含 `btn no-text btn-icon icon btn-flat checkin-button`, **内部只有 svg 图标无可见文本**, title/aria-label=「每日签到」)。点击后同页变化(class 加 `checked-in`、title/aria-label 变「您今天已经签到过了」)→ **引擎按钮级文本通道(click_checkin 已签判定 / checkInContent 文案匹配)依赖 visibleText, 对 no-text 按钮不可用** → 建模: ① 已签判定 = `alreadyCheck` 自定义函数(detectAlreadyCheckedIn 第 1 通道): 按钮存在且 class 含 `checked-in` 或 title/aria-label 含「已经签到过」→ 未登录无按钮返回 false; ② 点击 = steps 里 function 步骤(`waitForElement` 找到按钮, 已签 class/title 守卫后才 `click()`); ③ 成功后 = `successDetect:[{type:'func', fn: 轮询按钮 class 含 checked-in / title 已签(16s)}]`。显式 `match` 限首页根路径(排除话题/节点页——非首页可能有其它按钮或无此按钮, 防误点/无按钮误报 failed)。**P25 重现检测(.26 通用化改造后已纳入)**: no-text 无文本 → 引擎原按钮级重现(纯 visibleText 翻转判定)结构上排除 → 补 `checkInSelector` + `stateSignals`(载体无关信号): checked=[class `checked-in`, attr title/aria-label 含「已经签到过」], checkable=[attr title/aria-label 含「每日签到」] → `readEntryState` 直接读 class/attr, 已签/可签两态互斥(已签 title 不含「每日签到」, 可签 title 不含「已经签到过」)不误判。引擎文本站行为不变(旧字段自动翻译)。
+- **HDHome**(已签后入口变纯文本型, 2026.09.19 接入): NexusPHP 传统站, 顶部信息栏未签时是
+  `<a href="attendance.php" class="faqlink">签到得魔力</a>`, 已签后**该链接整个消失**, 同一位置换成魔力值行内纯文本
+  `<font class="color_bonus">魔力值 </font>[<a href="mybonus.php">使用</a>]: 10.4&nbsp;(签到已得10)`
+  → 已签信息**不在按钮上**(按钮级文案翻转通道失效), 但**页面仍留有已签文本**。
+  → 建模(2026.09.19.3 定稿): 常规 `checkInSelector`/`checkInContent`(点击照旧; 文案为**无方括号**的
+  「签到得魔力」, 与其它站的「[签到得魔力]」不同) + `alreadyCheckedInContent:'签到已得'` +
+  **`alreadyPageCheck:true`**(整页文本) + **`alreadyCheck`** 自定义判定(同步, `alreadyCheckBudgetMs:0`)。
+  **为什么不用 `noButtonMeansCheckedIn`**(曾用 .2 版试过, 用户反馈"不够保险"后回退): 它只回答
+  「入口没了?」却回答不了「你登录了吗?」—— 未登录(cookie 过期)/维护页同样没有签到入口,
+  会被判成已签 → **把漏登录报成"今日已成功"**(最坏的一类误报: 面板绿着, 当天根本没签)。
+  → 换成 `alreadyCheck` 把两件事一起问:
+  ```js
+  alreadyCheck: () => {                                   // 同步, 声明 alreadyCheckBudgetMs: 0
+      if (document.querySelector('a[href*="attendance.php"]')) return false;  // 入口还在 → 未签
+      return !!document.querySelector('a[href*="mybonus.php"], font.color_bonus'); // 入口消失 + 登录态证据
+  }
+  ```
+  登录态证据 = 魔力值信息栏(`a[href*="mybonus.php"]` 或 `font.color_bonus`), 它只在**登录后**的
+  顶部信息栏出现。两通道互补: `alreadyCheck` 覆盖「已签但文本没渲染/文案改版」,
+  `alreadyPageCheck` 覆盖「登录态证据选择器改版」; 都不命中(未登录/无入口)→ 落 `unconfirmed`
+  (可重试、不计失败), **不会假成功**。
+  点击 `attendance.php` 链接即由站方记账(落地页短暂停留后跳回首页), 无需额外步骤。
+  仿真回归 `tests/ptautocheckin/sim-hdhome-pagetext.js` 四条断言: 已签零点击 / 点击落地结算 /
+  入口消失无文本仍判已签 / **未登录页不得判已签**(最后一条是 `noButtonMeansCheckedIn` 的盲区)。
+  > 踩坑: `alreadyCheckBudgetMs` 必须写在 `alreadyCheck` **8 行以内**(静态校验器的扫描窗口),
+  > 函数体写太长会被判"未声明成本"(`check-ptac-budget.js` C2)。
 - **贴吧吧页**: 归属由 `url` 的 `kw` 参数推导(`matchUnit` 逐参比较, 同域多个吧互不误签); 已关注吧才有签到按钮(未关注按失败提示)。
 
 ## 主流程(v2)
@@ -270,6 +297,16 @@ boot()
 20. **行内单站强制重试(.28, 待实测)**: ① 某站今日 failed(冷却中)→ 面板该站 badge「失败」hover 变「↻ 重试」; 点击 → 前台新标签打开且**不自动关闭**, 该站执行一次强制签到; ② 重试成功 → 状态变已成功, 原面板/新标签面板均转绿, badge 重试入口消失; 重试仍失败 → 保持失败 + 进入新一轮冷却, 可再次重试; ③ 同页连点(8s 防抖)与同站双标签并发(30s 锁)→ 仅执行一次, 后者 toast「已在进行中」; ④ 重试页停留后按 F5/刷新 → 不再重复强点(URL 参数已剥, 走普通访问, 冷却中则跳过); ⑤ 跳转型站点(点击签到跳落地页)→ 落地页自动结算, 不产生第二个重试页; ⑥ 批量调度进行中 → 该站行内重试被拒(批量优先); ⑦ suspect(失败-待确认)/已成功/待确认站 → 无重试入口; ⑧ detectOnly 站(U2)与 MTeam 系无按钮站 → 不出现重试入口。
 
 21. **慢站误判修复 + 预算不变式 + 结果分类(P28, 2026.09.18 .1, 待实测)**: ① **冷却站不再被改写**——被动访问一个冷却中的站, 记录 `skipped(冷却中…)`, 40 秒后该站当日状态应**保持不变**(P28 前会在 25s 后被改成 `failed(整流程超时)`); ② 同理 U2(`detect_only`)、suspect(失败-待确认)访问后 40s 状态不被改写, suspect **不**被翻成 failed(否则会被「强制批量」重新纳入并重复点击); ③ **慢加载不再误判**——人为让某站元素 8s 后才出现(或 DevTools 网络限速), 签到应记 success 或至少 `unconfirmed`, 不再秒判 failed; ④ **面板新状态**: `unconfirmed` 显示青色「未确认」徽章, 汇总行出现「· N 未确认」, **不计入失败数**; 今日 failed 或 unconfirmed 的站 badge 悬停均可「↻ 重试」; ⑤ **预算自检**: 打开任意匹配站 console 应有一行 `预算自检: n/n 通过; 最紧 <站> …/40000ms(余量 …ms)`; 若某站越界或有 `function` 步骤没写 `budgetMs`, 应打出全量表格 + 红色 error(可用 `node tests/ptautocheckin/check-ptac-budget.js` 复核); ⑥ **死站加速**: 批量中模拟某站断网 → 应在 ~20s(`NO_PROGRESS_SKIP_MS`)内被判定并跳到下一站(不再是 60s); ⑦ **进度可见**: 批量进行中面板应显示当前站阶段(`等待签到按钮`/`已点击签到按钮`/`确认签到结果`)与已用秒数; ⑧ **回归抽查**: 跨天守卫(P23)、P25 重现降级/恢复、P27 文本站信号等价性行为不变。
+
+22. **HDHome(2026.09.19 接入, 待实测)**: ① 登录态打开 https://hdhome.org/index.php 未签时 → 面板该站应
+    自动点击签到链接并转绿 success(落地页跳回后确认已签); ② 当日已签再访问 → 直判 success 且**无点击**
+    (console 日志 `检测到已签到(自定义判定)` 或 `(页面文案)`); ③ 批量模式该站正常参与并在 ~20s 内结算;
+    ④ **已确认事实**(用户 2026.09.19 实测): 顶部签到链接文案是**无方括号**的「签到得魔力」; 签到入口
+    **在所有页面都常驻**; ⑤ **待真站复核的关键一条**: 退出登录(或清 cookie)后访问该站, 页面应**没有**
+    「魔力值 [使用]」信息栏 → 此时脚本**不得**判 success(应收敛为 unconfirmed/未确认, 面板不显示已成功)。
+    这条正是 `noButtonMeansCheckedIn` 的盲区(见 P31), 仿真已覆盖(`?sim=hdhome-guest`), 真站需验证
+    「登录态证据选择器(`a[href*="mybonus.php"]` / `font.color_bonus`)在未登录页确实不存在」;
+    ⑥ 仿真回归: `node tests/ptautocheckin/sim-hdhome-pagetext.js`(四条断言, 需本机 Chrome/Edge)。
 
 ## 修改与扩展指南
 

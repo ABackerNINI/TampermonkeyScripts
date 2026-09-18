@@ -47,6 +47,39 @@ const NORMAL = {
     slow: async (ctx) => { await sleep(ctx.delay || 3000); return NORMAL.index(); }
 };
 
+// ---------- HDHome 型: 已签后签到入口被纯文本取代(整页文本通道) ----------
+// 对齐 src 里的 unit `hdhome`(url https://hdhome.org/index.php):
+//   未签: 顶部信息栏有 <a href="attendance.php">签到得魔力</a>
+//   已签: 该链接**消失**, 魔力值行内出现「(签到已得N)」纯文本(无按钮可查) → 已签判定
+//         只能靠整页文本(alreadyPageCheck), 这正是该站与 tangpt 型的差别
+const HDHOME = {
+    'hdhome-index': () => page('',
+        `<p><font class="color_bonus">魔力值 </font>[<a href="mybonus.php">使用</a>]: 10.4</p>` +
+        `<a href="attendance.php" class="faqlink">签到得魔力</a>`),
+    'hdhome-already': () => page('',
+        `<p><font class="color_bonus">魔力值 </font>[<a href="mybonus.php">使用</a>]: 10.4&nbsp;(签到已得10)</p>`),
+    // 入口已消失、但页面上**没有**「签到已得」文本(文本未刷新/文案改版) → 只能靠
+    // alreadyCheck「入口消失 + 登录态证据」判已签
+    'hdhome-gone': () => page('',
+        `<p><font class="color_bonus">魔力值 </font>[<a href="mybonus.php">使用</a>]: 10.4</p>`),
+    // 未登录(cookie 过期)/访客页: **同样没有**签到入口, 但也没登录态信息栏 —— 
+    // 这是 noButtonMeansCheckedIn 会踩的坑(只看"入口没了"就判已签), 必须判为未签
+    'hdhome-guest': () => page('',
+        `<p><a href="login.php">登录</a> | <a href="signup.php">注册</a></p><p>请先登录后再浏览本站</p>`),
+    // 签到落地页: 站方记账后短暂停留再跳回首页(此处用 meta refresh 复刻整页跳转)
+    'hdhome-attended': () => page('<meta http-equiv="refresh" content="1;url=/index.php?sim=hdhome-already">',
+        '<p>签到成功</p>')
+};
+
+// 按 host 的默认剧本(请求未带 ?sim= 时): 让同一套剧本库能同时服务不同页面模型的假站
+const HOST_DEFAULT = {
+    'hdhome.org': {
+        '/': 'hdhome-index',
+        '/index.php': 'hdhome-index',
+        '/attendance.php': 'hdhome-attended'
+    }
+};
+
 // ---------- 恶意剧本(安全用例用) ----------
 const EVIL = {
     // A2: 外链 favicon → 存入 GM 存储 → 此后任意站开面板都会请求 evil.test(跨站信标)
@@ -70,7 +103,7 @@ const EVIL = {
     'evil-fake-success': () => page('', `<a href="${BTN}">${CHECKED_TEXT} 999 魔力</a>`)
 };
 
-const ALL = Object.assign({}, NORMAL, EVIL);
+const ALL = Object.assign({}, NORMAL, HDHOME, EVIL);
 
 /**
  * 按 host + path + ?sim= 渲染一个仿真页面。
@@ -78,7 +111,10 @@ const ALL = Object.assign({}, NORMAL, EVIL);
  */
 async function renderPage(ctx) {
     const u = new URL(ctx.url);
-    const name = u.searchParams.get('sim') || (ctx.path === '/attendance.php' ? 'attended' : 'index');
+    const hostDefault = HOST_DEFAULT[ctx.host];
+    const name = u.searchParams.get('sim')
+        || (hostDefault && hostDefault[ctx.path])
+        || (ctx.path === '/attendance.php' ? 'attended' : 'index');
     const fn = ALL[name];
     if (!fn) {
         return { status: 404, body: page('', `<p>未知剧本: ${escHtml(name)}</p>`) };

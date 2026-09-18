@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.18.4
+// @version      2026.09.19.3
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -21,6 +21,7 @@
 // @match        *://*.pting.club/*
 // @match        *://*.hdtime.org/*
 // @match        *://*.hdfans.org/*
+// @match        *://*.hdhome.org/*
 // @match        *://*.cyanbug.net/*
 // @match        *://*.crabpt.vip/*
 // @match        *://*.muxuege.org/*
@@ -269,6 +270,35 @@ const K = {
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得魔力]',
             alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            // HDHome: 已签后签到入口**不再是按钮** —— 顶部信息栏的「签到得魔力」链接被魔力值
+            //   行内的「(签到已得N)」纯文本取代(见 <font class="color_bonus">魔力值 </font>…
+            //   : 10.4&nbsp;(签到已得10)), 故按钮文案翻转通道对此站不适用。已签判定走两条**都要求
+            //   已登录**的双保险(见 P31, 不用 noButtonMeansCheckedIn):
+            //   ① alreadyCheck(自定义, 同步): 「签到入口消失」+「页面有登录态证据」→ 已签。
+            //      登录态证据 = 魔力值信息栏(`a[href*="mybonus.php"]` 或 `font.color_bonus`),
+            //      它只在登录后的顶部信息栏出现 —— 加了这层, 未登录/维护页(同样没有签到入口)
+            //      就**不会**被误判成已签(那正是 noButtonMeansCheckedIn 的漏洞: 它只看到"入口没了",
+            //      看不到"人没登录", 会把漏登录报成"今日已成功")。
+            //   ② alreadyPageCheck: 整页文本含「签到已得」(最直接, 未登录页自然不含)。
+            //   两通道互补: ①覆盖「已签但文本没渲染/文案改版」, ②覆盖「登录态证据选择器改版」。
+            //   两条都不命中(未登录/无入口)→ 落到 unconfirmed(可重试、不计失败), 不会假成功。
+            //   点击 attendance.php 链接即由站方记账(落地页短暂停留后跳回), 无需额外步骤。
+            id: 'hdhome', name: 'HDHome',
+            url: 'https://hdhome.org/index.php',
+            checkInSelector: 'a[href*="attendance.php"]',
+            checkInContent: '签到得魔力',
+            alreadyCheckedInContent: '签到已得',
+            alreadyPageCheck: true,
+            alreadyCheck: () => {
+                try { // 入口还在 → 未签(交给后续通道); 入口消失 + 魔力值信息栏(登录态证据) → 已签
+                    if (document.querySelector('a[href*="attendance.php"]')) return false;
+                    return !!document.querySelector('a[href*="mybonus.php"], font.color_bonus');
+                } catch (e) { return false; }
+            },
+            alreadyCheckBudgetMs: 0, // 纯同步 DOM 判定(见 P28: 同步写 0)
             steps: [CLICK_CHECK_IN]
         },
         {

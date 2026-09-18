@@ -239,4 +239,10 @@ chrome.exe \
     S07 一次性票据 `ptacToken`；S09a 站外 href 护栏 + `refused` 语义（拒绝点击时记 `failed`，不谎报 pending）。
   - **未修（已评估，见 P30）**：S09b 同站任意参数入口、S13 `@match` 过宽 —— 两者都会影响真实站点行为，
     必须真站回归后再定。**已提交：`e2d5f52`（分支 `dev`，尚未 push）。**
+- **2026-09-19（基建扩展：从「安全用例专用」到「也服务站点功能回归」）**：新增 HDHome 站时顺带扩展剧本库 ——
+  `sites.js` 加 **HDHome 型剧本**（`hdhome-index` / `hdhome-already` / `hdhome-gone` / `hdhome-attended`）与
+  **`HOST_DEFAULT` 按 host 的默认剧本路由**（原先默认剧本只有 tangpt 型，一套剧本库无法同时服务两种页面模型的假站）；
+  新增用例 `sim-hdhome-pagetext.js`（**首个非安全向的仿真用例**：已签零点击 / 点击→落地→跳回→success /
+  入口消失无文本仍判已签）。`node tests/run-all.js` → 14/14。
+  意义：此后「新增站点」也可以先在本地仿真站跑通页面模型再上真站，不必每次都拿真站试错。
 - **待办**：M4（把 TASK015/T14 的功能场景矩阵也搬到这套环境）+ M5（S09b / S13 的真站回归与加固决策）。

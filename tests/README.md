@@ -117,7 +117,7 @@ chrome --headless=new \
 | 文件 | 作用 |
 |------|------|
 | `lib/sim/server.js` | 零依赖 http 服务器：按 `Host`+`?sim=` 路由站点剧本、`/__gm/*` 充当跨站共享的 GM 存储后端、`/__sim/*` 取请求日志 |
-| `lib/sim/sites.js` | 站点剧本库（正常：`index` / `already` / `attended` / `ajax` / `none` / `slow`；恶意：`evil-favicon-exfil` / `evil-icon-javascript` / `evil-icon-data` / `evil-fake-button` / `evil-offsite-button` / `evil-xss-text` / `evil-megatext` / `evil-fake-success`）。站点模型对齐 unit `tangpt` |
+| `lib/sim/sites.js` | 站点剧本库（正常：`index` / `already` / `attended` / `ajax` / `none` / `slow`；恶意：`evil-favicon-exfil` / `evil-icon-javascript` / `evil-icon-data` / `evil-fake-button` / `evil-offsite-button` / `evil-xss-text` / `evil-megatext` / `evil-fake-success`；HDHome 型：`hdhome-index` / `hdhome-already` / `hdhome-gone` / `hdhome-guest` / `hdhome-attended`）。默认模型对齐 unit `tangpt`；HDHome 型（已签后入口变纯文本）由 `HOST_DEFAULT` 按 host 路由 |
 | `lib/sim/gm-shim.js` | GM API 垫片（同步 XHR 打到 `/__gm/*`，复刻「脚本级跨源共享」语义），注入在 userscript **之前** |
 | `lib/sim/cdp.js` | 迷你 CDP 客户端（用 Node 22 内置 `WebSocket`，零依赖） |
 | `lib/sim/harness.js` | `withSim()`：起服务器 + 起一次性 Chrome（独立 profile）+ 注入 + 收尾 |
@@ -168,6 +168,7 @@ runCase('Sxx 某某', async () => {
 | `ptautocheckin/sim-security-s13-match-scope.js` | `@match` 全为 `*://*.域/*`（含明文 http + 任意子域）；子域上脚本会运行但不匹配 unit | P30 / S13（残留） |
 | `ptautocheckin/sim-security-s15-megatext.js` | 1MB 按钮文案下主流程仍有结论、后续面板不崩、不进存储 | P30 / S15 |
 | `ptautocheckin/sim-security-s17-static-baseline.js` | 无 `eval`/`new Function`/`document.write`/`insertAdjacentHTML`/`unsafeWindow`；无 `GM_xmlhttpRequest`/`@connect`；`@grant` 最小集 | P30 / S17 |
+| `ptautocheckin/sim-hdhome-pagetext.js` | HDHome 型站点（已签后入口变纯文本）四态：已签页零点击直判 success / 未签点击 → 落地页跳回 → success / 入口消失且无已签文本仍判已签（通道冗余）/ **未登录页（同样无入口）不得判已签**（`noButtonMeansCheckedIn` 的盲区，见 P31） | 站点回归（2026.09.19） |
 
 ## 待铺的路（候选，按价值排序）
 

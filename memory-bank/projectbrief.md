@@ -26,7 +26,7 @@ TampermonkeyScripts/
 │       ├── check-ptac-budget.js  #   超时预算/状态阶梯/不透明成本声明静态校验（见 P28）
 │       └── sim-security-s*.js    #   仿真站安全向用例 S00–S17（见 P30）
 └── src/
-    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v2 并入正式版: 批量+FAB+贴吧多吧, 2026.09.18.4)
+    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v2 并入正式版: 批量+FAB+贴吧多吧, 2026.09.19.3)
     ├── BTSchoolHelper.user.js                # BTSchool 种子列表增强
     ├── BTSchoolTorrentsTableSample.html      # BTSchool 种子表格真实 HTML 样本（测试用 fixture）
     ├── BilibiliEnterFullscreen.user.js       # B 站 Enter 键全屏
@@ -46,7 +46,7 @@ TampermonkeyScripts/
 
 | 脚本 | 匹配站点 | run-at | grant | 核心能力 |
 |------|----------|--------|-------|----------|
-| `src/PTAutoCheckIn.user.js` | 27 站 + 百度贴吧 6 吧 | `document-start` | `GM_getValue` / `GM_setValue` / `GM_log` / `GM_openInTab` | 被动签到 + 批量调度 + 跨站 FAB 结果面板 + 贴吧多吧 + 按钮重现降级 + 行内重试（详见 `scripts/PTAutoCheckIn.md`） |
+| `src/PTAutoCheckIn.user.js` | 28 站 + 百度贴吧 6 吧 | `document-start` | `GM_getValue` / `GM_setValue` / `GM_log` / `GM_openInTab` | 被动签到 + 批量调度 + 跨站 FAB 结果面板 + 贴吧多吧 + 按钮重现降级 + 行内重试（详见 `scripts/PTAutoCheckIn.md`） |
 | `src/BTSchoolHelper.user.js` | `pt.btschool.club/torrents.php*` | `document-end` | 无 | 高亮 2xFree 种子、置顶种低亮、空格键跳转 |
 | `src/BilibiliEnterFullscreen.user.js` | `bilibili.com/video/*`、`/bangumi/*` | `document-body` | 无 | 进页面自动网页全屏；Enter 全屏 / Shift+Enter 网页全屏 |
 | `src/EnhanceVisitedLinks.user.js` | 全部站点 `*` | `document-start` | `GM_addStyle` | 紫色高亮 `a:visited` 并适配明/暗色模式 |

@@ -137,7 +137,8 @@
 
 新增 PTAutoCheckIn 站点（或贴吧加吧）：
 - [ ] 在 `@match` 增加域名（贴吧加吧无需，同域多个吧时 `match` 用函数按参数区分）；
-- [ ] `SITES` 增加配置：简单站加单站对象（`name` / `id` / `url` / `match` / `checkInSelector` / `checkInContent` / `alreadyCheckedInContent` / `steps`；若已签后签到按钮消失, 加 `noButtonMeansCheckedIn: true`）；同站多入口加 group，入口列表加进该 group 的 `units`；
+- [ ] `SITES` 增加配置：简单站加单站对象（`name` / `id` / `url` / `match` / `checkInSelector` / `checkInContent` / `alreadyCheckedInContent` / `steps`）；同站多入口加 group，入口列表加进该 group 的 `units`；
+- [ ] **已签后签到入口消失的站，别一律套 `noButtonMeansCheckedIn`**（见 P31）：它只回答「入口没了？」不回答「登录了吗？」，未登录/cookie 过期页同样无入口 → 会把**漏登录报成"今日已成功"**（最坏的误报）。优先取 **① 整页已签文本**（`alreadyPageCheck: true`）；需要"入口消失"这条通道时，用 **② `alreadyCheck` 自定义判定把「入口消失」升级为「入口消失**且**有登录态证据」**（找一个只在登录后出现的元素），并声明 `alreadyCheckBudgetMs`（同步判定写 `0`，且必须在 `alreadyCheck` **8 行内**，否则 C2 报未声明）；只有页面**无任何**已签痕迹且已确认入口全站常驻（BTSchool）才直接用 `noButtonMeansCheckedIn: true`；
 - [ ] 对照站点页面的真实 DOM（非网络截图）核对选择器与文案；
 - [ ] 实测：未签到页能点、已签到页不重复点、10 分钟内刷新不重复触发、贴吧各吧独立触发；
 - [ ] **若新增/修改了 `function` 步骤或自定义 `alreadyCheck`**：**必须**声明 `budgetMs`(步骤) / `alreadyCheckBudgetMs`(unit)，**纯同步 DOM 判定写 `0`**；并确认该站「检测 + 各步骤 + 固定预留 18000ms」未超 `UNIT_TOTAL_TIMEOUT`(40000ms)（超时预算不变式，见 P28）；
