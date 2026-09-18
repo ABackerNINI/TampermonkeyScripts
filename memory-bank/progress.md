@@ -37,7 +37,7 @@
   并**额外挖出 P0 崩溃 Bug**（P29：首次安装时主流程 100% 不执行）。
   **已修 5 处**（`@version` 2026.09.18.2 → **2026.09.18.4**，见 P30），残留 2 项（S09b / S13）需真站回归后定。
   **已提交**（`e2d5f52`，分支 `dev`）。
-- **分支 `dev` 上共 7 个提交尚未 push**（`ebb06bb` / `2b31377` / `8036f44` / `e2d5f52` / `18e0824` / `0bac142` / `d63fe0c`，`dev` 无上游跟踪；数量为 `git rev-list --count dev --not origin/master`，2026-09-19 复核）。
+- **分支 `dev` 上共 9 个提交尚未 push**（`ebb06bb` / `2b31377` / `8036f44` / `e2d5f52` / `18e0824` / `0bac142` / `d63fe0c` / `ab9701a` / `80e0f37`，`dev` 无上游跟踪；数量为 `git rev-list --count dev --not origin/master`，2026-09-19 复核）。
 - 其余脚本功能稳定，处于增量维护状态。
 
 ## 待办 / 待修（Known Bugs & Left to Build）
