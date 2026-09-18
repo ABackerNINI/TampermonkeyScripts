@@ -12,7 +12,9 @@
   RSS 增删、分页、页脚）由「功能基线快照 + hit-test」两道仿真断言守住。结构契约（A 级锚点 + 12 列 +
   行列数一致）任一不满足 ⇒ 卸妆 + 控制台 error + 顶部红色横幅 + 写 `hdui.lastError`；运行时
   MutationObserver 复查。诊断统一走 `Diag` 账本，禁止空 catch，挂载 window error/unhandledrejection 只记不吞。
-  详见 `scripts/HDHomeUI.md`。**已改完待审核（未提交）。**
+  详见 `scripts/HDHomeUI.md`。**已提交 `13266e0`**（分支 `dev`，尚未 push）。
+  另用**真实页面**（`resources-do-not-track/` 下已脱敏的整页）离线核验过契约判定：12 列全部识别、
+  数据行 12 格、4 个 A 级锚点齐全 ⇒ 仿真复刻与现实一致（核验脚本在 `.workbuddy-ai/`，不入库）。
 - **BTSchoolHelper**（`2026.08.09.1`）：高亮 2xFree、置顶低亮、空格跳转、完整表格解析器 `parseTorrentTable`。
 - **BilibiliEnterFullscreen**（`2026.07.22.7`）：自动网页全屏 + Enter/Shift+Enter 切换，防误触输入框。
 - **EnhanceVisitedLinks**（`2026.08.09.1`）：全局 `:visited` 紫色高亮 + 明暗适配 + SPA 软导航重注入。

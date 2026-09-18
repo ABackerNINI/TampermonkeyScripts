@@ -4,7 +4,9 @@
 > 原站功能全部保留；页面结构一旦与预期不符，**提示并回退站点默认界面**。
 > 设计依据与实施计划见 `tasks/TASK018-hdhome-ui-themes.md`。
 
-- 当前版本：`2026.09.19.1`
+- 当前版本：`2026.09.19.1`（已提交 `13266e0`，分支 `dev`）
+- **真实标记已核验**：用 `resources-do-not-track/` 下已脱敏的整页离线跑过 `headerKey()` 与契约判定，
+  12 列全部识别、数据行 12 格、4 个 A 级锚点齐全（脚本 `.workbuddy-ai/_verify-hdui-real-page.js`，不入库）。
 - 匹配：`*://*.hdhome.org/*`，`@run-at document-start`
 - 权限：`GM_getValue` / `GM_setValue`（**不申请任何网络类权限**）
 - 存储键：`hdui.theme`（当前主题 id）、`hdui.lastError`（上次结构错误）

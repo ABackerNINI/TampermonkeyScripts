@@ -295,4 +295,10 @@ div#footer                — 版权 + #lightbox + #curtain
   另修正两处**测试自身**的问题：搜索箱默认折叠时提交按钮本就 0 尺寸（移出 hit-test，
   改由「表单提交仍带关键词」断言覆盖）；危险端点断言按增量判定（上一轮用户主动点的
   `/myrss.php` 不应被下一轮计入）。
-- **待用户审核后提交**（未 commit / 未 push）。
+- **2026-09-19（核验 + 提交）**：用 `resources-do-not-track/` 下**已脱敏的真实整页**离线跑了一遍
+  `headerKey()` + 契约判定：表头 12 列全部识别、数据行 12 格、4 个 A 级锚点齐全 ⇒
+  **仿真剧本与真实标记一致**（核验脚本 `.workbuddy-ai/_verify-hdui-real-page.js`，只输出结构键，不入库）。
+  两个待定项按依据定了：**默认主题保持 `reel`**；**`@match` 不加裸域那一条**——仓库内
+  `PTAutoCheckIn` 用同一个 `*://*.hdhome.org/*` 且在真站逐页实测过，证明该 pattern 在 Tampermonkey
+  下匹配裸域。
+  **已提交 `13266e0`**（分支 `dev`，17 文件），**未 push**。
