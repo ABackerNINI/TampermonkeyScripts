@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.18.1
+// @version      2026.09.18.4
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -61,6 +61,7 @@ const UNCONFIRMED_RECHECK_DELAYS = [5000, 12000]; // 未确认后的同页复检
 const RECHECK_DETECT_CAP_MS = 4000;            // 复检时单次成功检测的时间上限(ms): 防复检把整流程预算吃光
 const HEARTBEAT_FRESH_MS = 15 * 1000;          // 调度页心跳保鲜判定(ms): 超过视为调度者已离开(断链/关页)
 const RETRY_LOCK_MS = 30 * 1000;               // 单站前台重试互斥锁窗口(ms): 同站两个重试页不可并发点击; 跳转型页面跳走后锁自然过期
+const RETRY_TICKET_TTL_MS = 10 * 60 * 1000;    // 强制重试票据有效期(ms): ?ptacRetry 必须带脚本自签的一次性票据才生效(见 P29/S07)
 const PROGRESS_TTL_MS = 60 * 1000;             // 进度心跳有效期(ms): 超过视为陈旧(跨天/中断残留)
 
 // ==================== 当日状态单向阶梯(见 P28) ====================
@@ -98,6 +99,7 @@ const K = {
     task: 'ptac_task',                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
     alert: (uid) => `ptac_alert_${uid}`,       // 签到按钮重现提醒 {date, btnText, ts, state:'on'|'off'}(见 P25)
     retryLock: (uid) => `ptac_retry_${uid}`,   // 单站前台重试一次性锁(时间戳 ms): 防同站重试页/落地页并发强点(30s 窗口)
+    retryTicket: (uid) => `ptac_retryticket_${uid}`, // 强制重试票据 {token, ts}: 仅脚本自己开的 ?ptacRetry 标签能出示(见 P29/S07)
     progress: (uid) => `ptac_progress_${uid}`  // 单站执行进度心跳 {date, stage, msg, ts}(见 P28): 调度页据此显示阶段/耗时并识别死站
 };
 
@@ -1307,6 +1309,32 @@ const K = {
         favCache.set(unit.id, src);
         return src;
     }
+    // ---------- 同源/同站判定(安全护栏, 见 P29) ----------
+    // 取 unit 的主域(忽略 www. 前缀), 供 icon 采集与链接校验使用
+    function unitHostOf(unit) {
+        try { return new URL(unit.url).hostname.replace(/^www\./, ''); }
+        catch (e) { return ''; }
+    }
+    // iconHost 是否属于 siteHost 本站(主域相等或其子域); 跨站一律 false
+    function isSameSiteHost(iconHost, siteHost) {
+        if (!iconHost || !siteHost) return false;
+        const h = iconHost.replace(/^www\./, '');
+        return h === siteHost || h.endsWith('.' + siteHost);
+    }
+    // 待点击链接是否指向站外(协议非 http(s) 或 host 不属于当前站点)。
+    // 选择器只约束 href 的**子串**(如 a[href*="attendance.php"]), 因此
+    // https://evil.example/attendance.php 也会命中 —— 站点可用它把脚本变成
+    // "无需用户交互的点击器"。签到按钮必然指向本站, 故点击前校验 host(见 P29/S09)。
+    function hrefIsOffSite(rawHref) {
+        try {
+            const u = new URL(rawHref, document.baseURI);
+            if (u.protocol !== 'http:' && u.protocol !== 'https:') return true;
+            return !isSameSiteHost(u.hostname, location.hostname.replace(/^www\./, ''));
+        } catch (e) {
+            return false; // 解析失败(异常 href)按同站处理, 不改变既有行为
+        }
+    }
+
     // 路过收集: 脚本运行在当前站时读取其 <link rel="icon"> 真实 URL 存入匹配 unit
     // (同 host 多吧共享同一 icon, 各自存一份量级可忽略); 仅收 http(s), 无 icon/已相同则跳过
     function collectFavicon() {
@@ -1317,8 +1345,14 @@ const K = {
             let abs;
             try { abs = new URL(href, document.baseURI).href; } catch (e) { return; }
             if (!/^https?:/i.test(abs)) return; // 丢弃 data:/javascript: 等
+            // 同站约束(见 P29/S03): 采集的 icon 必须是**本站**的。否则站 A 只要在 <link rel=icon>
+            // 上挂一个外链, 该 URL 就会以 ptac_favicon_<uid> 长期驻留, 此后用户在任意其它 PT 站
+            // 打开面板时它都会作为 <img src> 发出请求 —— 等于给站 A 送了个跨站跟踪信标。
+            // 允许本站主域及其子域(CDN 图标常见), 其余一律丢弃(回落到 /favicon.ico)。
+            const iconHost = new URL(abs).hostname;
             for (const u of UNITS) {
                 if (!matchUnit(u, location.href)) continue;
+                if (!isSameSiteHost(iconHost, unitHostOf(u))) continue;
                 if (gmGet(K.favicon(u.id), '') === abs) continue;
                 gmSet(K.favicon(u.id), abs);
             }
@@ -1346,6 +1380,10 @@ const K = {
         try { return new URL(location.href).searchParams.get('ptacRetry'); }
         catch (e) { return null; }
     }
+    function readRetryTokenFromUrl() {
+        try { return new URL(location.href).searchParams.get('ptacToken'); }
+        catch (e) { return null; }
+    }
     // 一次性语义: 剥掉 URL 上的 ptacRetry(history.replaceState 不触发页面刷新/不产生历史记录),
     // 防用户停留在重试页按 F5/刷新重复强点; 站点内链接跳转(签到后跳落地页)本就丢弃该参数
     function stripRetryParamFromUrl() {
@@ -1353,6 +1391,7 @@ const K = {
             const u = new URL(location.href);
             if (!u.searchParams.has('ptacRetry')) return;
             u.searchParams.delete('ptacRetry');
+            u.searchParams.delete('ptacToken'); // 票据参数一并剥掉, 不留在地址栏/历史里
             history.replaceState(null, '', u.pathname + u.search + u.hash);
         } catch (e) { /* 忽略: 剥参失败不影响本次重试执行 */ }
     }
@@ -1391,6 +1430,12 @@ const K = {
                     console.warn(`${ScriptName} 签到按钮内容不匹配: expected ${unit.checkInContent}, got ${visibleText(el)}`);
                     return;
                 }
+                // 站外链接护栏: 文案与选择器都对, 但 href 指向别的域 → 疑似伪造入口, 不点(见 P29/S09)
+                const rawHref = el.getAttribute ? el.getAttribute('href') : null;
+                if (rawHref && hrefIsOffSite(rawHref)) {
+                    console.warn(`${ScriptName} 签到按钮 href 指向站外, 拒绝点击: ${rawHref}`);
+                    return { refused: true };
+                }
                 console.log(`${ScriptName} 点击按钮: ${visibleText(el).trim()}`);
                 el.click();
                 setProgress(unit, 'clicked', '已点击签到按钮');
@@ -1402,6 +1447,11 @@ const K = {
                 if (!el) {
                     console.warn(`${ScriptName} 按钮未找到: ${step.selector}`);
                     return;
+                }
+                const clickHref = el.getAttribute ? el.getAttribute('href') : null;
+                if (clickHref && hrefIsOffSite(clickHref)) {
+                    console.warn(`${ScriptName} 步骤链接指向站外, 拒绝点击: ${clickHref}`);
+                    return { refused: true };
                 }
                 console.log(`${ScriptName} 点击按钮: ${visibleText(el).trim() || step.selector}`);
                 el.click();
@@ -1434,15 +1484,17 @@ const K = {
     async function executeSteps(unit) {
         const steps = unit.steps || [CLICK_CHECK_IN];
         let alreadyHit = false;
+        let refused = false; // 被安全护栏拒绝(未执行点击), 见 P29/S09
         for (const step of steps) {
             try {
                 const marker = await executeStep(unit, step);
                 if (marker && marker.alreadyHit) alreadyHit = true;
+                if (marker && marker.refused) refused = true;
             } catch (e) {
                 if (!step.ignoreError) throw e;
             }
         }
-        return { alreadyHit };
+        return { alreadyHit, refused };
     }
 
     // ==================== 已签到检测 ====================
@@ -1874,11 +1926,18 @@ const K = {
         log('开始执行签到步骤');
 
         try {
-            const { alreadyHit } = await executeSteps(unit);
+            const { alreadyHit, refused } = await executeSteps(unit);
             if (alreadyHit) {
                 writeStatus(unit.id, 'success', '步骤中检测到已签到');
                 log('步骤中检测到已签到, 记为成功');
                 return { status: 'success', msg: '检测到已签到', reason: 'already' };
+            }
+            // 步骤被安全护栏拒绝(如签到入口 href 指向站外, 见 P29/S09): 一次都没点,
+            // 不能继续走"点击后确认" —— 那样会把状态写成 pending 并谎称"已点击, 等待确认"。
+            if (refused) {
+                writeStatus(unit.id, 'failed', '签到入口校验未通过(疑似伪造), 已拒绝点击');
+                warn('签到入口被安全护栏拒绝, 未执行点击');
+                return { status: 'failed', msg: '签到入口校验未通过, 已拒绝点击', reason: 'refused' };
             }
         } catch (e) {
             // 步骤错误分类(见 P28): "等待超时"属慢/无信号(瞬时, 可复检可重试)→ unconfirmed;
@@ -2402,7 +2461,10 @@ const K = {
             // 今日失败 / 未确认 → 提供「重试」入口(suspect 失败-待确认、pending、已成功不提供)
             const url = esc(unit.url);
             const fav = faviconSrc(unit);
-            const retryTitle = st.status === 'unconfirmed'
+            // 注意: st 为 null(该站从未有过状态记录, 如全新安装/新接入站点)时不得读取 st.status ——
+            // 旧写法无条件 `st.status === 'unconfirmed'` 会抛 TypeError, 经 render → UI.init → main
+            // 冒泡后**整条主流程中断**(签到完全不执行)。见 pitfalls P29。
+            const retryTitle = todayHit && st.status === 'unconfirmed'
                 ? '点击: 在新标签页【强制重试】本站(未确认到结果, 无视 10 分钟冷却, 执行完不关闭标签)。风险提示: 站点持续不可用时反复强制重试可能触发风控/封号, 请先确认站点可访问'
                 : '点击: 在新标签页【强制重试】本站(无视 10 分钟冷却, 执行完不关闭标签)。风险提示: 站点持续不可用时反复强制重试可能触发风控/封号, 请先确认站点可访问';
             const badge = retryable
@@ -2421,7 +2483,10 @@ const K = {
         function init() {
             host = document.createElement('div');
             host.id = 'ptac-root-v2';
-            const shadow = host.attachShadow({ mode: 'open' });
+            // closed: open 模式下宿主页面的脚本可以直接穿透 shadowRoot 读到面板全部内容
+            // (站点清单 + 各站今日签到状态), 等于把用户在所有 PT 站的画像送给当前访问的这一个站。
+            // 脚本自身全程持有 shadow 引用, 不需要 shadowRoot 访问, 故收紧为 closed(见 P29/S05)。
+            const shadow = host.attachShadow({ mode: 'closed' });
             const style = document.createElement('style');
             style.textContent = UI_CSS;
             shadow.appendChild(style);
@@ -2560,7 +2625,13 @@ const K = {
             if (now - lastRetryAt < 8000) return; // 防连点(双击/误触)
             lastRetryAt = now;
             try {
-                GM_openInTab(appendQuery(targetUrlOf(unit), 'ptacRetry', unit.id), { active: true });
+                // 一次性票据(见 P29/S07): 重试页必须同时出示 ptacToken, 否则按普通访问处理。
+                // 否则任何人只要诱导用户打开 <站点>/?ptacRetry=<uid> 这个 URL, 就能让脚本带着
+                // 用户会话、无视 10 分钟冷却反复点击签到(风控风险)。
+                const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+                gmSet(K.retryTicket(unit.id), { token, ts: Date.now() });
+                const url = appendQuery(appendQuery(targetUrlOf(unit), 'ptacRetry', unit.id), 'ptacToken', token);
+                GM_openInTab(url, { active: true });
                 toast(`正在新标签页强制重试: ${unit.name}`, 3000);
             } catch (e) {
                 toast(`打开重试标签失败: ${unit.name}`);
@@ -3267,12 +3338,22 @@ const K = {
         const urlRetryUid = readRetryUidFromUrl();
         if (urlRetryUid) {
             stripRetryParamFromUrl(); // 一次性语义: F5/刷新不再重复强点(不影响本站匹配)
+            // 票据校验(见 P29/S07): 只有脚本自己经面板「重试」开出的标签才带得出来。
+            // 外部拼的 ?ptacRetry=<uid> 链接没有票据 → 不强制点击, 退化为普通访问。
+            const ticket = gmGet(K.retryTicket(urlRetryUid), null);
+            const urlToken = readRetryTokenFromUrl();
+            const ticketOk = !!(ticket && urlToken && ticket.token === urlToken
+                && Date.now() - (ticket.ts || 0) < RETRY_TICKET_TTL_MS);
+            gmSet(K.retryTicket(urlRetryUid), null); // 一次性: 校验完立即作废(成功与否都不复用)
+            if (!ticketOk) {
+                console.warn(`${ScriptName} ?ptacRetry 无有效票据(疑似外部链接), 忽略强制重试`);
+            }
             UI.init();
             renderPageAlertBar();
             const retryUnit = UNIT_MAP.get(urlRetryUid);
-            if (!retryUnit || !matchUnit(retryUnit, location.href)) {
-                // uid 不存在或本页实际不是该站(参数残留/手工拼错): 不硬签, 按普通访问处理
-                console.warn(`${ScriptName} 重试页与站点不匹配(uid=${urlRetryUid}), 转入被动模式`);
+            if (!ticketOk || !retryUnit || !matchUnit(retryUnit, location.href)) {
+                // 无票据 / uid 不存在 / 本页实际不是该站(参数残留/手工拼错): 不硬签, 按普通访问处理
+                console.warn(`${ScriptName} 重试页未获授权(uid=${urlRetryUid}, ticketOk=${ticketOk}), 转入被动模式`);
                 await runPassiveMode();
             } else {
                 console.log(`${ScriptName} 前台强制重试页, 站点: ${retryUnit.name}`);

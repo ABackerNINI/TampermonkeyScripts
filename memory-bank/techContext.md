@@ -7,7 +7,11 @@
 - **语言**：JavaScript（ES6+，`const`/`let`，禁止 `var`）
 - **运行时**：浏览器 + Tampermonkey（Greasemonkey API）
 - **脚本格式**：`.user.js`（单文件，含 UserScript 元数据头）
-- **测试**：**无测试框架**（刻意保持：无 `package.json` / 无 npm / 无构建），但已有 `tests/` 开发期测试区 —— 约定为「`tests/*.js` 顶层每个文件 = 一个可独立运行的测试，**以退出码表达结果**」，`node tests/run-all.js` 一次跑完（极简零依赖运行器）。现有测试：`tests/check-ptac-budget.js`（PTAutoCheckIn 超时预算 / 状态阶梯 / 不透明成本声明 / `computeUnitBudget` 自测，见 P28）。另有真实页面 HTML 样本（`src/BTSchoolTorrentsTableSample.html`）+ 浏览器 F12 console 手动验证。测试约定与「如何测 userscript」技法见 `tests/README.md`。
+- **测试**：**无测试框架**（刻意保持：无 `package.json` / 无 npm / 无构建），但已有 `tests/` 开发期测试区 —— 约定为「`tests/*.js` 顶层每个文件 = 一个可独立运行的测试，**以退出码表达结果**」，`node tests/run-all.js` 一次跑完（极简零依赖运行器）。现有测试：`tests/check-ptac-budget.js`（PTAutoCheckIn 超时预算 / 状态阶梯 / 不透明成本声明 / `computeUnitBudget` 自测，见 P28）；
+以及 `tests/sim-security-s*.js` 共 11 个**仿真站**用例：起本地仿真服务器 + 一次性 Chrome
+（`--host-resolver-rules="MAP * 127.0.0.1:<port>"` 让真实域名 URL 落到本机，**生产脚本零改动**即可命中 `@match`），
+用 CDP（Node 22 内置 `WebSocket`，零依赖）注入「GM 垫片 + userscript」跑真浏览器端到端断言，
+覆盖安全向为主（见 P30）。另有真实页面 HTML 样本（`src/BTSchoolTorrentsTableSample.html`）+ 浏览器 F12 console 手动验证。测试约定与「如何测 userscript」技法见 `tests/README.md`。
 - **版本管理**：git（远程 GitHub + Gitee 镜像）
 
 ## 开发环境与设置

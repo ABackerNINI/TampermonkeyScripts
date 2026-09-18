@@ -1,0 +1,41 @@
+'use strict';
+/**
+ * S15 超大页面文本的健壮性(A8)
+ * ------------------------------------------------------------------
+ * 恶意页面可以把"签到按钮"文案做成 1MB: 脚本 visibleText(innerText) 会整块读取,
+ * 并可能把它写进 GM 存储(msg/alert.btnText), 进而拖慢/撑爆每次面板渲染。
+ * 断言: 主流程仍能给出结论, 且随后在另一站渲染面板不崩、不超时。
+ */
+
+const { withSim } = require('./sim/harness');
+const { runCase, assert, waitStore } = require('./sim/tcase');
+
+const A = 'http://www.tangpt.top';
+const B = 'http://www.pttime.org';
+const UID = 'tangpt';
+
+runCase('S15 1MB 按钮文案下的健壮性', async () => {
+    await withSim(async (sim) => {
+        const t0 = Date.now();
+        const page = await sim.open(`${A}/?sim=evil-megatext`, { waitMs: 2000 });
+        const st = await waitStore(sim, `ptac_status_${UID}`,
+            (v) => v && ['success', 'failed', 'unconfirmed', 'pending'].includes(v.status), 40000, '1MB 文案下仍有结论');
+        const cost = Date.now() - t0;
+        console.log(`  实测: 1MB 按钮文案场景 ${(cost / 1000).toFixed(1)}s 收敛为 ${st.status}`);
+        assert(cost < 42000, `1MB 文案导致主流程超时(${cost}ms)`);
+        await page.close();
+
+        // 另一站渲染面板: 不得崩、不得明显变慢
+        const t1 = Date.now();
+        const pageB = await sim.open(`${B}/?sim=already`, { waitMs: 6000 });
+        const probe = await pageB.eval(`
+            return { ui: !!document.getElementById('ptac-root-v2') };
+        `);
+        assert(probe.ui, '1MB 文案后面板未渲染(渲染被拖垮)');
+        const crashed = pageB.logs.filter((l) => l.includes('主流程异常'));
+        assert(crashed.length === 0, '1MB 文案导致主流程异常: ' + crashed[0]);
+        const storeSize = JSON.stringify(sim.store()).length;
+        console.log(`  实测: 后续面板渲染 ${((Date.now() - t1) / 1000).toFixed(1)}s 完成, GM 存储体积 ${(storeSize / 1024).toFixed(1)}KB(1MB 文案未进存储)`);
+        await pageB.close();
+    });
+});

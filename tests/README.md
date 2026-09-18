@@ -70,11 +70,75 @@ fs.unlinkSync(tmp);
 - **别把断言写在源文件里**：`check-ptac-budget.js` 的「D 段自测」就是这样做的 —— 它把 `computeUnitBudget` 抽出来喂**合成 unit**，从而能验证「自检本身是否写错了」（否则一个写错的自检会永远显示通过）。
 - 需要 DOM 时优先**喂数据**而不是**造环境**：解析类逻辑把 HTML 当字符串/`DOMParser` 输入，别去 mock 整个 `document`。
 
+## 仿真站：`tests/sim/`（真浏览器 + 假站点，生产代码零改动）
+
+有些东西没法靠"切代码块"测 —— 脚本是否真的点了按钮、状态是否真的落盘、面板在宿主页面里
+能不能被读穿。这些必须**真跑浏览器**。做法不是改脚本去适配 localhost，而是改浏览器的解析：
+
+```bash
+chrome --headless=new \
+  --user-data-dir=<临时 profile> \
+  --host-resolver-rules="MAP * 127.0.0.1:<port>" \
+  --remote-debugging-port=0 --disable-popup-blocking
+```
+
+**URL 保留真实域名（`@match` / `matchUnit` 正常命中）、`Host` 头保留（服务器按 host 分派站点剧本），
+但 DNS 指向本机。** 于是 `src/*.user.js` 一行都不用改，也不必加 `@match localhost`。
+
+| 文件 | 作用 |
+|------|------|
+| `sim/server.js` | 零依赖 http 服务器：按 `Host`+`?sim=` 路由站点剧本、`/__gm/*` 充当跨站共享的 GM 存储后端、`/__sim/*` 取请求日志 |
+| `sim/sites.js` | 站点剧本库（正常：`index` / `already` / `attended` / `ajax` / `none` / `slow`；恶意：`evil-favicon-exfil` / `evil-icon-javascript` / `evil-icon-data` / `evil-fake-button` / `evil-offsite-button` / `evil-xss-text` / `evil-megatext` / `evil-fake-success`）。站点模型对齐 unit `tangpt` |
+| `sim/gm-shim.js` | GM API 垫片（同步 XHR 打到 `/__gm/*`，复刻「脚本级跨源共享」语义），注入在 userscript **之前** |
+| `sim/cdp.js` | 迷你 CDP 客户端（用 Node 22 内置 `WebSocket`，零依赖） |
+| `sim/harness.js` | `withSim()`：起服务器 + 起一次性 Chrome（独立 profile）+ 注入 + 收尾 |
+| `sim/tcase.js` | 用例外壳：浏览器门禁（无浏览器打印 `SKIP` 退 0）+ 断言 + `waitStore()` 轮询 |
+
+**用例里怎么用**：
+
+```js
+const { withSim, todayStr } = require('./sim/harness');
+const { runCase, assert, assertEq, waitStore } = require('./sim/tcase');
+
+runCase('Sxx 某某', async () => {
+    await withSim(async (sim) => {
+        const page = await sim.open('http://www.tangpt.top/?sim=index', { waitMs: 8000 });
+        const st = await waitStore(sim, 'ptac_status_tangpt', (v) => v && v.status === 'success', 25000);
+        assertEq(sim.requests({ host: 'www.tangpt.top', path: '/attendance.php' }).length, 1);
+        await page.close();
+    });
+});
+```
+
+纪律与坑：
+
+- **剧本用 `?sim=` 选择**：`matchUnit` 只比对 host + unit.url 里声明的 query，额外的 `sim` 参数不影响匹配，
+  所以既能一域名多用，又不用改 `SITES` 配置。
+- **断言要轮询不要 sleep**：脚本是异步写状态的，用 `waitStore()` 而不是固定 `waitMs` 后直接读。
+- **GM 存储后端走服务器**：各假站 host 不同，浏览器 `localStorage` 是隔离的，必须由服务器持有唯一一份 store。
+- **独立 profile + 用完即删**：带 `--host-resolver-rules` 的实例里所有域名都指向本机，
+  只能当一次性测试浏览器，测完关闭；不得日常浏览或登录真实账号。
+- **浏览器门禁不是弱化断言**：无 Chrome 时 `SKIP` 退 0 是环境分级；有浏览器时必须真过。
+- **P0 结论要回真机复核**：CDP 注入 + GM 垫片是近似的（沙箱世界、存储时机），
+  关键结论用真实 Tampermonkey（装 `src/` 原文件、同样加 `--host-resolver-rules`）再验一次。
+
 ## 现有测试
 
 | 文件 | 覆盖 | 对应记录 |
 |------|------|----------|
 | `check-ptac-budget.js` | PTAutoCheckIn 的 **A** 常量不变式 / **B** 状态阶梯结构（`STATUS_TRANSITIONS`）/ **C** 配置区不透明步骤的 `budgetMs`/`alreadyCheckBudgetMs` 声明 / **D** 抽出 `computeUnitBudget` 喂 10 个合成 unit 自测 | `memory-bank/pitfalls.md` **P28** |
+| `sim-security-s00-env-smoke.js` | 仿真站环境自检（真实域名落本地、Host 保留）+ 端到端被动签到冒烟（点击 → 跳转 → success） | 门禁；不过则其余仿真用例结论不可信 |
+| `sim-security-s01-no-window-hook.js` | 无 `window.__*` 后门 / 无 `unsafeWindow` / 内部函数未挂 window（静态 + 运行时） | `conventions.md` §8.2 |
+| `sim-security-s02-stored-xss.js` | 站 A 埋恶意按钮文案 → 进 GM 存储 → 站 B 面板渲染，XSS 不得执行 | P30 |
+| `sim-security-s03-favicon-beacon.js` | favicon 外链不得跨站驻留（同站约束）+ 本站 icon 仍正常采集 | P30 / S03（已修） |
+| `sim-security-s04-favicon-scheme.js` | `javascript:` / `data:` 伪协议 icon 不得落存储 | P30 / S04 |
+| `sim-security-s05-panel-readable.js` | 宿主页面不得读穿面板（`closed` shadow） | P30 / S05（已修） |
+| `sim-security-s07-forced-retry.js` | `?ptacRetry` 需一次性票据：外部链接无效、面板重试仍可用、票据不可重放、伪造 `ptacTask` 无效 | P30 / S07（已修） |
+| `sim-security-s09-click-hijack.js` | 9a 站外伪造入口应被拒绝；9b 同站任意参数仍会点击（**已知残留风险**，含不修理由） | P30 / S09 |
+| `sim-security-s11-cooldown-timeout.js` | 冷却期内不重复点击且不改写状态；无签到入口时在预算内收敛（不挂死） | P28 / P30 |
+| `sim-security-s13-match-scope.js` | `@match` 全为 `*://*.域/*`（含明文 http + 任意子域）；子域上脚本会运行但不匹配 unit | P30 / S13（残留） |
+| `sim-security-s15-megatext.js` | 1MB 按钮文案下主流程仍有结论、后续面板不崩、不进存储 | P30 / S15 |
+| `sim-security-s17-static-baseline.js` | 无 `eval`/`new Function`/`document.write`/`insertAdjacentHTML`/`unsafeWindow`；无 `GM_xmlhttpRequest`/`@connect`；`@grant` 最小集 | P30 / S17 |
 
 ## 待铺的路（候选，按价值排序）
 
