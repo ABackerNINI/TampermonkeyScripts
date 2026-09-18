@@ -8,3 +8,15 @@
 # 注意：若强行入库，Git 会跟随联接把 SKILL.md 存成普通文件副本，
 #       与 .agents/ 中的真身脱钩，后续 apm 更新不会同步。
 .workbuddy-ai/
+
+# 不方便展示的资源文件（项目铁律 5，见 AGENTS.md / memory-bank/conventions.md 0.5）
+#
+# 该目录存放私有站点（如 HDHome）另存为的整页网页及附属资源，
+# 页面内可能内嵌 passkey / authkey / token / cookie / uid 等身份凭据，
+# 一旦入库并推送到公开远端即等于凭据泄露，且无法撤回。
+#
+# 因此：本行忽略规则属**安全边界**，不是可随手改的整理项——
+#   1. 禁止 `git add -f resources-do-not-track/...`；
+#   2. 禁止删除/注释本行，或改用更窄的通配符把它放进来；
+#   3. 禁止把目录内内容复制到 src/、tests/、memory-bank/ 等受追踪位置。
+resources-do-not-track/

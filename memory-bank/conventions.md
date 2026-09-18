@@ -34,6 +34,36 @@
   4. 完成/新增待办 → `memory-bank/tasks/_index.md` 登记。
 - 原则：**改了代码却不同步知识库，等同改动没做完**。
 
+### 0.5 私有资源与凭据铁律（`resources-do-not-track/`）
+
+> ⚠️ 本仓库是**公开**远端（GitHub / Gitee），任何被追踪并推送的内容都等于向全网公开、且**不可撤回**。
+> 因此本条是安全红线，优先级高于一切便利性考虑。
+
+**目录用途**：`resources-do-not-track/` 存放私有站点（PT 站等）**另存为的整页网页及其附属资源**
+（如 `resources-do-not-track/HDHome-Whole-Web/`，目前含 HDHome 整页 HTML + `*_files/` 静态资源），
+用于离线观察真实页面结构。这类页面**通常内嵌当前登录者的身份凭据**——`passkey`、`authkey`、
+`token`、CSRF token、`cookie`、`uid`、RSS/下载链接中的个人密钥等。
+
+**A. 不得追踪（Git）**
+
+- 目录已在 `.gitignore` 中被忽略，**永远保持被忽略状态**。
+- 禁止 `git add -f resources-do-not-track/...` 强行加入。
+- 禁止删除/注释 `.gitignore` 中该行，或用更窄的通配符变相放行。
+- 禁止把该目录内容复制/移动到任何受追踪位置：`src/`（脚本与示例 HTML 样本）、`tests/`（夹具与仿真剧本）、
+  `memory-bank/`（知识库文档）、`resources-*` 之外的任何路径。
+- 提交前自查：`git status --porcelain -uall` 中**不得出现** `resources-do-not-track/` 下的路径；
+  `git ls-files resources-do-not-track` 必须为空。
+
+**B. 不得泄露（网络）**
+
+- 其中的**密钥 / passkey / token / cookie / uid** 不得以任何形式出现在：对话回复、日志输出、截图、
+  提交信息与 diff、issue / PR / Gist、云端笔记或在线文档、示例与测试数据、任何上传行为。
+- 引用其中内容时**只描述结构**——选择器、类名、DOM 层级、URL 形状（如 `download.php?id=123&passkey=***`），
+  真实值一律脱敏为 `***` 或 `<redacted>`。
+- 需要把页面结构写进 `memory-bank/` 或 `src/*.html` 样本时：**先复制到受控位置，手工清除全部凭据，再提交**。
+- 给 `tests/lib/sim/` 写仿真剧本时同理：**手写脱敏 HTML**，绝不直接拷贝该目录文件。
+- AI 助手**不得读取该目录内容用于「举例 / 贴代码 / 展示」**；确需读取以分析结构时，输出阶段必须脱敏。
+
 ## 1. 版本管理
 
 ### 铁律：修改代码 ⇒ 同步递增版本号
@@ -61,6 +91,8 @@
 2. 版本号是否符合 `YYYY.MM.DD.N`（跨天重置 N、同日递增 N）？
 3. 是否与代码改动在**同一次提交**中？
 4. 改动行为时，`@description` 是否需要同步更新？
+5. **是否夹带了私有资源 / 凭据？** `git status --porcelain -uall` 与 `git diff --name-only` 中不得出现
+   `resources-do-not-track/` 下的路径；待提交内容中不得含真实 passkey / token / cookie（见第 0.5 节）。
 
 ### 提交信息规范（规范且详细）
 
