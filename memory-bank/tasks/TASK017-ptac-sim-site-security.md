@@ -200,7 +200,7 @@ chrome.exe \
 | 里程碑 | 内容 | 产出 | 依赖 |
 |--------|------|------|------|
 | **M0** | 可行性验证 | ✅ 已完成（本文件 §1） | — |
-| **M1** | 仿真服务器骨架 | `tests/sim/server.js` + `sites.js`：Host 路由、5 个正常剧本、请求日志、`/__sim/*` 控制接口；`curl` 手工验证 | M0 |
+| **M1** | 仿真服务器骨架 | `tests/lib/sim/server.js` + `sites.js`：Host 路由、5 个正常剧本、请求日志、`/__sim/*` 控制接口；`curl` 手工验证 | M0 |
 | **M2** | GM shim + CDP 驱动 + 冒烟 | `gm-store.js` / `gm-shim.js` / `cdp.js` / `run.js`；端到端跑通「被动签到 → success」 | M1 |
 | **M3** | 安全矩阵 P0 | S03 / S05 / S07 / S09 / S13 落地并实测，结论写 `pitfalls.md` | M2 |
 | **M4** | 矩阵补全 + 功能复用 | S01–S18 全部；顺带用同一套环境实现 `TASK016` 的「场景矩阵」（TASK015 的 T14） | M3 |
@@ -218,7 +218,7 @@ chrome.exe \
 | Chrome 自动更新导致 `--host-resolver-rules` / `--headless=new` 行为变化 | 仿真失效 | M1 里加一条「环境自检」用例，失败即明确报"浏览器参数不兼容" |
 | HSTS 预加载域名强制升级 https（如个别域在 preload 列表） | 该站点无法用 http 仿真 | openssl 自签证书 + `--ignore-certificate-errors`；服务器同时监听 https |
 | T2 shim 与真实 TM 语义偏差 → 误判 | 结论失真 | 每条 P0 结论在 T1（真机 TM）复核一次 |
-| 仿真站被误提交/误当成生产代码 | 仓库污染 | 全部在 `tests/sim/`（子目录不参与 `run-all.js`）；文档明确标注 |
+| 仿真站被误提交/误当成生产代码 | 仓库污染 | 全部在 `tests/lib/sim/`（子目录不参与 `run-all.js`）；文档明确标注 |
 | 独立 profile 里残留测试数据 | 隐私 | 每次运行前 `--user-data-dir` 指向全新临时目录，结束即删 |
 
 ---
@@ -229,7 +229,7 @@ chrome.exe \
   真实域名 URL 由本地服务器应答且 `Host` 头保留）→ 生产脚本可零改动命中 `@match`。
   完成威胁模型 A1–A8 与用例矩阵 S01–S18 设计，输出本计划。**未改动任何代码，待用户确认后进入 M1。**
 - **2026-09-18（实施 M1–M3）**：用户确认后开工，全部按计划落地：
-  - **M1 仿真站**：`tests/sim/`（`server.js` 零依赖 http + 站点剧本路由 + `/__gm` 跨站共享存储后端 + 请求日志；
+  - **M1 仿真站**：`tests/lib/sim/`（`server.js` 零依赖 http + 站点剧本路由 + `/__gm` 跨站共享存储后端 + 请求日志；
     `sites.js` 14 个剧本；`gm-shim.js` GM 垫片；`cdp.js` 内置 WebSocket 驱动；`harness.js` `withSim()`；`tcase.js` 用例外壳）。
   - **M2 打通**：S00 环境自检 + 被动签到冒烟一次跑通（点击 → 跳转落地页 → success，全程 8.9s）。
   - **M3 用例**：11 个用例全部通过（`node tests/run-all.js` → 13/13，含原 `check-ptac-budget`）。

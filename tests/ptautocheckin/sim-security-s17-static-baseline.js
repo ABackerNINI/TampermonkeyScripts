@@ -9,9 +9,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const { runCase, assert, assertEq } = require('./sim/tcase');
+const { runCase, assert, assertEq } = require('../lib/sim/tcase');
 
-const SRC = path.join(__dirname, '..', 'src', 'PTAutoCheckIn.user.js');
+const SRC = path.join(__dirname, '..', '..', 'src', 'PTAutoCheckIn.user.js');
 
 runCase('S17/S18 静态安全基线(无动态执行 / 无跨域外发 / @grant 最小集)', async () => {
     const src = fs.readFileSync(SRC, 'utf8');

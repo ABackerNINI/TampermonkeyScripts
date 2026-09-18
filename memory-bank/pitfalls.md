@@ -291,7 +291,7 @@ detectMs(自定义 alreadyCheck 最坏成本) + stepsMs(各步骤声明超时之
 
 **双校验入口(缺一不可)**:
 - **运行时**: `auditUnitBudgets()` 在脚本启动时逐站求和(放在 `boot` 之外, 后台任务标签也会跑到)。全通过 → 打**一行摘要**(`预算自检: n/n 通过; 最紧 <站> <合计>/<上限>ms(余量 …)`), 便于察觉配置逐渐逼近上限; 有越界/未声明 → 打全量表格 + `console.error` 逐条报出。
-- **提交前**: `node tests/check-ptac-budget.js`(零依赖)。校验 A 常量不变式 / B 阶梯结构(目标状态已知、无自环、`success` 出边 ⊆ `[suspect]`、`suspect` 出边 ⊆ `[success]`、无结论态不得转 `pending`、初始态可达 success) / C 配置区不透明步骤是否都声明了成本 / D 把源文件里的 `computeUnitBudget` 抽出来喂合成 unit 自测(防「自检本身写错于是永远显示通过」)。退出码 0/1。
+- **提交前**: `node tests/ptautocheckin/check-ptac-budget.js`(零依赖)。校验 A 常量不变式 / B 阶梯结构(目标状态已知、无自环、`success` 出边 ⊆ `[suspect]`、`suspect` 出边 ⊆ `[success]`、无结论态不得转 `pending`、初始态可达 success) / C 配置区不透明步骤是否都声明了成本 / D 把源文件里的 `computeUnitBudget` 抽出来喂合成 unit 自测(防「自检本身写错于是永远显示通过」)。退出码 0/1。
 
 **注意 / 边界**:
 - **不给 `window` 挂调试入口**(`conventions.md` §8.2 禁止为诊断/测试把内部函数挂到 `window`)。需要逐站明细时: 跑静态校验脚本, 或让自检在违规时自动打全量表格。
@@ -309,7 +309,7 @@ detectMs(自定义 alreadyCheck 最坏成本) + stepsMs(各步骤声明超时之
 
 ## P29. 面板渲染的空值地雷: 一行 `st.status` 未守卫 → 首次安装/新接入站点时脚本 100% 不工作
 
-**发现方式**: 2026-09-18 用本地仿真站(`tests/sim/`, 见 P30)跑 `S00 环境自检冒烟` 时,
+**发现方式**: 2026-09-18 用本地仿真站(`tests/lib/sim/`, 见 P30)跑 `S00 环境自检冒烟` 时,
 页面 console 直接报 `[PTAutoCheckIn] 主流程异常: TypeError: Cannot read properties of null`。
 
 **症状 → 原因 → 对策**
@@ -331,9 +331,9 @@ detectMs(自定义 alreadyCheck 最坏成本) + stepsMs(各步骤声明超时之
 
 ## P30. 安全审计(本地仿真站)结论: 站点可控数据进入「跨站共享存储 + 宿主 DOM」的三条通道
 
-**背景**: 2026-09-18 搭了 `tests/sim/` 仿真站做安全向测试(详见 `memory-bank/tasks/TASK017-*.md`),
+**背景**: 2026-09-18 搭了 `tests/lib/sim/` 仿真站做安全向测试(详见 `memory-bank/tasks/TASK017-*.md`),
 用 `--host-resolver-rules="MAP * 127.0.0.1:<port>"` 让真实域名 URL 落到本地服务器,
-**生产脚本零改动**即可命中 `@match`。共 11 个用例(`tests/sim-security-s*.js`)。
+**生产脚本零改动**即可命中 `@match`。共 11 个用例(`tests/ptautocheckin/sim-security-s*.js`)。
 
 **根因结构**: 脚本同时做了三件"把控制权交给站点"的事 ——
 ① 把**页面内容**当事实来源(按钮文案/href/favicon);

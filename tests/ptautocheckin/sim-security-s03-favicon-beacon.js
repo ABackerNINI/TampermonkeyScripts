@@ -8,8 +8,8 @@
  * 修复后: 只允许本站主域及其子域(CDN 图标), 跨站一律丢弃并回落 /favicon.ico。
  */
 
-const { withSim } = require('./sim/harness');
-const { runCase, assert } = require('./sim/tcase');
+const { withSim } = require('../lib/sim/harness');
+const { runCase, assert } = require('../lib/sim/tcase');
 
 const A = 'http://www.tangpt.top';
 const B = 'http://www.pttime.org';

@@ -17,11 +17,16 @@ TampermonkeyScripts/
 │   ├── tasks/                    # 任务清单（按状态分类）
 │   └── scripts/                  # 各脚本详细说明
 ├── tests/                        # 开发期测试与校验工具（非 userscript, 无 @version 头, 零依赖）
-│   ├── README.md                 # 测试约定：如何运行 / 命名 / 纪律 / 可测性技法
-│   ├── run-all.js                # 极简零依赖运行器（自动发现并逐个跑 tests/ 下的测试）
-│   └── check-ptac-budget.js      # PTAutoCheckIn 超时预算/状态阶梯静态校验（见 P28）
+│   ├── README.md                 # 测试约定：目录结构 / 如何运行 / 纪律 / 可测性技法
+│   ├── run-all.js                # 极简零依赖运行器（**递归**发现并逐个跑 tests/** 下的测试）
+│   ├── lib/                      # 共享基建（不是测试）
+│   │   └── sim/                  #   本地仿真站：真浏览器 + 假站点（server/sites/gm-shim/cdp/harness/tcase）
+│   ├── fixtures/                 # 测试数据（真实页面 HTML 样本等）
+│   └── ptautocheckin/            # PTAutoCheckIn 的用例（一个脚本一个目录，新增脚本照此建目录）
+│       ├── check-ptac-budget.js  #   超时预算/状态阶梯/不透明成本声明静态校验（见 P28）
+│       └── sim-security-s*.js    #   仿真站安全向用例 S00–S17（见 P30）
 └── src/
-    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v2 并入正式版: 批量+FAB+贴吧多吧, 2026.09.18.1)
+    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v2 并入正式版: 批量+FAB+贴吧多吧, 2026.09.18.4)
     ├── BTSchoolHelper.user.js                # BTSchool 种子列表增强
     ├── BTSchoolTorrentsTableSample.html      # BTSchool 种子表格真实 HTML 样本（测试用 fixture）
     ├── BilibiliEnterFullscreen.user.js       # B 站 Enter 键全屏

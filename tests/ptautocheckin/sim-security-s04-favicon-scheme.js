@@ -4,8 +4,8 @@
  * 对应 collectFavicon 里的 `if (!/^https?:/i.test(abs)) return;`
  */
 
-const { withSim } = require('./sim/harness');
-const { runCase, assert } = require('./sim/tcase');
+const { withSim } = require('../lib/sim/harness');
+const { runCase, assert } = require('../lib/sim/tcase');
 
 const A = 'http://www.tangpt.top';
 const UID = 'tangpt';

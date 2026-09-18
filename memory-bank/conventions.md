@@ -141,7 +141,7 @@
 - [ ] 对照站点页面的真实 DOM（非网络截图）核对选择器与文案；
 - [ ] 实测：未签到页能点、已签到页不重复点、10 分钟内刷新不重复触发、贴吧各吧独立触发；
 - [ ] **若新增/修改了 `function` 步骤或自定义 `alreadyCheck`**：**必须**声明 `budgetMs`(步骤) / `alreadyCheckBudgetMs`(unit)，**纯同步 DOM 判定写 `0`**；并确认该站「检测 + 各步骤 + 固定预留 18000ms」未超 `UNIT_TOTAL_TIMEOUT`(40000ms)（超时预算不变式，见 P28）；
-- [ ] 跑 `node tests/check-ptac-budget.js`（零依赖），必须全绿：常量不变式 + 状态阶梯结构 + 不透明成本声明 + `computeUnitBudget` 自测（等价于 `node tests/run-all.js` 跑该测试）；
+- [ ] 跑 `node tests/ptautocheckin/check-ptac-budget.js`（零依赖），必须全绿：常量不变式 + 状态阶梯结构 + 不透明成本声明 + `computeUnitBudget` 自测（等价于 `node tests/run-all.js` 跑该测试）；
 - [ ] 递增版本号 + 更新 `memory-bank/scripts/PTAutoCheckIn.md` 站点表与「各 unit 实测预算」表。
 
 新增独立脚本：
@@ -155,7 +155,7 @@
 ### 8.1 鼓励设计易测试的代码
 
 - 允许并鼓励为可测试性设计：逻辑尽量纯函数化（输入数据 → 输出数据，如 `parseTorrentTable`）、配置与逻辑分离、副作用收敛到 `main()` 等入口、可注入数据源/时钟等。
-- 本地回归脚本/断言**统一放在 `tests/`**（不放 `src/`，避免与生产脚本混放）：顶层 `tests/*.js` 每个文件 = 一个可独立运行的测试，以退出码表达结果；`node tests/run-all.js` 一次跑完全部。子目录 `tests/lib/`（共享辅助代码）、`tests/fixtures/`（数据样本，如真实页面 HTML）不被当作测试执行。
+- 本地回归脚本/断言**统一放在 `tests/`**（不放 `src/`，避免与生产脚本混放）：按被测脚本分子目录 `tests/<脚本名>/*.js`，每个文件 = 一个可独立运行的测试，以退出码表达结果（如 `tests/ptautocheckin/`）；`node tests/run-all.js` **递归**跑完全部（新增脚本目录无需改运行器）。共享基建 `tests/lib/`（含 `lib/sim` 仿真站）与数据 `tests/fixtures/` 不被当作测试执行。
 - **零依赖**：只用 Node 内置模块，不引入任何 npm 包/测试框架（与本仓库「无 package.json / 无构建」一致）。
 - 测试约定与「如何测 userscript」（把源文件里自包含的代码块切出来写进临时模块再 `require`）见 `tests/README.md`。
 
@@ -188,7 +188,7 @@ PT 站大多基于同一套开源代码（NexusPHP 系），但**各站模板与
 
 1. 编辑 `src/*.user.js`。
 2. **递增版本号**：同一天多次修改用 `.N` 递增（`2026.08.30.1` → `2026.08.30.2`）；跨天修改为 `YYYY.MM.DD.1`。
-3. **自检**：改 PTAutoCheckIn 后跑 `node tests/check-ptac-budget.js`（必须全绿；改到超时预算/状态阶梯/不透明步骤时尤其必要，见 P28）；改了任何脚本后跑 `node tests/run-all.js`（全部测试）+ 至少 `node --check src/*.user.js` 验语法。
+3. **自检**：改 PTAutoCheckIn 后跑 `node tests/ptautocheckin/check-ptac-budget.js`（必须全绿；改到超时预算/状态阶梯/不透明步骤时尤其必要，见 P28）；改了任何脚本后跑 `node tests/run-all.js`（全部测试）+ 至少 `node --check src/*.user.js` 验语法。
 4. **同步更新 `memory-bank/` 知识库**：受影响条目（脚本文档/约定/易错点/任务）与代码同次提交（见第 0.4 节）。
 5. **提交信息规范且详细**：首行概括 + 正文分条说明背景/要点/影响；一次提交只做一件事（见第 1 节）。
 6. Tampermonkey 安装/更新脚本后，到目标站点页面按 F12 观察 console 日志验证。

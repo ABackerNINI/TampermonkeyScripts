@@ -9,8 +9,8 @@
  *   · 面板点「重试」: 脚本自带票据 → 功能不变。
  */
 
-const { withSim, todayStr } = require('./sim/harness');
-const { runCase, assert, assertEq, waitStore } = require('./sim/tcase');
+const { withSim, todayStr } = require('../lib/sim/harness');
+const { runCase, assert, assertEq, waitStore } = require('../lib/sim/tcase');
 
 const A = 'http://www.tangpt.top';
 const UID = 'tangpt';

@@ -12,8 +12,8 @@
  *   带参入口), 属于会破坏功能的改动, 需真站回归后再决定 —— 见 pitfalls P29 的待办。
  */
 
-const { withSim } = require('./sim/harness');
-const { runCase, assert, assertEq } = require('./sim/tcase');
+const { withSim } = require('../lib/sim/harness');
+const { runCase, assert, assertEq } = require('../lib/sim/tcase');
 
 const A = 'http://www.tangpt.top';
 const UID = 'tangpt';

@@ -7,8 +7,8 @@
  * 修复后: mode:'closed', 宿主页面拿不到 shadowRoot, 但脚本自身仍持有引用, UI 功能不变。
  */
 
-const { withSim, todayStr } = require('./sim/harness');
-const { runCase, assert } = require('./sim/tcase');
+const { withSim, todayStr } = require('../lib/sim/harness');
+const { runCase, assert } = require('../lib/sim/tcase');
 
 const HOST = 'http://www.pttime.org';
 

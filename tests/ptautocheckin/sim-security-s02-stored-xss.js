@@ -7,8 +7,8 @@
  * 本用例先证明"恶意文本确实跨站进了存储"(通道打通), 再断言渲染未执行它。
  */
 
-const { withSim, todayStr } = require('./sim/harness');
-const { runCase, assert, waitStore } = require('./sim/tcase');
+const { withSim, todayStr } = require('../lib/sim/harness');
+const { runCase, assert, waitStore } = require('../lib/sim/tcase');
 
 const A = 'http://www.tangpt.top';   // 站 A: 埋恶意文案
 const B = 'http://www.pttime.org';   // 站 B: 受害者页面, 在此渲染面板

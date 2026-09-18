@@ -7,8 +7,8 @@
  * 断言: 主流程仍能给出结论, 且随后在另一站渲染面板不崩、不超时。
  */
 
-const { withSim } = require('./sim/harness');
-const { runCase, assert, waitStore } = require('./sim/tcase');
+const { withSim } = require('../lib/sim/harness');
+const { runCase, assert, waitStore } = require('../lib/sim/tcase');
 
 const A = 'http://www.tangpt.top';
 const B = 'http://www.pttime.org';

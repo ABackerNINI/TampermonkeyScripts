@@ -1,45 +1,46 @@
 name: CI
 
+# 本仓库是「无构建、无依赖、无 package.json」的 Tampermonkey 用户脚本集合:
+#   生产代码 = src/*.user.js(单文件), 测试 = tests/**(Node 内置模块, 零依赖)。
+# 旧版 ci.yml 是从一个 Python(uv + pytest)仓库复制过来忘了清理的, 与本仓库完全不匹配, 已整体替换。
+#
+# 说明: tests/** 里的「仿真站」用例需要浏览器; 找不到 Chrome 时它们会打印 SKIP 并退出 0,
+#      不会让 CI 变红。GitHub 的 ubuntu 镜像自带 Chrome, 正常会实跑; 需要指定二进制时用 SIM_CHROME。
+
 on:
   push:
-    branches: [develop, master, main]
+    branches: [master, dev]
   pull_request:
-    branches: [develop, master, main]
+    branches: [master]
   workflow_dispatch:
 
 jobs:
   test:
-    name: Test (Python ${{ matrix.python-version }})
+    name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        node-version: ["20", "22"]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10
+      - name: Set up Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
+          node-version: ${{ matrix.node-version }}
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Syntax check (src/*.user.js)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(src/*.user.js)
+          if [ ${#files[@]} -eq 0 ]; then echo "src/ 下没有 .user.js, 检查配置"; exit 1; fi
+          for f in "${files[@]}"; do
+            echo "node --check $f"
+            node --check "$f"
+          done
 
-      - name: Install dependencies
-        run: uv sync
-
-      - name: Run tests
-        run: uv run pytest tests -q
-
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: coverage-${{ matrix.python-version }}
-          path: htmlcov/
-          if-no-files-found: ignore
+      - name: Run tests (tests/run-all.js)
+        run: node tests/run-all.js -v

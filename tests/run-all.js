@@ -3,9 +3,10 @@
  * run-all.js —— tests/ 目录的极简零依赖测试运行器
  *
  * 约定(见 tests/README.md):
- *   · tests/ 顶层每个 .js 文件 = 一个可独立运行的测试, **以退出码表达结果**(0=通过, 非 0=失败);
- *   · 下划线开头的文件(`_foo.js`)视为临时/草稿, 不参与; 运行器自身不参与;
- *   · tests/lib/、tests/fixtures/ 等子目录是共享代码与数据, 不会被当作测试执行。
+ *   · tests/** 下每个 .js 文件 = 一个可独立运行的测试, **以退出码表达结果**(0=通过, 非 0=失败);
+ *     按被测脚本分子目录(如 tests/ptautocheckin/), 运行器**递归**发现, 新增目录无需改运行器;
+ *   · 下划线开头的文件/目录(`_foo.js`、`_draft/`)视为临时/草稿, 不参与; 运行器自身不参与;
+ *   · tests/lib/(共享基建, 含 lib/sim 仿真站)与 tests/fixtures/(测试数据)不会被当作测试执行。
  *
  * 用法:
  *   node tests/run-all.js              # 跑全部测试, 只对失败项打印子进程输出
@@ -32,13 +33,25 @@ const listOnly = argv.some((a) => a === '--list' || a === '-l');
 const verbose = argv.some((a) => a === '--verbose' || a === '-v');
 const passthrough = argv.filter((a) => RUNNER_FLAGS.indexOf(a) < 0);
 
-// 发现顶层测试文件(排除自身与下划线开头的草稿)
+// 共享基建与数据目录: 不是测试, 不递归进去
+const NON_TEST_DIRS = new Set(['lib', 'fixtures', 'node_modules']);
+
+// 递归发现测试文件: 跳过共享目录与下划线开头的草稿, 返回相对 tests/ 的路径(统一用 /)
 function discover() {
-    return fs.readdirSync(TESTS_DIR, { withFileTypes: true })
-        .filter((e) => e.isFile() && e.name.endsWith('.js'))
-        .map((e) => e.name)
-        .filter((n) => n !== SELF && n.charAt(0) !== '_')
-        .sort();
+    const found = [];
+    (function walk(dir, rel) {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (e.name.charAt(0) === '_') continue;               // 草稿
+            if (NON_TEST_DIRS.has(e.name)) continue;              // 共享基建/数据
+            const childRel = rel ? `${rel}/${e.name}` : e.name;
+            if (e.isDirectory()) {
+                walk(path.join(dir, e.name), childRel);
+            } else if (e.isFile() && e.name.endsWith('.js') && childRel !== SELF) {
+                found.push(childRel);
+            }
+        }
+    })(TESTS_DIR, '');
+    return found.sort();
 }
 
 const tests = discover();
@@ -54,7 +67,8 @@ if (listOnly) {
     process.exit(0);
 }
 
-console.log(`PTAutoCheckIn 测试套件 —— 共 ${tests.length} 个(零依赖运行器)`);
+const groups = new Set(tests.map((t) => (t.indexOf('/') > 0 ? t.slice(0, t.indexOf('/')) : '(根目录)')));
+console.log(`TampermonkeyScripts 测试套件 —— 共 ${tests.length} 个(零依赖运行器): ${Array.from(groups).join(', ')}`);
 console.log('='.repeat(72));
 
 const failed = [];

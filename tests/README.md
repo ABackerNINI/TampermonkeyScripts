@@ -1,30 +1,56 @@
 # tests/ —— 开发期测试与校验工具
 
 > 本目录是 **TampermonkeyScripts** 的开发期测试区，**不属于生产脚本**（生产脚本只在 `src/*.user.js`）。
-> 目标：让「给脚本加一条回归测试」成为**零配置、零依赖**的动作 —— 新增一个 `.js` 文件即可，无需改运行器、无需 `npm install`。
+> 目标：让「给脚本加一条回归测试」成为**零配置、零依赖**的动作 —— 在对应脚本的子目录里新增一个 `.js` 文件即可，无需改运行器、无需 `npm install`。
+
+## 目录结构（按被测脚本分目录）
+
+```
+tests/
+├── run-all.js                 # 零依赖运行器, **递归**发现 tests/** 下的用例
+├── lib/                       # 共享基建(不是测试)
+│   └── sim/                   #   本地仿真站: 真浏览器 + 假站点(见下文)
+├── fixtures/                  # 测试数据(真实页面 HTML 样本等)
+└── ptautocheckin/             # PTAutoCheckIn 的用例
+    ├── check-ptac-budget.js
+    └── sim-security-s*.js
+```
+
+**为什么要分子目录**：本仓库是多脚本集合（`PTAutoCheckIn` / `BTSchoolHelper` /
+`BilibiliEnterFullscreen` / `EnhanceVisitedLinks`）。用例都堆在 `tests/` 顶层时，
+新增脚本的测试会和既有测试混在一起、命名要靠前缀区分。现在**一个脚本一个目录**
+（`tests/ptautocheckin/`，将来 `tests/btschoolhelper/` …），运行器递归发现，
+**新增目录不用改运行器**。
 
 ## 运行
 
 ```bash
-node tests/run-all.js            # 跑 tests/ 下全部测试(只对失败项打印输出)
-node tests/run-all.js -v         # 总是打印子进程输出
-node tests/run-all.js --list     # 只列出发现的测试
-node tests/check-ptac-budget.js  # 单独跑某一个(所有测试都能独立运行)
+node tests/run-all.js                                # 跑全部测试(只对失败项打印输出)
+node tests/run-all.js -v                             # 总是打印子进程输出
+node tests/run-all.js --list                         # 只列出发现的测试
+node tests/ptautocheckin/check-ptac-budget.js        # 单独跑某一个(所有测试都能独立运行)
 ```
 
 退出码：`0` 全通过 / `1` 有失败 / `2` 没发现测试或源文件缺失。可直接接 CI 或 git hook。
+CI 见 `.github/workflows/ci.yml`（Node 20/22：`node --check src/*.user.js` + `node tests/run-all.js -v`）。
 
 ## 约定
 
 | 位置 | 约定 |
 |------|------|
-| `tests/*.js`（顶层） | **每个文件 = 一个可独立运行的测试**，用**退出码**表达结果（0=通过，非 0=失败）。不需要任何测试框架。 |
-| `tests/_*.js` | 下划线开头 = 临时/草稿，**不参与** `run-all.js`（排查问题时可随意留）。 |
+| `tests/<脚本名>/*.js` | **每个文件 = 一个可独立运行的测试**，用**退出码**表达结果（0=通过，非 0=失败）。不需要任何测试框架。目录名小写、与被测脚本同名（`ptautocheckin` / `btschoolhelper` …）。 |
+| `tests/**/_*.js`、`tests/_*/` | 下划线开头 = 临时/草稿，**不参与** `run-all.js`（排查问题时可随意留）。 |
 | `tests/run-all.js` | 运行器自身，不参与。 |
-| `tests/lib/` | 共享辅助代码（如「从 userscript 抽取函数」的 harness）。子目录内容**不会**被当作测试执行。 |
+| `tests/lib/` | 共享基建（含 `lib/sim` 仿真站）。子目录内容**不会**被当作测试执行。 |
 | `tests/fixtures/` | 测试数据（真实页面 HTML 样本等）。脱敏后再入库，勿含账号/会话信息。 |
 
 **零依赖**：只用 Node 内置模块。本仓库刻意保持「无 `package.json` / 无 npm / 无构建」，测试不得引入任何 npm 包或框架。
+
+### 给另一个脚本加测试（三步）
+
+1. `mkdir tests/<脚本名>/`（小写、与 `src/<脚本名>.user.js` 同名）。
+2. 在里面新建 `.js`，用退出码表达结果（`process.exit(0/1)`）；可直接 `require('../lib/...')` 复用基建。
+3. `node tests/run-all.js --list` 确认被发现；**无需改运行器**。
 
 ## 三条纪律（`memory-bank/conventions.md` 第 8 节）
 
@@ -70,7 +96,10 @@ fs.unlinkSync(tmp);
 - **别把断言写在源文件里**：`check-ptac-budget.js` 的「D 段自测」就是这样做的 —— 它把 `computeUnitBudget` 抽出来喂**合成 unit**，从而能验证「自检本身是否写错了」（否则一个写错的自检会永远显示通过）。
 - 需要 DOM 时优先**喂数据**而不是**造环境**：解析类逻辑把 HTML 当字符串/`DOMParser` 输入，别去 mock 整个 `document`。
 
-## 仿真站：`tests/sim/`（真浏览器 + 假站点，生产代码零改动）
+## 仿真站：`tests/lib/sim/`（真浏览器 + 假站点，生产代码零改动）
+
+> 仿真站是**共享基建**，放在 `lib/` 下（不是某个脚本的用例），各脚本的用例通过
+> `require('../lib/sim/...')` 复用。
 
 有些东西没法靠"切代码块"测 —— 脚本是否真的点了按钮、状态是否真的落盘、面板在宿主页面里
 能不能被读穿。这些必须**真跑浏览器**。做法不是改脚本去适配 localhost，而是改浏览器的解析：
@@ -87,18 +116,18 @@ chrome --headless=new \
 
 | 文件 | 作用 |
 |------|------|
-| `sim/server.js` | 零依赖 http 服务器：按 `Host`+`?sim=` 路由站点剧本、`/__gm/*` 充当跨站共享的 GM 存储后端、`/__sim/*` 取请求日志 |
-| `sim/sites.js` | 站点剧本库（正常：`index` / `already` / `attended` / `ajax` / `none` / `slow`；恶意：`evil-favicon-exfil` / `evil-icon-javascript` / `evil-icon-data` / `evil-fake-button` / `evil-offsite-button` / `evil-xss-text` / `evil-megatext` / `evil-fake-success`）。站点模型对齐 unit `tangpt` |
-| `sim/gm-shim.js` | GM API 垫片（同步 XHR 打到 `/__gm/*`，复刻「脚本级跨源共享」语义），注入在 userscript **之前** |
-| `sim/cdp.js` | 迷你 CDP 客户端（用 Node 22 内置 `WebSocket`，零依赖） |
-| `sim/harness.js` | `withSim()`：起服务器 + 起一次性 Chrome（独立 profile）+ 注入 + 收尾 |
-| `sim/tcase.js` | 用例外壳：浏览器门禁（无浏览器打印 `SKIP` 退 0）+ 断言 + `waitStore()` 轮询 |
+| `lib/sim/server.js` | 零依赖 http 服务器：按 `Host`+`?sim=` 路由站点剧本、`/__gm/*` 充当跨站共享的 GM 存储后端、`/__sim/*` 取请求日志 |
+| `lib/sim/sites.js` | 站点剧本库（正常：`index` / `already` / `attended` / `ajax` / `none` / `slow`；恶意：`evil-favicon-exfil` / `evil-icon-javascript` / `evil-icon-data` / `evil-fake-button` / `evil-offsite-button` / `evil-xss-text` / `evil-megatext` / `evil-fake-success`）。站点模型对齐 unit `tangpt` |
+| `lib/sim/gm-shim.js` | GM API 垫片（同步 XHR 打到 `/__gm/*`，复刻「脚本级跨源共享」语义），注入在 userscript **之前** |
+| `lib/sim/cdp.js` | 迷你 CDP 客户端（用 Node 22 内置 `WebSocket`，零依赖） |
+| `lib/sim/harness.js` | `withSim()`：起服务器 + 起一次性 Chrome（独立 profile）+ 注入 + 收尾 |
+| `lib/sim/tcase.js` | 用例外壳：浏览器门禁（无浏览器打印 `SKIP` 退 0）+ 断言 + `waitStore()` 轮询 |
 
-**用例里怎么用**：
+**用例里怎么用**（注意 require 路径：`tests/<脚本名>/` → `../lib/sim/`）：
 
 ```js
-const { withSim, todayStr } = require('./sim/harness');
-const { runCase, assert, assertEq, waitStore } = require('./sim/tcase');
+const { withSim, todayStr } = require('../lib/sim/harness');
+const { runCase, assert, assertEq, waitStore } = require('../lib/sim/tcase');
 
 runCase('Sxx 某某', async () => {
     await withSim(async (sim) => {
@@ -126,19 +155,19 @@ runCase('Sxx 某某', async () => {
 
 | 文件 | 覆盖 | 对应记录 |
 |------|------|----------|
-| `check-ptac-budget.js` | PTAutoCheckIn 的 **A** 常量不变式 / **B** 状态阶梯结构（`STATUS_TRANSITIONS`）/ **C** 配置区不透明步骤的 `budgetMs`/`alreadyCheckBudgetMs` 声明 / **D** 抽出 `computeUnitBudget` 喂 10 个合成 unit 自测 | `memory-bank/pitfalls.md` **P28** |
-| `sim-security-s00-env-smoke.js` | 仿真站环境自检（真实域名落本地、Host 保留）+ 端到端被动签到冒烟（点击 → 跳转 → success） | 门禁；不过则其余仿真用例结论不可信 |
-| `sim-security-s01-no-window-hook.js` | 无 `window.__*` 后门 / 无 `unsafeWindow` / 内部函数未挂 window（静态 + 运行时） | `conventions.md` §8.2 |
-| `sim-security-s02-stored-xss.js` | 站 A 埋恶意按钮文案 → 进 GM 存储 → 站 B 面板渲染，XSS 不得执行 | P30 |
-| `sim-security-s03-favicon-beacon.js` | favicon 外链不得跨站驻留（同站约束）+ 本站 icon 仍正常采集 | P30 / S03（已修） |
-| `sim-security-s04-favicon-scheme.js` | `javascript:` / `data:` 伪协议 icon 不得落存储 | P30 / S04 |
-| `sim-security-s05-panel-readable.js` | 宿主页面不得读穿面板（`closed` shadow） | P30 / S05（已修） |
-| `sim-security-s07-forced-retry.js` | `?ptacRetry` 需一次性票据：外部链接无效、面板重试仍可用、票据不可重放、伪造 `ptacTask` 无效 | P30 / S07（已修） |
-| `sim-security-s09-click-hijack.js` | 9a 站外伪造入口应被拒绝；9b 同站任意参数仍会点击（**已知残留风险**，含不修理由） | P30 / S09 |
-| `sim-security-s11-cooldown-timeout.js` | 冷却期内不重复点击且不改写状态；无签到入口时在预算内收敛（不挂死） | P28 / P30 |
-| `sim-security-s13-match-scope.js` | `@match` 全为 `*://*.域/*`（含明文 http + 任意子域）；子域上脚本会运行但不匹配 unit | P30 / S13（残留） |
-| `sim-security-s15-megatext.js` | 1MB 按钮文案下主流程仍有结论、后续面板不崩、不进存储 | P30 / S15 |
-| `sim-security-s17-static-baseline.js` | 无 `eval`/`new Function`/`document.write`/`insertAdjacentHTML`/`unsafeWindow`；无 `GM_xmlhttpRequest`/`@connect`；`@grant` 最小集 | P30 / S17 |
+| `ptautocheckin/check-ptac-budget.js` | PTAutoCheckIn 的 **A** 常量不变式 / **B** 状态阶梯结构（`STATUS_TRANSITIONS`）/ **C** 配置区不透明步骤的 `budgetMs`/`alreadyCheckBudgetMs` 声明 / **D** 抽出 `computeUnitBudget` 喂 10 个合成 unit 自测 | `memory-bank/pitfalls.md` **P28** |
+| `ptautocheckin/sim-security-s00-env-smoke.js` | 仿真站环境自检（真实域名落本地、Host 保留）+ 端到端被动签到冒烟（点击 → 跳转 → success） | 门禁；不过则其余仿真用例结论不可信 |
+| `ptautocheckin/sim-security-s01-no-window-hook.js` | 无 `window.__*` 后门 / 无 `unsafeWindow` / 内部函数未挂 window（静态 + 运行时） | `conventions.md` §8.2 |
+| `ptautocheckin/sim-security-s02-stored-xss.js` | 站 A 埋恶意按钮文案 → 进 GM 存储 → 站 B 面板渲染，XSS 不得执行 | P30 |
+| `ptautocheckin/sim-security-s03-favicon-beacon.js` | favicon 外链不得跨站驻留（同站约束）+ 本站 icon 仍正常采集 | P30 / S03（已修） |
+| `ptautocheckin/sim-security-s04-favicon-scheme.js` | `javascript:` / `data:` 伪协议 icon 不得落存储 | P30 / S04 |
+| `ptautocheckin/sim-security-s05-panel-readable.js` | 宿主页面不得读穿面板（`closed` shadow） | P30 / S05（已修） |
+| `ptautocheckin/sim-security-s07-forced-retry.js` | `?ptacRetry` 需一次性票据：外部链接无效、面板重试仍可用、票据不可重放、伪造 `ptacTask` 无效 | P30 / S07（已修） |
+| `ptautocheckin/sim-security-s09-click-hijack.js` | 9a 站外伪造入口应被拒绝；9b 同站任意参数仍会点击（**已知残留风险**，含不修理由） | P30 / S09 |
+| `ptautocheckin/sim-security-s11-cooldown-timeout.js` | 冷却期内不重复点击且不改写状态；无签到入口时在预算内收敛（不挂死） | P28 / P30 |
+| `ptautocheckin/sim-security-s13-match-scope.js` | `@match` 全为 `*://*.域/*`（含明文 http + 任意子域）；子域上脚本会运行但不匹配 unit | P30 / S13（残留） |
+| `ptautocheckin/sim-security-s15-megatext.js` | 1MB 按钮文案下主流程仍有结论、后续面板不崩、不进存储 | P30 / S15 |
+| `ptautocheckin/sim-security-s17-static-baseline.js` | 无 `eval`/`new Function`/`document.write`/`insertAdjacentHTML`/`unsafeWindow`；无 `GM_xmlhttpRequest`/`@connect`；`@grant` 最小集 | P30 / S17 |
 
 ## 待铺的路（候选，按价值排序）
 

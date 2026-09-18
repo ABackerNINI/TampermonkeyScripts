@@ -57,7 +57,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const SRC = path.join(__dirname, '..', 'src', 'PTAutoCheckIn.user.js');
+const SRC = path.join(__dirname, '..', '..', 'src', 'PTAutoCheckIn.user.js');
 
 // A2 的结算余量: 整流程超时后落盘 + 落地页结算所需(与脚本内 PER_UNIT_TIMEOUT_MS 注释口径一致)
 const SETTLE_MARGIN_MS = 5 * 1000;

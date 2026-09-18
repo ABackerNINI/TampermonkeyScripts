@@ -12,10 +12,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const { withSim } = require('./sim/harness');
-const { runCase, assert, assertEq } = require('./sim/tcase');
+const { withSim } = require('../lib/sim/harness');
+const { runCase, assert, assertEq } = require('../lib/sim/tcase');
 
-const SRC = path.join(__dirname, '..', 'src', 'PTAutoCheckIn.user.js');
+const SRC = path.join(__dirname, '..', '..', 'src', 'PTAutoCheckIn.user.js');
 const SUB = 'http://cdn.tangpt.top';
 
 runCase('S13 @match 覆盖任意子域与明文 http', async () => {

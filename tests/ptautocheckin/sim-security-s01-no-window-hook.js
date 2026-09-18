@@ -6,10 +6,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const { withSim } = require('./sim/harness');
-const { runCase, assert } = require('./sim/tcase');
+const { withSim } = require('../lib/sim/harness');
+const { runCase, assert } = require('../lib/sim/tcase');
 
-const SRC = path.join(__dirname, '..', 'src', 'PTAutoCheckIn.user.js');
+const SRC = path.join(__dirname, '..', '..', 'src', 'PTAutoCheckIn.user.js');
 
 runCase('S01 无 window 后门(静态 + 运行时)', async () => {
     // --- 静态 ---

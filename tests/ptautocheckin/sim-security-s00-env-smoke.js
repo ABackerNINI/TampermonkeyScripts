@@ -9,8 +9,8 @@
  * 这一条不过, 后面所有安全用例的结论都不可信 —— 所以它是门禁。
  */
 
-const { withSim, todayStr } = require('./sim/harness');
-const { runCase, assert, assertEq, waitStore } = require('./sim/tcase');
+const { withSim, todayStr } = require('../lib/sim/harness');
+const { runCase, assert, assertEq, waitStore } = require('../lib/sim/tcase');
 
 const SITE = 'http://www.tangpt.top';
 const UID = 'tangpt';

@@ -98,7 +98,7 @@ return await Promise.race([
 | 文件 | 改动 |
 |------|------|
 | `src/PTAutoCheckIn.user.js` | 引擎改动（见下表），`@version` → `2026.09.18.1` |
-| `tests/check-ptac-budget.js` | **新增**（零依赖 Node 静态校验器，见 T3/T14 说明） |
+| `tests/ptautocheckin/check-ptac-budget.js` | **新增**（零依赖 Node 静态校验器，见 T3/T14 说明） |
 | `memory-bank/pitfalls.md` | 新增 **P28** |
 | `memory-bank/scripts/PTAutoCheckIn.md` | 新增「超时预算与状态阶梯」章节 + 各 unit 预算表 + 校准项 21 |
 | `memory-bank/systemPatterns.md` / `conventions.md` / `tasks/_index.md` / `activeContext.md` / `progress.md` | 同步 |
@@ -109,7 +109,7 @@ return await Promise.race([
 |----|------|
 | T1 | `runUnitWithTimeout` 加 `settled` + `clearTimeout`；超时/异常一律归 `unconfirmed`，主流程已结算则超时分支不写状态 |
 | T2 | 新增 `STATUS_TRANSITIONS` 白名单；`writeStatus` 拒绝非法迁移并 `console.warn`，返回布尔 |
-| T3 | 常量：`UNIT_TOTAL_TIMEOUT=40s`、`UNIT_TIMEOUT_MARGIN_MS=5s`、`POST_CLICK_WATCH_MS=4s`、`UNCONFIRMED_RECHECK_DELAYS=[5s,12s]`、`RECHECK_DETECT_CAP_MS=4s`、`PER_UNIT_TIMEOUT_MS=60s`、`NO_PROGRESS_SKIP_MS=20s`、`SLOW_PAGE_WAIT_BONUS_MS=10s`；运行时 `auditUnitBudgets()` 启动自检 + `tests/check-ptac-budget.js` |
+| T3 | 常量：`UNIT_TOTAL_TIMEOUT=40s`、`UNIT_TIMEOUT_MARGIN_MS=5s`、`POST_CLICK_WATCH_MS=4s`、`UNCONFIRMED_RECHECK_DELAYS=[5s,12s]`、`RECHECK_DETECT_CAP_MS=4s`、`PER_UNIT_TIMEOUT_MS=60s`、`NO_PROGRESS_SKIP_MS=20s`、`SLOW_PAGE_WAIT_BONUS_MS=10s`；运行时 `auditUnitBudgets()` 启动自检 + `tests/ptautocheckin/check-ptac-budget.js` |
 | T4 | `unconfirmed` 全链路：`writeStatus` 允许值、`countToday()` 增 `unconfirmed`、`statusMeta` 青色「未确认」徽章(`.badge.unc` / `--unc`)、面板汇总 `· N 未确认`、行内重试入口覆盖 failed+unconfirmed |
 | T5 | `confirmAfterClick` 有界复检（只检测不重点），每轮前查剩余预算 |
 | T6 | `watchNavigation(ms)` 竞速 pagehide/beforeunload/URL 变化；`confirmAfterClick` 只被有结论信号结束 |
@@ -118,7 +118,7 @@ return await Promise.race([
 | T9 | 调度循环读心跳：`openedAt` 起 20s 零进度 → 提前判死站（`noProgress`）；打开标签失败写 `unconfirmed` |
 | T10 | pending 宽限跟随心跳（有 3s 内心跳则延后结算） |
 | T11 | 面板批量进度显示阶段 + 已用秒数 |
-| T13/T14 | `tests/check-ptac-budget.js` 校验 A 常量不变式 / B 阶梯结构 / C 不透明成本声明 / **D 抽出 `computeUnitBudget` 喂合成 unit 自测**（防自检本身写错） |
+| T13/T14 | `tests/ptautocheckin/check-ptac-budget.js` 校验 A 常量不变式 / B 阶梯结构 / C 不透明成本声明 / **D 抽出 `computeUnitBudget` 喂合成 unit 自测**（防自检本身写错） |
 
 **T3 实施说明（计划与实现的偏差，已记录）**：原计划是「零依赖 Node 校验脚本（读配置算最坏预算）」。实施时判断**从 JS 源里解析 `SITES` 数组**（含箭头函数、正则、模板串）过于脆弱，改为**职责拆分**：
 - **运行时 `auditUnitBudgets()`** 直接拿真实 `UNITS` 逐站求和 —— 零解析风险、永远与配置同步；
@@ -234,7 +234,7 @@ T14 场景矩阵（每项都对应一个已发现缺陷，防止重构回归）�
 |----|-------------|--------|---------|-------|
 | 15.1 | T1 修整流程超时定时器覆写 | Completed | 2026-09-18 | `settled` + `clearTimeout`；超时归 `unconfirmed` |
 | 15.2 | T2 `writeStatus` 单向阶梯守卫 | Completed | 2026-09-18 | `STATUS_TRANSITIONS` 白名单 + 拒绝时 `console.warn` |
-| 15.3 | T3 预算不变式 + 双校验 | Completed | 2026-09-18 | 常量提升 + 运行时 `auditUnitBudgets()` + `tests/check-ptac-budget.js`（含自测 D 段） |
+| 15.3 | T3 预算不变式 + 双校验 | Completed | 2026-09-18 | 常量提升 + 运行时 `auditUnitBudgets()` + `tests/ptautocheckin/check-ptac-budget.js`（含自测 D 段） |
 | 15.4 | T4 结果分类（`unconfirmed`） | Completed | 2026-09-18 | 独立状态（用户决策）；徽章/汇总/重试入口全链路 |
 | 15.5 | T5 同页有界复检（不重点） | Completed | 2026-09-18 | `[5s, 12s]` 只检测不点击；每轮前查预算 |
 | 15.6 | T6 点击后事件驱动观察窗 | Completed | 2026-09-18 | `watchNavigation` 竞速 pagehide/beforeunload/URL 变化 |
@@ -254,7 +254,7 @@ T14 场景矩阵（每项都对应一个已发现缺陷，防止重构回归）�
 - 应用项目内 skills（`poka-yoke` / `test-gap-audit` / `docs-sync-audit`）形成分阶段计划（P0–P3）与场景矩阵验收标准。
 - **未改动任何代码**；本文件为方案记录，待用户审核并授权后再实施。
 - 用户答复三项决策（`unconfirmed` 独立状态 / 冷却期内不重复点击 / 40s 接受）并授权实施。
-- 实施 P0/P1 全部 + P2 大部分：引擎改动 11 处（T1–T11），新增 `tests/check-ptac-budget.js`，为 HHCLUB/NodeLoc 补 `budgetMs`/`alreadyCheckBudgetMs`。
+- 实施 P0/P1 全部 + P2 大部分：引擎改动 11 处（T1–T11），新增 `tests/ptautocheckin/check-ptac-budget.js`，为 HHCLUB/NodeLoc 补 `budgetMs`/`alreadyCheckBudgetMs`。
 - `node --check` 语法通过；静态校验器全部不变式通过（A 6 项 / B 6 项 / C 2 项 / D 2 项）；预算自检 32 站全通过，最紧 HHCLUB 34400/40000ms。
 - 实施中发现并自纠 5 处设计缺陷：`setProgress` 同阶段不写导致心跳 `ts` 陈旧（改为每次必写）、`wait` 步骤 `Math.min` 方向错把 3000ms 压到 1000ms 下限、`func` 检测器复检需 `maxMs` 限时否则吃光预算、阶梯拒绝写入后调度页结算与存储不一致（改为写入后回读）、`window.__ptacAuditBudgets` 调试入口违反 `conventions.md` §8.2（已移除，改为启动打一行摘要 + 违规打全量表格）。
 - 知识库同步：新增 P28；`scripts/PTAutoCheckIn.md` 新增「超时预算与状态阶梯」章节 + 各 unit 预算表 + 校准项 21；`systemPatterns.md`/`conventions.md`/`tasks/_index.md`/`activeContext.md`/`progress.md` 同步。

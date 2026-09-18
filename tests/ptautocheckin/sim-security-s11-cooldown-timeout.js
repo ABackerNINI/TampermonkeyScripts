@@ -8,8 +8,8 @@
  *      不得挂死 —— 这是"恶意页面用永不出现的元素拖死脚本"的边界。
  */
 
-const { withSim, todayStr } = require('./sim/harness');
-const { runCase, assert, assertEq, waitStore } = require('./sim/tcase');
+const { withSim, todayStr } = require('../lib/sim/harness');
+const { runCase, assert, assertEq, waitStore } = require('../lib/sim/tcase');
 
 const A = 'http://www.tangpt.top';
 const UID = 'tangpt';

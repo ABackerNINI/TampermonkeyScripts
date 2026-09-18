@@ -17,16 +17,24 @@ const { createSimServer } = require('./server');
 const { SHIM } = require('./gm-shim');
 const { CDP } = require('./cdp');
 
-const ROOT = path.join(__dirname, '..', '..');
+const ROOT = path.join(__dirname, '..', '..', '..'); // tests/lib/sim -> repo root
 const SCRIPT_PATH = path.join(ROOT, 'src', 'PTAutoCheckIn.user.js');
 
 function findChrome() {
     if (process.env.SIM_CHROME) return process.env.SIM_CHROME;
+    // Windows / Linux / macOS 常见位置; CI(Linux runner)自带 Chrome, 无需额外安装
     const cands = [
         'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
         'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/snap/bin/chromium',
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
     ];
     for (const p of cands) { try { if (fs.existsSync(p)) return p; } catch (e) { /* ignore */ } }
     return null;
