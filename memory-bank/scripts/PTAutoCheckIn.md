@@ -1,6 +1,6 @@
 # PTAutoCheckIn.user.js — PT 多站点自动签到
 
-> 源文件：`src/PTAutoCheckIn.user.js` ｜ 版本 `2026.09.19.3`(升级时同步更新)
+> 源文件：`src/PTAutoCheckIn.user.js` ｜ 版本 `2026.09.19.4`(升级时同步更新)
 > ⚠️ 状态：**v2 已并入正式版**。原 `src/PTAutoCheckIn-v2.user.js`（v2026.09.15.1）内容已并入 `PTAutoCheckIn.user.js` 并改回 `@name PTAutoCheckIn`（递增版本号）；`-v2` 暂存文件与旧 v1（v2026.08.30.1）均已删除, 生产脚本合并为单一 `PTAutoCheckIn.user.js`。
 
 ## 功能概述
@@ -10,7 +10,7 @@
 1. **被动模式**：访问匹配站点自动签到(同 v1)。
 2. **主动批量模式**：点击右下角悬浮按钮 → 面板「批量签到」→ **发起页常驻**, 由调度循环依次用 `GM_openInTab` 在**后台标签**打开各站执行签到, 发起页轮询 GM 状态逐个推进, 全部完成后停在发起页弹出完成面板。
 3. **结果查看**：FAB 面板展示**当日全量结果**(成功/失败/未确认/待确认/跳过), GM 存储跨域共享 → 任意已匹配站点打开面板看到的都是同一份数据。`unconfirmed`(未确认, P28)= 超时/无信号等**没有结论**的情况, 面板显青色「未确认」徽章, **不计入失败数**、可重试; 与「失败」(确定失败, 需人工排查)严格区分。
-4. **签到按钮重现降级提醒**(2026.09.08 .18/.19/.20)：当日记录已签(success)但按钮又呈可签态(服务器重置/换账号/误报)→ **.20 状态降级**: 把当日状态改为 `suspect`, 面板该站 badge 显「**失败-待确认**」且不再计入今日成功(仍不自动重签、不进批量); 同时 **.19 页面级呈现**仍生效: 琥珀警示 toast 一次 + 按钮琥珀高亮描边+⚠ 徽标「已标失败-待确认(仅提醒)」+ 页面底部居中常驻横条(可 ✕ 圆钮关闭本页); FAB 琥珀角标/面板警示条/行标记(.18)保留。页面确认已签 → 状态自动恢复已成功 + 提醒消除; 次日自然作废(见 P25)。**2026.09.08 .26 通用化改造**: 判定从「纯按钮可见文本翻转」重构为**载体无关入口状态信号**(`stateSignals`/`readEntryState`, 文本/attr/class/fn/exists), 旧文本站自动翻译**行为逐位一致**, no-text 属性/class 态站(NodeLoc)由此纳入重现通道(显式 `checkInSelector`+`stateSignals`); MTeam 系六无按钮站与 HHCLUB(无已签基准)仍结构排除(见校准项 19)。
+4. **签到按钮重现降级提醒**(2026.09.08 .18/.19/.20；**2026.09.19.4 起只在页面级呈现, 不弹主面板**)：当日记录已签(success)但按钮又呈可签态(服务器重置/换账号/误报)→ **.20 状态降级**: 把当日状态改为 `suspect`, 面板该站 badge 显「**失败-待确认**」且不再计入今日成功(仍不自动重签、不进批量); 同时 **.19 页面级呈现**仍生效: 琥珀警示 toast 一次 + 按钮琥珀高亮描边+⚠ 徽标「已标失败-待确认(仅提醒)」+ 页面底部居中常驻横条(可 ✕ 圆钮关闭本页); FAB 琥珀角标/面板警示条/行标记(.18)保留。页面确认已签 → 状态自动恢复已成功 + 提醒消除; 次日自然作废(见 P25)。**2026.09.08 .26 通用化改造**: 判定从「纯按钮可见文本翻转」重构为**载体无关入口状态信号**(`stateSignals`/`readEntryState`, 文本/attr/class/fn/exists), 旧文本站自动翻译**行为逐位一致**, no-text 属性/class 态站(NodeLoc)由此纳入重现通道(显式 `checkInSelector`+`stateSignals`); MTeam 系六无按钮站与 HHCLUB(无已签基准)仍结构排除(见校准项 19)。
 5. **行内单站强制重试(2026.09.08 .28)**：面板中今日「失败」的站点, badge「失败」悬停变琥珀「↻ 重试」→ 点击在**新标签页(前台)**打开 `?ptacRetry=<unitId>` 对该站执行一次**无视冷却**的强制签到(`forceCooldown`, 语义同批量「强制重试」), **执行完毕不关闭标签**(用户留在页面观察, 状态写回后即呈现成功/仍失败)。与批量任务完全隔离(不建任务/不参与调度/不关标签/不轮询)。一次性语义: 重试页执行前 `history.replaceState` 剥掉 `ptacRetry`(F5/刷新不重复强点); 跨标签 30s 互斥锁(`ptac_retry_<uid>`)防同站并发双点; 批量调度活跃且正处理该站时入口/执行页均拒绝; 点击前仍重写冷却, 再失败进入新一轮冷却(不连环); 今日 `failed` 与 `unconfirmed` 均提供(suspect「失败-待确认」疑似已签不提供, 防误重签)。
 6. **慢站误判修复 + 预算不变式 + 结果分类(2026.09.18 .1, 见 P28)**：① 整流程超时定时器不再覆写已给出的结论(旧版会在 25s 后把 `skipped`/`detect_only`/`suspect` 一律改成 `failed('整流程超时')`, 这是「经常失败」的主因); ② `writeStatus` 加**状态单向阶梯**白名单; ③ 新增 `unconfirmed` 独立状态区分「慢」与「坏」; ④ 点击后观察窗由固定 800ms + 只认 `pagehide` 改为**事件驱动**(`pagehide`/`beforeunload`/URL 变化/成功特征任一命中即提前结束, 上限 4s) + **有界复检**(+5s/+12s 各一轮, **只检测不重复点击**); ⑤ 建立**超时预算不变式**并附双校验(运行时 `auditUnitBudgets()` 启动自检 + 提交前 `node tests/ptautocheckin/check-ptac-budget.js`); ⑥ `waitForElement` 增加可交互判定与慢页面超时自适应; ⑦ 后台标签写**进度心跳** `ptac_progress_<uid>`(调度页显示实时阶段/耗时), 20s 零进度即判死站(死站从 60s 降到 ~20s); ⑧ 整流程超时 25s→40s、调度窗口 50s→60s。
 
@@ -163,6 +163,14 @@ success      -> suspect
 ## FAB / 面板 UI
 
 - Shadow DOM 注入, 样式完全隔离; CSS 变量 + `@media (prefers-color-scheme: dark)` **跟随系统深浅色**。
+- **主面板「失焦自动关闭」(2026.09.19.4, 用户需求)**: 面板是用完即走的浮层 —— 焦点离开即收起:
+  ① 点面板外任一处(`document` **捕获阶段** `mousedown`, 抢在站点 `stopPropagation` 之前);
+  ② 切标签页/切窗口/点地址栏(`window` 的 `blur`)。三条配套约束:
+  · **监听只在面板展开期间挂**(`openPanel` → `armAutoClose`, `closePanel` → `disarmAutoClose`), 不给宿主页面留常驻全局监听;
+  · **点在 UI 自身不算失焦** —— shadow(closed) 内部事件传播到外部时 `target` 被重定向成 `host`, 故用 `host.contains(e.target)` 判定(否则点面板里的「批量签到/外观」会把自己关掉);
+  · **面板内有待决横幅时不自动收起**(`bannerHasAction()` 查横幅里有没有操作钮)—— 「中断恢复」是一次性入口, 用户点了页面别处就再也找不回来。
+  ⚠️ 因此**程序性弹出的面板要意识到它会被收起**: 目前 `showBatchDone`(批量完成, 横幅无操作钮 → 可被收起)与 `offerBatchResume`(中断恢复, 带「恢复批量」钮 → **豁免**)两处; 新增自动弹面板的场景先想清楚"被误关了用户还能不能找回入口"。
+- **重现提醒不弹主面板(2026.09.19.4)**: 「签到按钮重现」的页面级呈现**唯一入口** = `presentReappearedOnPage(unit, toastMsg)`(按钮琥珀描边 + ⚠ 徽标 + 底部横条 + 首次降级一条琥珀 toast; `toastMsg` 空串 = 只重建装饰不打扰)。**该入口与复核分支内均不得出现 `openPanel`** —— 用户正在看页面上的签到按钮时把面板弹出来 = 抢焦点 + 挡住要看的东西; 面板内本就有常驻警示条与行标记, 想看随时点 FAB。两条不变式由 `tests/ptautocheckin/check-ptac-panel.js` 静态钉死, 并由 `tests/ptautocheckin/sim-panel-autoclose.js` 在真浏览器里实测 —— 面板挂在 closed shadow 下, 页面脚本/CDP 都拿不到 `panel` 元素, 故用 `document.elementFromPoint` 的 **shadow 重定向**(命中面板 → 返回宿主 `#ptac-root-v2`)判定开合(详见校准项 23)。已实测通过: 点面板外收起 / 点 UI 自身不收起 / window blur 收起 / 重现不弹面板且零点击 / 中断恢复横幅不被误关。
 - FAB(右下角, 渐变圆钮)→ 点击展开面板：今日汇总 + 分组列表(多吧 group 有组头)+ 每行状态徽章/msg/时间 + 「批量签到(剩余 n)」按钮。**FAB 皮肤 4 套可切换**(面板头部「外观」展开选择条, 存 `ptac_skin` 跨站生效): ①变色 全完成→绿底✓(无角标)/ 有未签→紫底✓+红底剩余角标; ②数字 全完成→✓ / 有未签→主区大字剩余数(绿角标=成功数); ③信号灯 完成→绿✓ / 今日有失败→红底!+失败角标 / 其余→琥珀✓+剩余角标; ④光环 分段彩光贴圆缘柔和发散(成功淡绿 mint 段 / 失败淡粉 rose 段 / 待办灰段, 段弧长=该状态站数占比, 多段并存不整环变色; 如 20 成功+1 失败→绿环为主+尾段淡粉), **本体透明且显式 `animation:none` 关掉 baseGlow**(外圈紫晕又强又与呼吸脱节), 段 alpha 压低至 0.34/0.26 → 常亮辉光弱; ::before 整体 ringBreathe **弱呼吸**(brightness 0.96↔1.07 明暗 + drop-shadow 淡紫光晕沿圆缘外 2px↔9px 外扩收拢, blur 2px 在 keyframes 内重声明; 3.6s, 幅度收敛不抢戏); 光芒动感由 **真实 DOM 日冕射线承担**(**完全复刻 sample.html 太阳算法**——先前「埋段+mask 圆孔挖根」「渐变平台按露出段比例」等自定义均效果一般已弃): `.ring-rays` 容器(inset:-60px 仅定位, **z-index:-1 沉到 ::before 之下**(盖光层之下), 无 mask 无裁剪, 射线溢出可见), 内 22 条 `<i class="ray">`(主 18 + 日冕长细 4, sample 同款数量): 底边锚圆心(`bottom:50%;left:50%` + 负 margin 居中)、`transform-origin:bottom center`、**只 `rotate(var(--a))` 绕圆心**指向各角(勿加 translateY——rotate 绕 transform-origin=底边中心, 根会全叠圆正上一点呈折扇); **射线全长=圆心到尖端(主 70~124px/日冕 118~162px), 根部(0~26px)被 ::before 中心紫罩圆盖住(紫罩 radial 实盖至圆缘: accent-1 42% → transparent 67%, 兼 sample center-icon 的盖光作用), 露出=圆缘外渐变尾段——无需 mask 挖孔**; 渐变照 sample 金档 `0.9@0 → 0.6@30% → 0.2@70% → transparent`(根亮尖透, **无平台**)+ 顶部半圆帽 `border-radius:50% 50% 0 0 / 100% 100% 0 0` + `filter: blur(1px)` 羽化; 静态 `opacity:0`, 动画 `rayPulse` **三帧**(照 sample solarPulse): 0% `opacity 0.15/blur2px/scaleY 0.6` → 50% `0.9/blur0/1.1`(峰值锐利清晰成刺) → 100% `0.3/blur1.5/0.8`, `alternate` 往复 + **正** `animation-delay`(主 0~2.5s、日冕 0~3s)错相 → 各条低谷模糊柔化、峰值锐利的呼吸闪烁; **keyframes 内须重组 `rotate(var(--a)) scaleY(...)` 与 blur(动画覆盖行内值)**; 主束均分角+±7.5° 随机扰动、日冕束全随机角(更长更细更慢, sample 比例); 本体 `.fab.ring` 另以 `box-shadow` 柔和紫光晕取代硬黑投影(透明圆上黑投影破坏光感); JS 生成只一次(`!querySelector('.ring-rays')` 守卫, 每页图案不同), **切走 ring 皮肤时须移除 `.ring-rays` 元素**(样式挂 `.fab.ring` 下, 残留会裸显示); 中间圆(紫罩蒙版带图标+绿角标=成功数, 蒙版越边缘越透明, 实盖至圆缘)不上波纹动画(transform 留给 hover/active); 辉光带仅圆缘外 26~34px。核心诉求: **全部签到完毕与有站点未签到在 FAB 上有明显区别**。
 - 批量进行中(发起页)：FAB 旁芯片与面板内进度条显示 `批量 i/n · 正在处理/倒计时`, 可随时停止; **后台任务标签不注入 FAB/UI**(避免后台闪烁); 中断恢复横幅在发起页以外任意匹配页显示(「检测到中断的批量任务」+「恢复批量」按钮)。
 - **站点图标**: 每个站点名前显示其 favicon(14px 圆角, 透明底加灰底容错)。取用链 = 配置 `favicon` 字段 → GM 路过收集的真实 `<link rel="icon">` URL(存 `ptac_favicon_<unitId>`, 仅 http(s)) → 站点根 `/favicon.ico` → 无则不发图; URL 与站页面一致时命中浏览器 HTTP 缓存(零额外流量); 加载失败(无图标/路径非标/防外链)由**捕获阶段 error 事件委托**隐藏, 不占位不影响站名。
@@ -308,10 +316,23 @@ boot()
     「登录态证据选择器(`a[href*="mybonus.php"]` / `font.color_bonus`)在未登录页确实不存在」;
     ⑥ 仿真回归: `node tests/ptautocheckin/sim-hdhome-pagetext.js`(四条断言, 需本机 Chrome/Edge)。
 
+23. **主面板失焦自动关闭 + 重现不弹面板(2026.09.19.4, 待实测)**: ① 点 FAB 展开面板 → 点页面任意空白处 / 点站点自身元素
+    → 面板应立即收起(不是"点第二下才关"); ② 面板内点「外观」切皮肤、点站点名开新标签 → 面板**不得**自己关掉
+    (点在 UI 自身的豁免); ③ 展开面板后切到别的标签页再切回 → 面板已收起; ④ 批量进行中面板被收起后,
+    FAB 旁的芯片仍在且「停止」可用; ⑤ 中断恢复横幅出现时(横幅带「恢复批量」钮)点页面别处 → 面板**不收起**,
+    入口仍在; ⑥ 模拟「签到按钮重现」(已签记录 + 可签按钮)→ 只有琥珀 toast + 按钮描边 + 底部横条,
+    **面板不弹出**(保持关闭态), 手动点 FAB 才看到警示条与「失败-待确认」; ⑦ 后台任务标签无 UI → 不呈现也不弹面板;
+    ⑧ 静态回归: `node tests/ptautocheckin/check-ptac-panel.js`(失焦接线 A1–A5 / 重现不弹面板 B1–B3);
+    ⑨ 浏览器回归: `node tests/ptautocheckin/sim-panel-autoclose.js`(真 Chrome 实测 ①②③④⑤ 五种情形)。
+    **观测手法**(面板在 closed shadow 下拿不到元素): 用 `document.elementFromPoint` —— 它会进入 shadow
+    树并把命中结果**重定向**成宿主 `#ptac-root-v2`, 于是"该坐标最上层是不是宿主" = 面板开合;
+    探测点取 `innerWidth-60, innerHeight-104`(面板右下角内侧, 避开 FAB/芯片, toast 是 `pointer-events:none`)。
+    headless 下切标签页**不一定**派发 window blur(无窗口焦点), 用例会自动退化为同源的 `window` blur 事件。
+
 ## 修改与扩展指南
 
 1. **新增简单站**：`SITES` 加单站对象 + `@match` 域名; 参考同类型站复制字段。
 2. **贴吧加吧**：`tieba` group 的 `units` 加一条(改 id/name/url 与 kw), `@match` 无需改。
 3. **新增/修改 `function` 步骤或 `alreadyCheck`**：**必须**同时声明 `budgetMs` / `alreadyCheckBudgetMs`(同步判定写 `0`), 否则预算自检报 UNKNOWN(P28)。
 4. **失效排查**：先看 console 日志(`未匹配`→match; `步骤失败`→选择器/文案; `未检测到成功特征`→successDetect/文案; `整流程超时`→步骤卡死; `状态写入被拒(单向阶梯)`→P28 阶梯拦截, 检查是否有代码在写不合法的状态迁移; `预算自检未通过`→该站超时预算越界)。
-5. **改动后**：① 递增版本号; ② 跑 `node tests/ptautocheckin/check-ptac-budget.js`(必须全绿); ③ 更新本文档与站点表(含上面「各 unit 实测预算」表)。
+5. **改动后**：① 递增版本号; ② 跑 `node tests/ptautocheckin/check-ptac-budget.js`(必须全绿); ③ **动了面板/弹出 UI 或重现提醒的呈现时**, 再跑 `node tests/ptautocheckin/check-ptac-panel.js`(钉住「失焦自动关闭」与「重现不弹主面板」两条不变式); ④ 更新本文档与站点表(含上面「各 unit 实测预算」表)。

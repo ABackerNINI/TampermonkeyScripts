@@ -7,8 +7,8 @@
 - **语言**：JavaScript（ES6+，`const`/`let`，禁止 `var`）
 - **运行时**：浏览器 + Tampermonkey（Greasemonkey API）
 - **脚本格式**：`.user.js`（单文件，含 UserScript 元数据头）
-- **测试**：**无测试框架**（刻意保持：无 `package.json` / 无 npm / 无构建），但已有 `tests/` 开发期测试区 —— 约定为「按被测脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个可独立运行的测试，**以退出码表达结果**」，`node tests/run-all.js` 一次跑完（极简零依赖运行器）。现有测试：`tests/ptautocheckin/check-ptac-budget.js`（PTAutoCheckIn 超时预算 / 状态阶梯 / 不透明成本声明 / `computeUnitBudget` 自测，见 P28）；
-以及 `tests/ptautocheckin/sim-*.js` 共 12 个**仿真站**用例（`sim-security-s*.js` 11 个安全向 + `sim-hdhome-pagetext.js` 1 个站点功能向，2026.09.19 起仿真站不再只服务安全用例）：起本地仿真服务器 + 一次性 Chrome
+- **测试**：**无测试框架**（刻意保持：无 `package.json` / 无 npm / 无构建），但已有 `tests/` 开发期测试区 —— 约定为「按被测脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个可独立运行的测试，**以退出码表达结果**」，`node tests/run-all.js` 一次跑完（极简零依赖运行器）。现有测试：`tests/ptautocheckin/check-ptac-budget.js`（PTAutoCheckIn 超时预算 / 状态阶梯 / 不透明成本声明 / `computeUnitBudget` 自测，见 P28）与 `check-ptac-panel.js`（主面板「失焦自动关闭」+「重现不弹主面板」两条交互不变式的静态校验，2026.09.19.4）；
+以及 `tests/ptautocheckin/sim-*.js` 共 13 个**仿真站**用例（`sim-security-s*.js` 11 个安全向 + `sim-hdhome-pagetext.js` 站点功能向 + `sim-panel-autoclose.js` UI 交互向，2026.09.19 起仿真站不再只服务安全用例）：起本地仿真服务器 + 一次性 Chrome
 （`--host-resolver-rules="MAP * 127.0.0.1:<port>"` 让真实域名 URL 落到本机，**生产脚本零改动**即可命中 `@match`），
 用 CDP（Node 22 内置 `WebSocket`，零依赖）注入「GM 垫片 + userscript」跑真浏览器端到端断言，
 覆盖安全向为主（见 P30），站点功能向由 `sim-hdhome-pagetext.js` 打样（已签/点击落地/入口消失三态，

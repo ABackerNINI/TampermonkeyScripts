@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.19.3
+// @version      2026.09.19.4
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -1862,18 +1862,13 @@ const K = {
                             log(`降级执行: alert=${JSON.stringify(a)}, offToday=${offToday}, firstWrite=${firstWrite}`);
                             downgraded = true;
                             // 本次触发页即时反馈: 高亮按钮 + 重建横条(off 时不清提醒则不重建 on 记录,
-                            // 但本次页面仍 toast/高亮一次直达用户); 已降级过不再 toast
-                            if (uiActive()) {
-                                highlightReappearedBtn(unit);
-                                renderPageAlertBar();
-                                UI.toast(`⚠ ${unit.name} 签到按钮重现(${btnText}) → 已标失败-待确认`, 4000, 'warn');
-                            }
+                            // 但本次页面仍 toast/高亮一次直达用户); 已降级过不再 toast。
+                            // 呈现方式一律走 presentReappearedOnPage(页面级, 不弹主面板)
+                            presentReappearedOnPage(unit,
+                                `⚠ ${unit.name} 签到按钮重现(${btnText}) → 已标失败-待确认`);
                         } else if (suspectToday) {
                             // 已是 suspect(刷新/跨页重访本分支): 重建页面装饰(高亮/横条), 不重复降级
-                            if (uiActive()) {
-                                highlightReappearedBtn(unit);
-                                renderPageAlertBar();
-                            }
+                            presentReappearedOnPage(unit, '');
                         }
                         // 其余(offToday 已人工确认 / firstWrite=false 当天已提醒过 on): 不打扰、不重复
                     } else {
@@ -2869,9 +2864,45 @@ const K = {
         function togglePanel() {
             panel.classList.contains('show') ? closePanel() : openPanel();
         }
+
+        // 失焦自动关闭(2026.09.19.4): 面板是"用完即走"的浮层 —— 焦点离开它(点面板外 / 切标签页 /
+        // 切窗口)就收起, 不再常驻遮挡页面内容。三条约束:
+        //  ① 只在面板展开期间挂监听(收起即摘), 不给宿主页面留常驻全局监听;
+        //  ② **面板内还有待决横幅时不自动收起** —— 「中断恢复」是一次性入口, 用户点了页面别处就把
+        //     它连同横幅一起弄丢, 下次只能靠刷新页面才看得到; 按钮型横幅由 showBanner 的 action 判定;
+        //  ③ Shadow DOM(closed)内部事件传播到外部时 target 会被重定向成 host → 用 host.contains
+        //     判定"这一下点在 UI 自己身上(FAB/面板/toast)", 点在页面任何别处都算失焦。
+        let autoCloseOn = false;
+        function bannerHasAction() { // 有待用户决策的操作钮(如「恢复批量」)→ 不自动收起
+            return !!(bannerEl && bannerEl.style.display !== 'none' && bannerEl.querySelector('button'));
+        }
+        function onOutsideDown(e) {
+            if (!panel.classList.contains('show')) return;
+            if (host && host.contains(e.target)) return; // 点在 UI 自身(shadow 内事件重定向到 host)
+            if (bannerHasAction()) return;
+            closePanel();
+        }
+        function onWindowBlur() {   // 切标签页/切窗口/地址栏等真正的失焦
+            if (!panel.classList.contains('show')) return;
+            if (bannerHasAction()) return;
+            closePanel();
+        }
+        function armAutoClose() {
+            if (autoCloseOn) return;
+            autoCloseOn = true;
+            document.addEventListener('mousedown', onOutsideDown, true); // 捕获阶段: 抢在站点自己 stopPropagation 之前
+            window.addEventListener('blur', onWindowBlur);
+        }
+        function disarmAutoClose() {
+            if (!autoCloseOn) return;
+            autoCloseOn = false;
+            document.removeEventListener('mousedown', onOutsideDown, true);
+            window.removeEventListener('blur', onWindowBlur);
+        }
         function openPanel() {
             panel.classList.add('show');
             render();
+            armAutoClose();
         }
         function showBanner(msg, variant, actionText, onAction) {
             bannerEl.className = 'banner' + (variant ? ' ' + variant : '');
@@ -2896,6 +2927,7 @@ const K = {
             panel.classList.remove('show');
             panel.classList.remove('skin-open');
             hideBanner();
+            disarmAutoClose();
         }
         function showBatchDone() {
             endBatch();
@@ -2980,6 +3012,17 @@ const K = {
             background: #b45309; color: #fff; transform: scale(1.1);
         }
         `;
+    }
+    // 「签到按钮重现」的页面级呈现**总入口**(2026.09.19.4): 只做页面级反馈 —— 按钮琥珀描边 +
+    // ⚠ 徽标 + 底部常驻横条 + (首次降级时)一条琥珀 toast; **绝不弹出主面板**。
+    // 依据用户需求: 主面板已改为「失焦即关」的浮层(见 UI.openPanel/closePanel), 用户正在看页面
+    // 上的签到按钮时把它弹出来 = 抢焦点 + 挡住要看的东西; 面板内本就有常驻警示条与行标记,
+    // 想看随时点 FAB 自取。toastMsg 传空串 = 只重建页面装饰(已是 suspect 的重访, 不重复打扰)。
+    function presentReappearedOnPage(unit, toastMsg) {
+        if (!uiActive()) return; // 后台任务标签无 UI: 不呈现(更不弹面板)
+        highlightReappearedBtn(unit);
+        renderPageAlertBar();
+        if (toastMsg) UI.toast(toastMsg, 4000, 'warn');
     }
     function highlightReappearedBtn(unit) {
         if (!unit.checkInSelector) return;

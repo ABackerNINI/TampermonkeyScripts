@@ -26,7 +26,7 @@ TampermonkeyScripts/
 │       ├── check-ptac-budget.js  #   超时预算/状态阶梯/不透明成本声明静态校验（见 P28）
 │       └── sim-security-s*.js    #   仿真站安全向用例 S00–S17（见 P30）
 └── src/
-    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v2 并入正式版: 批量+FAB+贴吧多吧, 2026.09.19.3)
+    ├── PTAutoCheckIn.user.js                 # PT 多站点自动签到(v2 并入正式版: 批量+FAB+贴吧多吧, 2026.09.19.4)
     ├── BTSchoolHelper.user.js                # BTSchool 种子列表增强
     ├── BTSchoolTorrentsTableSample.html      # BTSchool 种子表格真实 HTML 样本（测试用 fixture）
     ├── BilibiliEnterFullscreen.user.js       # B 站 Enter 键全屏
