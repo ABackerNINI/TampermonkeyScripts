@@ -1,0 +1,10 @@
+# WorkBuddy 本地运行时目录
+#
+# 内含两类仅限本机的内容，均不可跨机移植：
+#   1. skills/  —— 指向 .agents/skills/ 的目录联接（junction），存的是绝对路径
+#   2. memory/  —— AI 助手的工作记忆日志
+#
+# 技能的真身由 apm 维护在 .agents/skills/ 并已入库，此处仅为加载入口，故不入库。
+# 注意：若强行入库，Git 会跟随联接把 SKILL.md 存成普通文件副本，
+#       与 .agents/ 中的真身脱钩，后续 apm 更新不会同步。
+.workbuddy-ai/
