@@ -194,7 +194,13 @@ class Sim {
     }
 }
 
-async function withSim(fn) {
+/**
+ * @param {(sim:Sim)=>Promise<any>} fn
+ * @param {{scriptPath?:string}} [opts]  scriptPath 缺省为 src/PTAutoCheckIn.user.js,
+ *   测其它脚本时显式传入(如 src/HDHomeUI.user.js)
+ */
+async function withSim(fn, opts) {
+    const scriptPath = (opts && opts.scriptPath) || SCRIPT_PATH;
     const server = createSimServer();
     await new Promise((r) => server.listen(0, '127.0.0.1', r));
     const port = server.address().port;
@@ -203,7 +209,7 @@ async function withSim(fn) {
     const cdp = new CDP();
     await cdp.connect(wsUrl);
 
-    const scriptSrc = fs.readFileSync(SCRIPT_PATH, 'utf8');
+    const scriptSrc = fs.readFileSync(scriptPath, 'utf8');
     const sim = new Sim(server, port, proc, profile, cdp, `${SHIM}\n${scriptSrc}`);
     try {
         return await fn(sim);

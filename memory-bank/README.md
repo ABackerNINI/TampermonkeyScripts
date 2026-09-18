@@ -34,13 +34,14 @@ flowchart TD
 
 | 文档 | 内容 |
 |------|------|
-| [conventions.md](./conventions.md) | 铁律（计划不改码/等审核/版本号/知识库同步）、提交信息规范、测试约定、检查清单、开发与发布工作流 |
-| [pitfalls.md](./pitfalls.md) | 已知易错点与坑（含现存 Bug 清单，症状→原因→对策） |
+| [conventions.md](./conventions.md) | 铁律（计划不改码/等审核/版本号/知识库同步/**私有资源与凭据**）、提交信息规范、测试约定、检查清单、开发与发布工作流 |
+| [pitfalls.md](./pitfalls.md) | 已知易错点与坑（含现存 Bug 清单，症状→原因→对策；P32 = 私有网页里的 passkey 泄露） |
 | [tasks/_index.md](./tasks/_index.md) | 任务清单（按状态分类，路线图角色由此承担） |
 | [scripts/PTAutoCheckIn.md](./scripts/PTAutoCheckIn.md) | PT 多站点自动签到（常驻调度批量 + FAB 面板 + 贴吧多吧，站点/单元配置驱动，v2 已并入正式版） |
 | [scripts/BTSchoolHelper.md](./scripts/BTSchoolHelper.md) | BTSchool 种子列表高亮 + 快捷键滚动脚本 |
 | [scripts/BilibiliEnterFullscreen.md](./scripts/BilibiliEnterFullscreen.md) | B 站 Enter 键全屏切换脚本 |
 | [scripts/EnhanceVisitedLinks.md](./scripts/EnhanceVisitedLinks.md) | 全局已访问链接样式增强脚本 |
+| [scripts/HDHomeUI.md](./scripts/HDHomeUI.md) | HDHome 界面主题套件（5 套可切换 UI，纯样式层保功能，结构异常回退默认） |
 
 ## 如何阅读
 
@@ -63,4 +64,11 @@ flowchart TD
 6. **标点**：注释/日志用中文但统一**英文标点**。
 7. **解析易错**：BTSchool 表格用 `tbody > tr:has(> td.rowfollow)` 定位行、`:scope > td` 取列；浮点属性（时魔）不可用整数解析函数。
 8. **自测**：改动后在真实站点页面 F12 看 console；详尽的症状/原因/对策见 `pitfalls.md`。
-9. **测试**：`tests/` 是开发期测试区（零依赖，无测试框架）——按脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个测试，以退出码表达结果；`node tests/run-all.js` 一次跑完全部。改 PTAutoCheckIn 后必跑 `node tests/ptautocheckin/check-ptac-budget.js`（校验超时预算不变式 + 状态阶梯结构 + 不透明步骤的 `budgetMs` 声明），必须全绿；新增 `function` 步骤/自定义 `alreadyCheck` 时**必须**声明 `budgetMs` / `alreadyCheckBudgetMs`（同步判定写 `0`）。测试约定与「如何测 userscript」技法见 `tests/README.md`，原理见 `pitfalls.md` P28。
+9. **铁律：私有资源与凭据**——`resources-do-not-track/`（私有站点另存为的整页网页）**永不被 Git 追踪**，
+   其中的 **passkey / authkey / token / cookie / uid 禁止以任何形式外泄**（不进回复、日志、截图、提交、
+   issue、测试夹具、示例 HTML）；只描述结构、值脱敏为 `***`。详见 `conventions.md` 第 0.5 节、`pitfalls.md` P32。
+10. **HDHomeUI 换肤铁律（2026-09-19 起）**——它是**纯样式层**：不增删/移动/克隆站内节点、不挂事件、不改 `href`，
+    站内功能靠「功能基线快照 + hit-test」两道仿真断言守住；页面结构不符时**必须提示并回退默认 UI**，
+    禁止带错上妆。新增主题必须有**不同的布局骨架**（不能只换配色），由 `sim-hdui-theme-switch.js` 钉死。
+    详见 `scripts/HDHomeUI.md` 与 `tasks/TASK018-hdhome-ui-themes.md`。
+11. **测试**：`tests/` 是开发期测试区（零依赖，无测试框架）——按脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个测试，以退出码表达结果；`node tests/run-all.js` 一次跑完全部。改 PTAutoCheckIn 后必跑 `node tests/ptautocheckin/check-ptac-budget.js`（校验超时预算不变式 + 状态阶梯结构 + 不透明步骤的 `budgetMs` 声明），必须全绿；新增 `function` 步骤/自定义 `alreadyCheck` 时**必须**声明 `budgetMs` / `alreadyCheckBudgetMs`（同步判定写 `0`）。测试约定与「如何测 userscript」技法见 `tests/README.md`，原理见 `pitfalls.md` P28。

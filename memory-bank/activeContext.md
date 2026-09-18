@@ -4,6 +4,26 @@
 
 ## 当前工作焦点
 
+**HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.19.1`，2026-09-19 新建，TASK018）——HDHome 界面主题套件。**
+用户给的素材是 `resources-do-not-track/HDHome-Whole-Web/` 下**已脱敏**的 HDHome 整页（首页/种子页，
+已登录未签到）。需求是「5 套**不同类型**的 UI（不能只换颜色）+ 保住原站全部功能 + 严格仿真测试 +
+不许静默忽略错误 + 页面改版不许误触发危险操作 + 结构错误要提醒并回退默认 UI + 可切换可记忆」。
+**架构定案：纯样式层 + 运行时列映射**——不重建/移动/克隆任何站内节点、不挂事件、不改 `href`，
+列索引靠读表头动态生成 `nth-child` 规则；唯一 DOM 写入是 `<html>` 状态属性与行上的
+`--hdui-cat` / `--hdui-ratio` 自定义属性。自持 UI（浮动开关 + 面板）放 **closed shadow root**，
+事件 `stopPropagation`，不冒泡到站内监听。只申请 `GM_getValue` / `GM_setValue`。
+5 套：`reel` 片库索引（卡片网格/衬线/暗金）、`tape` 电传纸带（保持 `display:table` 密排/全等宽/纸黄/单红）、
+`sheet` 大开本（单列长条/17px 衬线标题/双细线）、`swiss` 瑞士网格（留白分隔/28px 数字锚点/钴蓝）、
+`signal` 播控台（行 grid 4 轨道 + 电平条 + 类别色点/深石板+青）。
+契约校验：A 级锚点（`table.mainouter`/`#nav_block`/`#info_block`/`ul#mainmenu`）+ B 级 12 列全识别
++ 行列数一致；失败即卸妆 + `console.error` + 顶部红色横幅（错误码 + 重新尝试/知道了）+ 写 `hdui.lastError`。
+运行时 `MutationObserver` 观察 `#outer` childList（debounce 500ms），局部刷新后重新校验。
+测试：`tests/hdhomeui/` 1 个静态 + 4 个真浏览器仿真（功能保持/切换记忆/结构守卫/危险防护），
+配套仿真剧本 `tests/lib/sim/hdhome-ui-page.js`（**结构化复刻、零私有数据**，6 个变体）与
+`tests/lib/hdui-help.js`；`harness.withSim(fn, { scriptPath })` 由此支持测任意脚本。
+实施中由测试挖出**一处真实缺陷**：`validateContract` 只判 `map` 缺失，漏了「列齐全但行列数不符」——已修。
+**已改完待用户审核（未提交）。**
+
 **PTAutoCheckIn（`src/PTAutoCheckIn.user.js`，当前 `2026.09.19.4`）——2026-09-19 主面板交互调整（失焦自动关闭 + 签到按钮重现不弹主面板，用户当日需求，**已提交 `80e0f37`（分支 `dev`，尚未 push）**）；2026-09-19 新增 HDHome 站（已签后入口变纯文本 → 整页文本 + 「入口消失且已登录」自定义判定双通道），**已提交 `d63fe0c`（分支 `dev`，尚未 push）**；此前的慢站误判修复已实施，待实测校准**；同日又完成 TASK017（本地仿真站 + 安全审计），修了首装崩溃等 5 处（见 P29/P30）。v2 引擎与站点建模此前已完成（批量+FAB+贴吧多吧合并为单一生产脚本）。**2026-09-18** 针对用户报告「经常失败 / 网页加载慢一点就可能失败 / 结果反馈慢」，完成 TASK015 的实施：整流程超时定时器不再覆写已给出的结论、状态写入加单向阶梯、新增 `unconfirmed` 独立状态、点击后观察改事件驱动 + 有界复检、建立超时预算不变式与双校验（运行时自检 + 静态校验器）、进度心跳 + 死站提前跳过（见 P28）。同日把测试工具收进 **`tests/`** 并定下零依赖测试约定（TASK016，见 `tests/README.md`）。**三批改动已提交**（`ebb06bb`、`2b31377`、`e2d5f52`，分支 `dev`，未 push），待真实站点实测校准。
 
 ## 最近改动时间线（2026.09.07–09.18）
@@ -30,6 +50,15 @@
   与用例 `sim-hdhome-pagetext.js`（四条断言: 已签零点击 / 点击→落地→跳回→成功 / 入口消失无文本仍判已签 /
   **未登录页不得判已签**），本机 Chrome 实测通过；`tests/run-all.js` 14/14 全绿。
   **已提交 `d63fe0c`**（分支 `dev`），尚未 push。
+- **2026-09-19 新增项目铁律 5「私有资源与凭据」（文档级改动，未动代码）**：用户把 HDHome 整页网页
+  （`HDHome __ 种子 高清家园 - Powered by NexusPHP.html` + `*_files/`）放进 `resources-do-not-track/HDHome-Whole-Web/`，
+  该类页面内嵌个人 passkey / token / cookie，而本仓库远端公开。据此立规矩：
+  ① `resources-do-not-track/` **永不被 Git 追踪**（`.gitignore` 已含，禁止 `git add -f` / 改忽略规则 / 复制到受追踪位置，
+  注释已升级为带理由的安全边界说明）；② 其中的密钥/passkey/token/cookie/uid **禁止任何形式外泄**
+  （不进对话回复、日志、截图、提交与 diff、issue/PR/Gist、云端笔记、`tests/` 夹具、`src/*.html` 样本）；
+  ③ 引用只描述结构（选择器/类名/URL 形状），值一律 `***`；需要样本入库先复制并手工清凭据。
+  落点：`AGENTS.md` 铁律 5、`conventions.md` §0.5 + §1 提交前自查第 5 条、`pitfalls.md` **P32**、
+  `README.md` 索引与快速提醒 9。**待用户审核后提交**（与今日其他改动同一批）。
 
 ## 活跃决策与考量
 

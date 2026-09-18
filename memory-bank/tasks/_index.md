@@ -5,6 +5,10 @@
 
 ## In Progress（进行中）
 
+- [TASK018] HDHome 界面主题套件（5 套可切换 UI） — **已实施完毕，待用户审核后提交**（`src/HDHomeUI.user.js`
+  `2026.09.19.1`）；设计 + 脚本 + 仿真剧本 + 5 个测试全部就位，`node tests/run-all.js` 全绿。
+  见 `TASK018-hdhome-ui-themes.md` 与 `scripts/HDHomeUI.md`。
+
 - [TASK001] PTAutoCheckIn v2 实测校准并入正式版 — **已并入正式版**（1.10 完成），其余逐站实测校准继续（核心主线）
 - [TASK002] 修复 BTSchoolHelper 时魔数值恒为 0（P2）— 待实施
 - [TASK003] 修复 BTSchoolHelper 命名不一致（P10）— 待实施，N 键前置

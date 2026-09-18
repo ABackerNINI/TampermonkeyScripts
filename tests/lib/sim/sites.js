@@ -15,6 +15,9 @@
  *        /attendance.php 上放 <a href="attendance.php">签到已得…</a> 即"已签"。
  */
 
+// HDHome 种子页的**结构化复刻**剧本(测 src/HDHomeUI.user.js 用): 选择器/列序对齐真站, 数据全虚构
+const { SCENARIOS: HDHOME_UI } = require('./hdhome-ui-page');
+
 const BTN = 'attendance.php';
 const CHECKIN_TEXT = '[签到得魔力]';
 const CHECKED_TEXT = '签到已得';
@@ -76,7 +79,9 @@ const HOST_DEFAULT = {
     'hdhome.org': {
         '/': 'hdhome-index',
         '/index.php': 'hdhome-index',
-        '/attendance.php': 'hdhome-attended'
+        '/attendance.php': 'hdhome-attended',
+        // 种子页默认走 UI 套件的大页剧本(仅当请求未带 ?sim= 时生效, 不影响 PTAC 用例)
+        '/torrents.php': 'hdhome-ui'
     }
 };
 
@@ -103,7 +108,7 @@ const EVIL = {
     'evil-fake-success': () => page('', `<a href="${BTN}">${CHECKED_TEXT} 999 魔力</a>`)
 };
 
-const ALL = Object.assign({}, NORMAL, HDHOME, EVIL);
+const ALL = Object.assign({}, NORMAL, HDHOME, HDHOME_UI, EVIL);
 
 /**
  * 按 host + path + ?sim= 渲染一个仿真页面。
