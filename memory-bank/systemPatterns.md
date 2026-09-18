@@ -24,6 +24,9 @@ src/*.user.js
 4. **GM 存储跨域共享**：PTAutoCheckIn 用 `GM_*` 按脚本共享、跨域可读，实现跨站 FAB 面板同一份数据。
 5. **DOM 快照跨天守卫**：脚本注入时记录页面出生日期，凡基于本页 DOM 的当日判定前查跨天，跨天即整页刷新，防昨日已签误写为今日成功。
 6. **前端独立呈现**：PTAutoCheckIn 用 Shadow DOM 注入 FAB/面板，样式隔离；关键提醒落页面 light DOM（用户注视处）。
+7. **超时预算不变式（P28）**：单站内部等待是**串行累加**的（已签检测 → 步骤 → 点击后观察窗 → 复检），故必须有硬约束 `detectMs + stepsMs + 固定预留(18000ms) <= UNIT_TOTAL_TIMEOUT(40s)`。**不透明步骤（`function` 步骤 / 自定义 `alreadyCheck`）必须显式声明 `budgetMs` / `alreadyCheckBudgetMs`**，未声明即判不通过——把「未知成本」从沉默变成报错。双校验：运行时 `auditUnitBudgets()` 启动自检 + 提交前 `tests/check-ptac-budget.js`。
+8. **状态单向阶梯（P28）**：当日状态写入走 `STATUS_TRANSITIONS` 白名单，非法迁移被拒。核心安全性质：`success` 只能转 `suspect`（P25 降级）、`suspect` 只能转 `success`（页面确认）、任何「有结论」的状态不得转回 `pending`。**超时/异常一律不得覆写已给出的结论**（旧版 25s 定时器覆写是「经常失败」的主因）。
+9. **可取消的超时保护（P28）**：`Promise.race([work, timeout])` 的败方必须 `clearTimeout` 且检查对方是否已结算，否则它不是「保护」而是「延迟覆写器」。真超时归 `unconfirmed`（未确认，可重试）而非 `failed`。
 
 ## 设计模式
 
@@ -36,6 +39,10 @@ src/*.user.js
 | 步骤数组执行 | 复杂页面交互拆成步骤数组按序执行，允许单步 `ignoreError`（HDBao/蜂巢/菜单展开） |
 | 载体无关信号 | `.26` 起按钮状态判定抽象为 `stateSignals`/`readEntryState`（text/attr/class/fn/exists），旧文本站自动翻译 |
 | 常驻调度 + 后台标签 | 批量签到 = 发起页常驻 + `GM_openInTab` 后台标签串行 + 轮询 GM 状态推进 + 单站超时自动跳过 |
+| 状态机 + 白名单迁移 | `.1` 起当日状态写入受 `STATUS_TRANSITIONS` 约束（P28），让非法状态迁移不可表达（poka-yoke rung 1） |
+| 预算不变式 + 自检 | `.1` 起单站超时必须装进整流程预算，运行时 `auditUnitBudgets()` 与静态 `tests/check-ptac-budget.js` 双校验（P28） |
+| 事件驱动观察 + 有界复检 | `.1` 起点击后并发竞速 `pagehide`/`beforeunload`/URL 变化/成功特征，窗口到时做限时复检（只检测不重复点击）（P28） |
+| 进度心跳 | `.1` 起后台标签写 `ptac_progress_<uid>`（阶段 + 时间戳），调度页据此显示实时阶段并识别零进度死站（P28） |
 
 ## 组件关系（PTAutoCheckIn 为例）
 
@@ -46,13 +53,15 @@ boot() → main()
 └─ 普通访问（含落地页）
    ├─ 任务心跳新鲜 + 命中当前 unit → settleUnitOnLandingPage
    ├─ 心跳过期 → offerBatchResume 横幅
-   └─ 无任务 → 被动 runUnit（25s 超时保护）
-发起页 runBatchScheduler: GM_openInTab 后台标签 → 轮询 GM 状态(1s) → pending 观察 10s / 50s 超时跳过 → 站间缓冲
+   └─ 无任务 → 被动 runUnit（40s 整流程超时保护 + 内部预算 deadline）
+发起页 runBatchScheduler: GM_openInTab 后台标签 → 轮询 GM 状态(1s) + 读进度心跳
+  → pending 观察 10s（有新鲜心跳则延后）/ success·failed·skipped·unconfirmed 即结算
+  → 20s 零进度判死站 / 60s 无回写写 unconfirmed 自动跳过 → 站间缓冲
 ```
 
 ## 各脚本数据流要点
 
-- **PTAutoCheckIn**：站点表 `SITES` → 拍平 `UNITS[]`（带 groupId/groupName）→ 单 unit 判定优先级（当日成功/已签检测/上次 pending/冷却/steps）→ 写 GM 状态。
+- **PTAutoCheckIn**：站点表 `SITES` → 拍平 `UNITS[]`（带 groupId/groupName）→ 单 unit 判定优先级（当日成功/已签检测/上次 pending/冷却/steps）→ 点击后事件驱动观察 + 有界复检 → 写 GM 状态（受单向阶梯约束）。后台标签额外写 `ptac_progress_<uid>` 进度心跳供调度页消费。
 - **BTSchoolHelper**：`parseTorrentTable('table.torrents')` → `TorrentState` 映射 → 高亮/低亮/滚动/键盘。
 - **BilibiliEnterFullscreen**：`window.onload` + 轮询点击「网页全屏」，Enter/Shift+Enter 键盘监听。
 - **EnhanceVisitedLinks**：`GM_addStyle` 注入 `:visited` 样式 + MutationObserver/interval 检测 URL 变化重注入。

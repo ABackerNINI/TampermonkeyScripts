@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.16.1
+// @version      2026.09.18.1
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -44,26 +44,61 @@
 
 const ScriptName = '[PTAutoCheckIn]';
 const MIN_INTERVAL = 10 * 60 * 1000;           // 单站触发最小间隔, 防止高频触发导致封号
-const POST_CLICK_SETTLE = 800;                 // 点击后停留观察时长(ms), 判断是否发生页面跳转
+const POST_CLICK_SETTLE = 800;                 // 点击后最小观察时长(ms): 小于它不判"同页无跳转"(判早了会把慢跳转站误判为同页)
+const POST_CLICK_WATCH_MS = 4000;              // 点击后观察窗上限(ms): 事件驱动(整页跳转/URL 变化/成功特征), 命中即提前结束
 const WAIT_TEXT_TIMEOUT = 3000;                // 成功文案轮询默认超时(ms)
 const TASK_STALE_MS = 30 * 60 * 1000;          // 批量任务总超时判定(ms): 超过视为过期并清理(调度页离开后的兜底)
-const UNIT_TOTAL_TIMEOUT = 25 * 1000;          // 单个站点整流程总超时(ms), 防卡死
+const UNIT_TOTAL_TIMEOUT = 40 * 1000;          // 单站整流程总超时(ms): 必须 >= 该站内层超时之和 + UNIT_TIMEOUT_MARGIN_MS(预算不变式, 见 P28)
+const UNIT_TIMEOUT_MARGIN_MS = 5 * 1000;       // 预算余量(ms): 内层超时之和 + 余量 <= UNIT_TOTAL_TIMEOUT, 由 tests/check-ptac-budget.js 校验
 const DEFAULT_BATCH_DELAY_MS = 0;              // 默认站间缓冲(ms), 站点可自行配置覆盖
 const POLL_INTERVAL_MS = 1000;                 // 调度页轮询后台标签结果间隔(ms)
-const PER_UNIT_TIMEOUT_MS = 50 * 1000;         // 单站调度窗口上限(ms): 覆盖标签内整流程 + 落地页结算 + 网络慢
-const PENDING_GRACE_MS = 10 * 1000;            // 状态 pending 后观察窗口(ms): 等待落地页将其改写为 success/failed
+const PER_UNIT_TIMEOUT_MS = 60 * 1000;         // 单站调度窗口上限(ms): 覆盖标签加载 + 整流程(40s) + 落地页结算; 零进度心跳的死站由 NO_PROGRESS_SKIP_MS 提前跳过
+const PENDING_GRACE_MS = 10 * 1000;            // 状态 pending 后观察窗口(ms): 等落地页改写 success/failed; 期间该站进度心跳仍在刷新则顺延
+const NO_PROGRESS_SKIP_MS = 20 * 1000;         // 后台标签"零进度心跳"提前跳过窗口(ms): 站点不可达/脚本未运行(浏览器错误页)不再白等窗口耗尽
+const ELEMENT_WAIT_TIMEOUT = 5000;             // 等待签到元素的基础超时(ms), 站点可用 steps[].timeout 覆盖
+const SLOW_PAGE_WAIT_BONUS_MS = 10 * 1000;     // 页面尚未 load 完成时的等待放宽量(ms): 治"网页加载慢一点就判失败"
+const UNCONFIRMED_RECHECK_DELAYS = [5000, 12000]; // 未确认后的同页复检延迟(ms): 只复检不重点(冷却期内绝不重复点击)
+const RECHECK_DETECT_CAP_MS = 4000;            // 复检时单次成功检测的时间上限(ms): 防复检把整流程预算吃光
 const HEARTBEAT_FRESH_MS = 15 * 1000;          // 调度页心跳保鲜判定(ms): 超过视为调度者已离开(断链/关页)
 const RETRY_LOCK_MS = 30 * 1000;               // 单站前台重试互斥锁窗口(ms): 同站两个重试页不可并发点击; 跳转型页面跳走后锁自然过期
+const PROGRESS_TTL_MS = 60 * 1000;             // 进度心跳有效期(ms): 超过视为陈旧(跨天/中断残留)
+
+// ==================== 当日状态单向阶梯(见 P28) ====================
+// 背景: 旧实现里"慢/超时/无信号"与"确定失败"共用同一个终态 failed, 且 writeStatus 无任何
+// 约束 —— 于是任何一次超时都能把已经确认的结果覆写掉(典型: 25s 整流程定时器把冷却/仅检测/
+// 失败-待确认统统改写成 failed 整流程超时)。这里把「允许的状态迁移」显式枚举成白名单,
+// 让非法迁移**不可表达**(poka-yoke rung 1), 而不是靠每个调用点自觉。
+//
+// 阶梯语义(同日):
+//   success     唯一"确认已签"终态; 只允许被 suspect 覆盖 —— 那是 P25 的"签到按钮重现"
+//               反证降级, 是**刻意**的回退, 必须放行。
+//   suspect     失败-待确认(P25); 只允许恢复为 success。
+//   pending     已点击待落地确认; 可被 success / failed / suspect / unconfirmed 覆盖。
+//   unconfirmed 未确认(超时/无信号, 可复检可重试); 不可覆盖 success / suspect / pending。
+//   failed      确定失败(选择器失效/未登录/无按钮); 可被 success / suspect / unconfirmed 覆盖
+//               (unconfirmed 是更保守的说法, 允许"确定失败 → 未确认"这种更轻的修正)。
+//   skipped     冷却/仅检测/今日已完成; 可被任何实际结论覆盖。
+// 未知来源状态(历史遗留值)按"当日无记录"处理, 一律放行, 避免升级后卡死。
+const STATUS_TRANSITIONS = {
+    '': ['success', 'failed', 'pending', 'skipped', 'suspect', 'unconfirmed'],
+    skipped: ['success', 'failed', 'pending', 'suspect', 'unconfirmed'],
+    failed: ['success', 'suspect', 'unconfirmed'],
+    unconfirmed: ['success', 'suspect', 'failed', 'skipped'],
+    pending: ['success', 'failed', 'suspect', 'unconfirmed'],
+    suspect: ['success'],
+    success: ['suspect']
+};
 
 // 存储 key 前缀(GM 存储按脚本共享, 跨域可读, 满足"任意站点查看同一份状态")
 const K = {
-    status: (uid) => `ptac_status_${uid}`,     // {date:'YYYY-MM-DD', status:'success|failed|pending|skipped', msg, ts}
+    status: (uid) => `ptac_status_${uid}`,     // {date:'YYYY-MM-DD', status:'success|failed|pending|skipped|suspect|unconfirmed', msg, ts}
     cooldown: (uid) => `ptac_cooldown_${uid}`, // 上次触发时间戳(ms)
     favicon: (uid) => `ptac_favicon_${uid}`,   // 路过收集的站点真实 icon URL(面板列表图标用)
     skin: 'ptac_skin',                          // FAB 外观皮肤: chameleon|number|signal|ring
     task: 'ptac_task',                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
     alert: (uid) => `ptac_alert_${uid}`,       // 签到按钮重现提醒 {date, btnText, ts, state:'on'|'off'}(见 P25)
-    retryLock: (uid) => `ptac_retry_${uid}`    // 单站前台重试一次性锁(时间戳 ms): 防同站重试页/落地页并发强点(30s 窗口)
+    retryLock: (uid) => `ptac_retry_${uid}`,   // 单站前台重试一次性锁(时间戳 ms): 防同站重试页/落地页并发强点(30s 窗口)
+    progress: (uid) => `ptac_progress_${uid}`  // 单站执行进度心跳 {date, stage, msg, ts}(见 P28): 调度页据此显示阶段/耗时并识别死站
 };
 
 (function () {
@@ -115,6 +150,12 @@ const K = {
     //   batchDelayMs: 批量模式本站处理完后、跳转下一站前的缓冲(ms)
     //   enabled: 是否参与批量签到
     //   steps: 步骤数组(click_checkin/click/wait/check/function), 缺省为 [CLICK_CHECK_IN]
+    //   budgetMs(function 步骤) / alreadyCheckBudgetMs(unit): 不透明成本的预算声明(见 P28)。
+    //     click/click_checkin/check/wait 步骤的超时可静态求和, 无需声明; 但 function 步骤与自定义
+    //     alreadyCheck 内部是任意代码, 引擎无法知道它最坏会等多久 → 必须显式声明最坏耗时(ms)。
+    //     运行时 auditUnitBudgets() 会把「检测 + 各步骤 + 观察窗 + 首轮复检 + 余量」逐站求和: 启动时打
+    //     一行摘要(最紧的站及剩余余量), 有越界或未声明成本则打全量表格 + console.error 逐条报出。
+    //     提交前可跑 `node tests/check-ptac-budget.js` 做静态校验(常量不变式 + 阶梯结构 + 声明检查)。
     //   注: 2026.09.07 实测各站签到链接普遍不再带 faqlink class(如 <a href="attendance.php" class="">),
     //       故 PT 站 checkInSelector 一律不依赖 class, 仅按 href 定位; url 同步为当前有效入口
     const SITES = [
@@ -562,6 +603,9 @@ const K = {
             url: 'https://hhanclub.net/',
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '[签到得憨豆]',
+            // 预算声明(见 P28): 已签判定为不透明异步函数, 内部含 waitForTrue(3000) →
+            //   必须显式声明最坏成本, 否则运行时预算自检报 UNKNOWN(不允许"未知成本"的配置存在)
+            alreadyCheckBudgetMs: 3000,
             alreadyCheck: async () => {
                 // 非签到落地页不判(防首页/其它区域误报)
                 if (!/attendance\.php/i.test(location.pathname)) return false;
@@ -601,6 +645,8 @@ const K = {
                     //   avatar(点击是 toggle, 奇数次开), 最多 3 次; 消除首访/页面未就绪的点击无效
                     type: 'function',
                     description: '点击头像展开签到菜单(点-验-重试, 最多3次)',
+                    // 预算声明(见 P28): 3 轮 × (waitForElement 2500 + 菜单动画 sleep 300) = 8400ms
+                    budgetMs: 8400,
                     func: async () => {
                         const linkVisible = () => {
                             const a = document.querySelector('a[href*="attendance.php"]');
@@ -676,6 +722,8 @@ const K = {
             },
             // 已签判定(自定义, 供 detectAlreadyCheckedIn 第 1 通道): 按钮 class 含 checked-in 或
             // title/aria-label 含「已经签到过」(Discourse 点击后已签态); 未登录页无按钮 → false
+            // 预算声明(见 P28): 纯同步 DOM 读取(querySelector + classList/属性正则), 无异步等待 → 0
+            alreadyCheckBudgetMs: 0,
             alreadyCheck: async () => {
                 try {
                     const btn = document.querySelector('button.checkin-button');
@@ -688,6 +736,8 @@ const K = {
             steps: [{
                 type: 'function',
                 description: '点击每日签到按钮(未签才点)',
+                // 预算声明(见 P28): 内部 waitForElement('button.checkin-button', 10000) = 10000ms
+                budgetMs: 10000,
                 func: async () => {
                     const btn = await waitForElement('button.checkin-button', 10000);
                     if (!btn) return;
@@ -808,6 +858,104 @@ const K = {
     }
     const UNIT_MAP = new Map(UNITS.map((u) => [u.id, u]));
 
+    // ==================== 单站预算自检(预算不变式, 见 P28) ====================
+    // 为什么需要它: 单站内部有若干**串行**等待(已签检测 → 步骤 → 点击后观察窗 → 首轮复检),
+    // 它们各自带超时且会累加。若某站声明的最坏成本之和 > 整流程硬超时(UNIT_TOTAL_TIMEOUT),
+    // 该站就必然在"等结果"途中被硬超时打断 → 永远拿不到 success, 只能落 unconfirmed ——
+    // 这正是"网页加载慢一点就失败"的结构性来源(旧 25s 上限下 NodeLoc 已越界)。
+    // 不变式(全部毫秒):
+    //   detectMs + stepsMs + POST_CLICK_WATCH_MS + 首轮复检 + UNIT_TIMEOUT_MARGIN_MS <= UNIT_TOTAL_TIMEOUT
+    //   · detectMs  = 自定义 alreadyCheck 的最坏成本(同步 DOM 判定记 0)
+    //   · stepsMs   = 各步骤声明超时之和(wait 记 ms; click/click_checkin/check 记 timeout||ELEMENT_WAIT_TIMEOUT)
+    //   · 观察窗     = POST_CLICK_WATCH_MS(confirmAfterClick 阶段 a 的硬上限)
+    //   · 首轮复检   = UNCONFIRMED_RECHECK_DELAYS[0] + RECHECK_DETECT_CAP_MS
+    //                 (必须留下这一份预算, 否则"慢站复检"这个救场机制根本没机会执行)
+    //   · 余量       = UNIT_TIMEOUT_MARGIN_MS(阶段 a 可越过内部 deadline 的溢出, 及落盘/UI 收尾)
+    // 不透明步骤(function 步骤 / 自定义 alreadyCheck)无法静态求和 → 必须显式声明成本:
+    //   function 步骤 → step.budgetMs;  alreadyCheck → unit.alreadyCheckBudgetMs
+    // 未声明即报 UNKNOWN 并判为不通过 —— 让"未知成本"这种无效状态无法悄悄存在(poka-yoke)。
+    const AUDIT_RESERVE_MS = UNIT_TIMEOUT_MARGIN_MS + POST_CLICK_WATCH_MS
+        + ((UNCONFIRMED_RECHECK_DELAYS[0] || 0) + RECHECK_DETECT_CAP_MS);
+
+    // 单个步骤的声明成本; unknown=true 表示成本不可静态求值(需配置者补 budgetMs)
+    function declaredStepMs(step) {
+        if (!step) return { ms: 0, unknown: true };
+        switch (step.type) {
+            case 'wait': return { ms: step.ms || 1000, unknown: false };
+            case 'click':
+            case 'click_checkin':
+            case 'check': return { ms: step.timeout || ELEMENT_WAIT_TIMEOUT, unknown: false };
+            case 'function':
+                return (typeof step.budgetMs === 'number')
+                    ? { ms: step.budgetMs, unknown: false }
+                    : { ms: 0, unknown: true };
+            default: return { ms: 0, unknown: true }; // 未知步骤类型: 成本未知, 不放过
+        }
+    }
+
+    function computeUnitBudget(unit) {
+        const unknown = [];
+        let stepsMs = 0;
+        const steps = unit.steps || [CLICK_CHECK_IN];
+        steps.forEach((s, i) => {
+            const d = declaredStepMs(s);
+            stepsMs += d.ms;
+            if (d.unknown) unknown.push(`steps[${i}]:${s.type}${s.description ? `(${s.description})` : ''}`);
+        });
+        let detectMs = 0;
+        if (unit.alreadyCheck) {
+            if (typeof unit.alreadyCheckBudgetMs === 'number') detectMs = unit.alreadyCheckBudgetMs;
+            else unknown.push('alreadyCheck');
+        }
+        const total = detectMs + stepsMs + AUDIT_RESERVE_MS;
+        return {
+            unit, detectMs, stepsMs, reserveMs: AUDIT_RESERVE_MS, total, unknown,
+            ok: unknown.length === 0 && total <= UNIT_TOTAL_TIMEOUT
+        };
+    }
+
+    // 全站预算审计。返回 {rows, bad}。
+    //   opts.summaryOnly: 仅打一行摘要(启动时用; 有越界/未声明成本时自动升级为全量表格)
+    //   默认: 打全量表格(提交前/排查时用)
+    function auditUnitBudgets(opts) {
+        const summaryOnly = !!(opts && opts.summaryOnly);
+        const rows = UNITS.map(computeUnitBudget);
+        const bad = rows.filter((r) => !r.ok);
+        const worst = rows.reduce((m, r) => (m && m.total >= r.total ? m : r), null);
+
+        const printTable = () => {
+            // 中文站名按显示宽度对齐(padEnd 按码元数补空格, 汉字宽 2 会错位)
+            const dispW = (s) => Array.from(s).reduce((n, ch) => n + (/[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/.test(ch) ? 2 : 1), 0);
+            const w = rows.reduce((m, r) => Math.max(m, dispW(r.unit.name)), 4);
+            const padName = (s) => s + ' '.repeat(Math.max(0, w - dispW(s)));
+            console.log(`${ScriptName} ===== 单站预算自检: 固定预留 ${AUDIT_RESERVE_MS}ms(余量${UNIT_TIMEOUT_MARGIN_MS} + 观察窗${POST_CLICK_WATCH_MS} + 首轮复检${(UNCONFIRMED_RECHECK_DELAYS[0] || 0) + RECHECK_DETECT_CAP_MS}) + 站点开销 <= ${UNIT_TOTAL_TIMEOUT}ms =====`);
+            for (const r of rows.slice().sort((a, b) => b.total - a.total)) {
+                const tail = r.unknown.length ? `  ⚠ 未声明成本: ${r.unknown.join(', ')}` : '';
+                console.log(`${r.ok ? '✔' : '✘'} ${padName(r.unit.name)}  检测${String(r.detectMs).padStart(5)} + 步骤${String(r.stepsMs).padStart(5)} + 预留${String(r.reserveMs).padStart(5)} = ${String(r.total).padStart(6)}ms${tail}`);
+            }
+        };
+
+        if (bad.length) {
+            // 有违规: 无论如何都打全量表格, 让"哪个站、差多少"一眼可见
+            printTable();
+            console.error(`${ScriptName} 预算自检未通过 ${bad.length} 项(慢站会被整流程硬超时打断, 见 P28):`);
+            for (const r of bad) {
+                const over = r.total > UNIT_TOTAL_TIMEOUT;
+                const why = [
+                    r.unknown.length ? `未声明成本: ${r.unknown.join(', ')}` : '',
+                    over ? `合计 ${r.total}ms > ${UNIT_TOTAL_TIMEOUT}ms` : ''
+                ].filter(Boolean).join('; ');
+                console.error(`${ScriptName}   ✘ ${r.unit.name}: ${why}`);
+            }
+        } else if (summaryOnly) {
+            console.log(`${ScriptName} 预算自检: ${rows.length}/${rows.length} 通过; 最紧 ${worst.unit.name} ${worst.total}/${UNIT_TOTAL_TIMEOUT}ms(余量 ${UNIT_TOTAL_TIMEOUT - worst.total}ms)`);
+        } else {
+            printTable();
+            console.log(`${ScriptName} ===== 预算自检完成: ${rows.length}/${rows.length} 通过 =====`);
+        }
+        return { rows, bad };
+    }
+
     // 判断当前页面是否属于某 unit: 显式 match(正则/函数)优先; 缺省由 url 推导 ——
     // 域名单一事实来源在 url, 新增/改入口无需再同步 match, 避免两者漂移
     function matchUnit(unit, href) {
@@ -869,16 +1017,55 @@ const K = {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    // 等待元素出现(支持字符串/函数选择器), 超时 reject
-    function waitForElement(selector, timeout = 5000) {
+    // ---------- 本次单站执行的内部预算(见 P28 预算不变式) ----------
+    // runUnit 入口设 deadline = now + (UNIT_TOTAL_TIMEOUT - 余量), 内部所有等待都受它约束:
+    // 引擎必须在**外层整流程超时之前**自己得出结论并落盘, 而不是被外层定时器判死(旧实现里
+    // 外层 25s 定时器不取消, 会把冷却/仅检测/失败-待确认等结果统统改写成"整流程超时")。
+    let runDeadline = 0;
+    function setRunDeadline() { runDeadline = Date.now() + UNIT_TOTAL_TIMEOUT - UNIT_TIMEOUT_MARGIN_MS; }
+    function clearRunDeadline() { runDeadline = 0; }
+    function remainingBudgetMs() { return runDeadline ? Math.max(0, runDeadline - Date.now()) : UNIT_TOTAL_TIMEOUT; }
+    // 把期望超时收敛到剩余预算内(至少 1s, 便于给出明确失败原因而不是被外层判死)
+    function budgetedTimeout(base) {
+        return Math.max(1000, Math.min(base, remainingBudgetMs()));
+    }
+    // 元素等待超时自适应(治"网页加载慢一点就判失败"): 页面尚未 load 完成(资源/SPA 仍在渲染)时
+    // 放宽 SLOW_PAGE_WAIT_BONUS_MS。元素提前出现由 MutationObserver 立即命中, 放宽不拖慢正常路径。
+    function adaptiveElementTimeout(base) {
+        const loading = typeof document.readyState === 'string' && document.readyState !== 'complete';
+        return base + (loading ? SLOW_PAGE_WAIT_BONUS_MS : 0);
+    }
+
+    // 元素是否"可交互"(不只是存在于 DOM): 隐藏元素程序化 .click() 不触发导航(P22 教训),
+    // 旧实现只判存在 → 慢页面/懒渲染下会把"查得到但点不动"当作就绪, 点完再判失败。
+    function isInteractable(el) {
+        if (!el) return false;
+        try {
+            if (el.disabled) return false;
+            if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) return false;
+        } catch (e) {
+            return true; // 判定本身异常时不拦(宁可点也不卡死)
+        }
+        return true;
+    }
+
+    // 等待元素出现**且可交互**(支持字符串/函数选择器), 超时 reject。
+    // opts.ready === false 时退回旧语义(只判存在), 供特殊场景显式使用。
+    function waitForElement(selector, timeout = ELEMENT_WAIT_TIMEOUT, opts) {
         const isFunction = typeof selector === 'function';
+        const needReady = !opts || opts.ready !== false;
+        const label = isFunction ? '(函数选择器)' : selector;
+        const check = () => {
+            const el = isFunction ? selector() : document.querySelector(selector);
+            if (!el) return null;
+            return needReady && !isInteractable(el) ? null : el;
+        };
         return new Promise((resolve, reject) => {
-            const check = () => (isFunction ? selector() : document.querySelector(selector));
             const found = check();
             if (found) return resolve(found);
             if (document.body == null) {
                 // body 尚不存在(理论上 DOMContentLoaded 后不会发生, 防御)
-                return reject(new Error(`等待元素 "${selector}" 失败: body 不存在`));
+                return reject(new Error(`等待元素 "${label}" 失败: body 不存在`));
             }
             const observer = new MutationObserver(() => {
                 const el = check();
@@ -888,10 +1075,17 @@ const K = {
                     resolve(el);
                 }
             });
-            observer.observe(document.body, { childList: true, subtree: true });
+            // attributeFilter 收窄监听面: 只需捕捉"由 class/style/hidden/disabled 变化而变为可见"的情形
+            observer.observe(document.body, {
+                childList: true, subtree: true, attributes: true,
+                attributeFilter: ['class', 'style', 'hidden', 'disabled']
+            });
             const timer = setTimeout(() => {
                 observer.disconnect();
-                reject(new Error(`等待元素 "${selector}" 超时 (${timeout}ms)`));
+                // 区分"元素不存在"与"存在但不可交互": 让排障一眼看出是慢渲染还是选择器失效
+                const raw = isFunction ? null : document.querySelector(selector);
+                const why = raw ? '(元素已存在但不可交互/隐藏)' : '(未找到元素)';
+                reject(new Error(`等待元素 "${label}" 超时 ${why} (${timeout}ms)`));
             }, timeout);
         });
     }
@@ -948,26 +1142,70 @@ const K = {
     function readStatus(unitId) {
         return gmGet(K.status(unitId), null);
     }
-    function writeStatus(unitId, status, msg) {
+    // 写当日状态: 受 STATUS_TRANSITIONS 单向阶梯约束(见 P28)。返回 true=已写入, false=被拒。
+    // opts.force === true 时跳过阶梯(仅限确实需要"人为改写"的场景, 目前无调用点)。
+    function writeStatus(unitId, status, msg, opts) {
+        const force = !!(opts && opts.force);
+        const prev = gmGet(K.status(unitId), null);
+        const prevStatus = (prev && prev.date === todayStr()) ? prev.status : '';
+        if (!force) {
+            const allowed = STATUS_TRANSITIONS[prevStatus] || STATUS_TRANSITIONS[''];
+            if (allowed.indexOf(status) < 0) {
+                // 关键防御: 慢/超时/无信号类结果不得覆写更确定的结果(旧实现正是在这里把
+                // 冷却/仅检测/失败-待确认改写成了"整流程超时")
+                console.warn(`${ScriptName} 状态写入被拒(单向阶梯): ${prevStatus || '无'} -> ${status} [${msg}]`);
+                return false;
+            }
+        }
         gmSet(K.status(unitId), { date: todayStr(), status, msg, ts: Date.now() });
+        return true;
     }
     function isSuccessToday(unitId) {
         const st = readStatus(unitId);
         return !!(st && st.status === 'success' && st.date === todayStr());
     }
-    // 今日成功/失败数 / 总数(面板汇总与 FAB 皮肤用)
+    // 今日成功/失败/未确认数 / 总数(面板汇总与 FAB 皮肤用)
+    // 注意: unconfirmed(未确认)不计入 failed —— 它只代表"没拿到确认", 不是确定失败。
     function countToday() {
-        let success = 0, failed = 0;
+        let success = 0, failed = 0, unconfirmed = 0;
         const today = todayStr();
         for (const u of UNITS) {
             const st = readStatus(u.id);
             if (st && st.date === today) {
                 if (st.status === 'success') success += 1;
                 else if (st.status === 'failed') failed += 1;
+                else if (st.status === 'unconfirmed') unconfirmed += 1;
             }
         }
-        return { success, failed, total: UNITS.length };
+        return { success, failed, unconfirmed, total: UNITS.length };
     }
+
+    // ---------- 单站执行进度心跳(见 P28) ----------
+    // 后台任务标签在关键阶段写一次 {stage, ts}; 调度页据此:
+    //   ① 显示"当前卡在哪一步 + 已耗时"(旧实现只有一个站名, 反馈黑盒);
+    //   ② 识别"零进度心跳"的死站(浏览器错误页/脚本未运行)提前跳过, 不再白等到窗口耗尽。
+    // 同阶段不重复写(只在阶段变化时落盘), ts 即该阶段开始时刻。
+    function readProgress(unitId) {
+        const p = gmGet(K.progress(unitId), null);
+        if (!p || p.date !== todayStr() || Date.now() - (p.ts || 0) > PROGRESS_TTL_MS) return null;
+        return p;
+    }
+    // 每次调用都落盘(ts = 该阶段开始时刻): 调度页用 ts 判"这次打开标签后有没有新进度",
+    // 若同阶段跳过写入会让 ts 停留在上一轮, 被误判成"零进度死站"(见 P28)。
+    function setProgress(unit, stage, msg) {
+        try {
+            gmSet(K.progress(unit.id), { date: todayStr(), stage, msg: msg || '', ts: Date.now() });
+        } catch (e) { /* 进度是旁路信息, 失败不影响主流程 */ }
+    }
+    function clearProgress(unitId) {
+        try { gmSet(K.progress(unitId), null); } catch (e) { /* 忽略 */ }
+    }
+    // 阶段中文名(面板批量进度显示用)
+    const PROGRESS_LABELS = {
+        start: '已打开页面', detect: '检测签到状态', wait_element: '等待签到按钮',
+        clicked: '已点击', confirm: '确认签到结果'
+    };
+    function progressLabel(stage) { return PROGRESS_LABELS[stage] || '执行中'; }
 
     // ---------- 签到按钮重现提醒(与当日状态联动降级, 见 P25) ----------
     // 语义: 引擎曾把某站判为「今日已签 success」, 但后续访问发现签到按钮又呈可签态
@@ -1023,10 +1261,14 @@ const K = {
         const elapsed = Date.now() - readCooldown(unitId);
         return Math.max(0, MIN_INTERVAL - elapsed);
     }
-    // 今日失败且仍在冷却期(批量默认排除此类站, 避免白开标签重复点击; 勾选强制重试才纳入)
-    function isFailedInCooldown(unitId) {
+    // 今日"点击过但未拿到确认结果"且仍在冷却期: 批量默认排除(避免白开标签被冷却直接跳过;
+    // 勾选强制重试才纳入)。覆盖 failed(确定失败)与 unconfirmed(未确认)两种结果 —— 两者都
+    // 意味着"冷却窗口内再开标签也只会被跳过", 与是否确定失败无关(见 P28)。
+    function isPendingClickInCooldown(unitId) {
         const st = readStatus(unitId);
-        return !!(st && st.status === 'failed' && st.date === todayStr() && cooldownRemainMs(unitId) > 0);
+        if (!st || st.date !== todayStr()) return false;
+        if (st.status !== 'failed' && st.status !== 'unconfirmed') return false;
+        return cooldownRemainMs(unitId) > 0;
     }
 
     // ---------- 跨天守卫(页面出生日期 vs 今日) ----------
@@ -1133,7 +1375,10 @@ const K = {
         console.log(`${ScriptName} 执行步骤: ${step.description || step.type}`);
         switch (step.type) {
             case 'click_checkin': {
-                const el = await waitForElement(unit.checkInSelector, step.timeout || 5000);
+                // 超时自适应(慢页面放宽) + 收敛到本次执行剩余预算(见 P28)
+                const t = budgetedTimeout(adaptiveElementTimeout(step.timeout || ELEMENT_WAIT_TIMEOUT));
+                setProgress(unit, 'wait_element', '等待签到按钮');
+                const el = await waitForElement(unit.checkInSelector, t);
                 if (!el) {
                     console.warn(`${ScriptName} 未找到签到按钮: ${unit.checkInSelector} (已签到?)`);
                     return;
@@ -1148,10 +1393,12 @@ const K = {
                 }
                 console.log(`${ScriptName} 点击按钮: ${visibleText(el).trim()}`);
                 el.click();
+                setProgress(unit, 'clicked', '已点击签到按钮');
                 break;
             }
             case 'click': {
-                const el = await waitForElement(step.selector, step.timeout || 5000);
+                const t = budgetedTimeout(adaptiveElementTimeout(step.timeout || ELEMENT_WAIT_TIMEOUT));
+                const el = await waitForElement(step.selector, t);
                 if (!el) {
                     console.warn(`${ScriptName} 按钮未找到: ${step.selector}`);
                     return;
@@ -1161,12 +1408,13 @@ const K = {
                 break;
             }
             case 'wait': {
-                await sleep(step.ms || 1000);
+                // 等待也受本次执行剩余预算约束(防固定 wait 把整流程预算吃光)
+                await sleep(Math.max(0, Math.min(step.ms || 1000, remainingBudgetMs())));
                 break;
             }
             case 'check': {
                 try {
-                    await waitForElement(step.selector, step.timeout || 3000);
+                    await waitForElement(step.selector, budgetedTimeout(step.timeout || 3000));
                     console.log(`${ScriptName} 检查通过: ${step.selector}`);
                 } catch (e) {
                     console.warn(`${ScriptName} 检查未通过: ${e.message}`);
@@ -1354,11 +1602,15 @@ const K = {
     }
 
     // ==================== 成功检测(点击后) ====================
-    // 返回 true/false; 仅当页面未发生跳转(同页 AJAX/SPA)时才有意义
-    async function detectSuccess(unit) {
+    // 返回 true/false; 仅当页面未发生跳转(同页 AJAX/SPA)时才有意义。
+    // opts.maxMs: 各检测器超时上限(ms) —— 复检场景用它避免把整流程预算吃光(见 P28)。
+    async function detectSuccess(unit, opts) {
+        const cap = (opts && opts.maxMs) ? opts.maxMs : 0;
+        const capT = (t) => (cap ? Math.min(t, cap) : t);
         // 1) 配置的 successDetect 列表
         if (unit.successDetect) {
             for (const d of unit.successDetect) {
+                if (cap && remainingBudgetMs() <= 1000) break; // 预算耗尽: 不再逐个试检测器
                 try {
                     let hit = false;
                     if (d.type === 'url') {
@@ -1369,10 +1621,12 @@ const K = {
                         await waitForTrue(() => {
                             const scope = d.selector ? document.querySelector(d.selector) : document.body;
                             return scope && visibleText(scope).includes(d.text) ? true : null;
-                        }, d.timeout || WAIT_TEXT_TIMEOUT, 200, `成功文案(${d.text})`);
+                        }, budgetedTimeout(capT(d.timeout || WAIT_TEXT_TIMEOUT)), 200, `成功文案(${d.text})`);
                         hit = true;
                     } else if (d.type === 'func') {
-                        hit = !!(await d.fn());
+                        // func 检测器自带内部轮询(最长 16s, 见各站 successDetect), 复检时必须限时,
+                        // 否则单次复检就能把整流程预算吃光
+                        hit = !!(await (cap ? Promise.race([d.fn(), sleep(cap).then(() => false)]) : d.fn()));
                     }
                     if (hit) {
                         console.log(`${ScriptName} 成功检测命中: type=${d.type}`);
@@ -1389,7 +1643,7 @@ const K = {
                 await waitForTrue(() => {
                     const el = document.querySelector(unit.checkInSelector);
                     return el && visibleText(el).includes(unit.alreadyCheckedInContent) ? true : null;
-                }, 2500, 200, '按钮变为已签到');
+                }, budgetedTimeout(capT(2500)), 200, '按钮变为已签到');
                 console.log(`${ScriptName} 成功检测回退命中: 按钮已变已签到`);
                 return true;
             } catch (e) { /* 未命中 */ }
@@ -1397,12 +1651,91 @@ const K = {
         return false;
     }
 
+    // ==================== 点击后确认(事件驱动观察 + 有界复检, 见 P28) ====================
+    // 有界观察"是否发生跳转": 同时认整页跳转(pagehide/beforeunload)与 URL 变化(SPA 软导航,
+    // 无 pagehide —— P22 的 HHCLUB 就是这种)。窗口到时仍未跳转则返回 navigated:false。
+    function watchNavigation(ms) {
+        return new Promise((resolve) => {
+            const startHref = location.href;
+            let done = false;
+            const finish = (nav) => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                clearInterval(iv);
+                window.removeEventListener('pagehide', onHide);
+                window.removeEventListener('beforeunload', onHide);
+                resolve({ navigated: nav });
+            };
+            const onHide = () => finish(true);
+            window.addEventListener('pagehide', onHide);
+            window.addEventListener('beforeunload', onHide);
+            const iv = setInterval(() => { if (location.href !== startHref) finish(true); }, 200);
+            const timer = setTimeout(() => finish(false), Math.max(0, ms));
+        });
+    }
+    // 点击后确认全流程。返回 {status:'success'|'pending'|'unconfirmed', msg, reason}
+    // 旧实现: 固定 sleep 800ms 且只认 pagehide → 慢站(302 首包 > 800ms)被判成"同页 AJAX",
+    // 再因同页零特征而误记 failed(这就是"网页加载慢一点就失败"的机制之一)。
+    async function confirmAfterClick(unit) {
+        // a) 并发竞速: 同页成功特征命中 / 发生跳转。只有**有结论**的信号才结束等待:
+        //    detectSuccess 未命中不构成结论(继续等观察窗), 避免它秒返回 false 时把窗口跳过。
+        const t0 = Date.now();
+        const navP = watchNavigation(POST_CLICK_WATCH_MS);
+        let successHit = false;
+        const okP = detectSuccess(unit).then((hit) => { successHit = hit; });
+        const conclusive = Promise.race([
+            okP.then(() => (successHit ? { kind: 'success' } : new Promise(() => {}))),
+            navP.then((r) => (r.navigated ? { kind: 'navigated' } : new Promise(() => {})))
+        ]);
+        const first = await Promise.race([
+            conclusive,
+            sleep(Math.max(0, POST_CLICK_WATCH_MS - (Date.now() - t0))).then(() => ({ kind: 'window' }))
+        ]);
+        if (first.kind === 'success') {
+            return { status: 'success', msg: '签到成功(已检测到成功特征)', reason: 'detected' };
+        }
+        if (first.kind === 'navigated') {
+            return { status: 'pending', msg: '已点击, 页面跳转中待确认', reason: 'navigated' };
+        }
+        // b) 观察窗内无结论 → 有界复检: **只检测, 不重复点击**(冷却期内绝不重点, 用户决策)。
+        //    覆盖"站点响应慢于单次检测超时"的场景, 把慢站从 failed 拉回 success 或至少 unconfirmed。
+        for (const delay of UNCONFIRMED_RECHECK_DELAYS) {
+            if (remainingBudgetMs() < delay + 1500) break; // 预算不够再做一轮, 直接给未确认结论
+            const nav = await watchNavigation(delay); // 等待期间仍监视跳转(慢 302 会在此命中)
+            if (nav.navigated) {
+                return { status: 'pending', msg: '已点击, 页面跳转中待确认', reason: 'navigated' };
+            }
+            try {
+                const already = await detectAlreadyCheckedIn(unit);
+                if (already.hit) {
+                    return { status: 'success', msg: `复检确认已签到(${already.source})`, reason: 'recheck' };
+                }
+            } catch (e) { /* 复检异常不阻断, 继续下一轮 */ }
+            if (await detectSuccess(unit, { maxMs: RECHECK_DETECT_CAP_MS })) {
+                return { status: 'success', msg: '复检确认签到成功', reason: 'recheck' };
+            }
+        }
+        return { status: 'unconfirmed', msg: '点击后未确认到结果(可重试)', reason: 'no_confirm' };
+    }
+
     // ==================== 单 unit 签到主流程 ====================
     /**
      * 返回结果 {status, msg, reason}
      * status: success | failed | pending | skipped | suspect(失败-待确认, 见 P25)
+     *       | unconfirmed(未确认: 超时/无信号, 可复检可重试, 见 P28)
      */
+    // 薄包装: 每次单站执行设置/清理内部预算 deadline(见 P28), 使内部所有等待都在
+    // 外层整流程超时之前自行收敛并落盘, 而不是被外层定时器判死。
     async function runUnit(unit, ctx = {}) {
+        setRunDeadline();
+        try {
+            return await runUnitInner(unit, ctx);
+        } finally {
+            clearRunDeadline();
+        }
+    }
+    async function runUnitInner(unit, ctx = {}) {
         const log = (msg) => console.log(`${ScriptName} [${unit.name}] ${msg}`);
         const warn = (msg) => console.warn(`${ScriptName} [${unit.name}] ${msg}`);
 
@@ -1494,6 +1827,7 @@ const K = {
 
         // 2) 已签到检测 —— 每次访问都执行, 不受冷却限制(检测 ≠ 点击, 无封号风险)
         //    命中(按钮文案/整页文案)即得当日结果 success
+        setProgress(unit, 'detect', '检测签到状态');
         try {
             const already = await detectAlreadyCheckedIn(unit);
             if (already.hit) {
@@ -1514,13 +1848,14 @@ const K = {
         }
 
         // 3) 上次点击后落盘 pending 且未过冷却、且第 2 步仍检测不到已签
-        //    → 说明上次点击确实未生效/无法确认, 记为失败(避免永久挂起)
+        //    → 上次点击确实没拿到确认。归为 unconfirmed(未确认)而非 failed: 它可能是
+        //      "站点慢/落地页没回来", 不是确定失败; 面板显「未确认 · 可重试」且不污染失败统计(见 P28)。
         const prev = readStatus(unit.id);
         if (prev && prev.status === 'pending' && prev.date === todayStr()
             && Date.now() - prev.ts < MIN_INTERVAL) {
-            writeStatus(unit.id, 'failed', '上次签到尝试未确认生效');
-            log('上次签到尝试(pending)未确认, 记录为失败');
-            return { status: 'failed', msg: '上次签到未确认', reason: 'pending_stale' };
+            writeStatus(unit.id, 'unconfirmed', '上次签到尝试未确认(可重试)');
+            log('上次签到尝试(pending)未确认, 记录为未确认');
+            return { status: 'unconfirmed', msg: '上次签到未确认', reason: 'pending_stale' };
         }
 
         // 4) 冷却中 → 跳过点击(检测已在第 2 步完成; 冷却只防高频点击)
@@ -1537,9 +1872,6 @@ const K = {
         //    落地页 10 分钟内不会重复点击, 从根本上防止高频
         writeCooldown(unit.id);
         log('开始执行签到步骤');
-        let navigated = false;
-        const onPageHide = () => { navigated = true; };
-        window.addEventListener('pagehide', onPageHide, { once: true });
 
         try {
             const { alreadyHit } = await executeSteps(unit);
@@ -1549,54 +1881,81 @@ const K = {
                 return { status: 'success', msg: '检测到已签到', reason: 'already' };
             }
         } catch (e) {
-            warn(`签到步骤执行失败: ${e.message}`);
-            writeStatus(unit.id, 'failed', `步骤失败: ${e.message.slice(0, 200)}`);
-            return { status: 'failed', msg: e.message.slice(0, 200), reason: 'step_error' };
+            // 步骤错误分类(见 P28): "等待超时"属慢/无信号(瞬时, 可复检可重试)→ unconfirmed;
+            // 其余(选择器失效/文案不符/函数步骤抛错)属确定失败 → failed, 需人工排查。
+            // 注意: 这里**不做重试点击** —— 冷却已写入, 冷却期内绝不重复点击(用户决策)。
+            const emsg = (e.message || String(e)).slice(0, 200);
+            warn(`签到步骤执行失败: ${emsg}`);
+            if (/超时|timeout/i.test(emsg)) {
+                writeStatus(unit.id, 'unconfirmed', `步骤等待超时: ${emsg}`);
+                return { status: 'unconfirmed', msg: emsg, reason: 'step_timeout' };
+            }
+            writeStatus(unit.id, 'failed', `步骤失败: ${emsg}`);
+            return { status: 'failed', msg: emsg, reason: 'step_error' };
         }
 
-        // 6) 点击后确认: 先落盘 pending(防跳页丢状态), 再同页检测
+        // 6) 点击后确认: 先落盘 pending(防跳页丢状态), 再做事件驱动观察 + 有界复检(见 P28)
         writeStatus(unit.id, 'pending', '已点击签到, 等待结果确认');
-        await sleep(POST_CLICK_SETTLE);
+        setProgress(unit, 'confirm', '确认签到结果');
 
-        if (navigated) {
-            // 页面正在/已经跳转: 状态保持 pending, 由落地页判定(已签 → success, 未签 → failed)
-            log('点击后发生页面跳转, 状态待落地页确认');
-            return { status: 'pending', msg: '已点击, 页面跳转中待确认', reason: 'navigated' };
-        }
-
-        // 同页确认
         if (unit.confirmManual) {
+            // 无可靠成功特征: 只判断"有没有跳转"(跳转交落地页结算), 其余记 pending 待人工确认
+            const nav = await watchNavigation(POST_CLICK_SETTLE);
+            if (nav.navigated) {
+                log('点击后发生页面跳转, 状态待落地页确认');
+                return { status: 'pending', msg: '已点击, 页面跳转中待确认', reason: 'navigated' };
+            }
             log('无自动确认特征(confirmManual), 记为 pending');
             return { status: 'pending', msg: '已执行签到步骤, 请人工确认', reason: 'manual' };
         }
-        const ok = await detectSuccess(unit);
-        if (ok) {
-            writeStatus(unit.id, 'success', '签到成功(已检测到成功特征)');
-            log('签到成功(成功特征已确认)');
-            return { status: 'success', msg: '签到成功', reason: 'detected' };
+
+        const outcome = await confirmAfterClick(unit);
+        if (outcome.status === 'success') {
+            writeStatus(unit.id, 'success', outcome.msg);
+            log(`签到成功(${outcome.reason})`);
+            return { status: 'success', msg: '签到成功', reason: outcome.reason };
         }
-        writeStatus(unit.id, 'failed', '点击后未检测到成功特征');
-        warn('点击后未检测到成功特征');
-        return { status: 'failed', msg: '未检测到成功特征', reason: 'no_confirm' };
+        if (outcome.status === 'pending') {
+            log('点击后发生页面跳转, 状态待落地页确认');
+            return { status: 'pending', msg: outcome.msg, reason: outcome.reason };
+        }
+        writeStatus(unit.id, 'unconfirmed', outcome.msg);
+        warn(outcome.msg);
+        return { status: 'unconfirmed', msg: outcome.msg, reason: outcome.reason };
     }
 
     // 带整流程超时保护的 runUnit(防单站卡死拖住批量)
+    // 带整流程超时保护的 runUnit(防单站卡死拖住批量)。
+    // 关键修复(见 P28): 旧实现用 Promise.race 但**既不取消定时器, 也不检查主流程是否已结算**,
+    // 于是超时分支只守 !isSuccessToday —— 冷却(skipped)/仅检测(detect_only)/失败-待确认(suspect)
+    // 这些结果都会在 25 秒后被改写成 failed「整流程超时」, 且 suspect 被翻成 failed 后还会重新
+    // 进入强制批量 → 可能重复点击已签到的站。现在:
+    //   ① settled 标志 + clearTimeout: 主流程一旦给出结论, 超时分支不再写任何状态;
+    //   ② 真超时归为 unconfirmed(未确认, 可重试)而非 failed, 且受单向阶梯约束兜底;
+    //   ③ 主流程异常同理, 不再无脑写 failed。
     async function runUnitWithTimeout(unit, ctx) {
+        let settled = false;
+        let timer = null;
+        const timeoutPromise = new Promise((resolve) => {
+            timer = setTimeout(() => {
+                if (settled) return; // 主流程已结算 → 本次超时不代表任何结论, 不得写状态
+                console.warn(`${ScriptName} [${unit.name}] 整流程超时(${UNIT_TOTAL_TIMEOUT}ms), 记为未确认`);
+                writeStatus(unit.id, 'unconfirmed', '整流程超时, 未确认(可重试)');
+                resolve({ status: 'unconfirmed', msg: '整流程超时', reason: 'timeout' });
+            }, UNIT_TOTAL_TIMEOUT);
+        });
         try {
-            return await Promise.race([
-                runUnit(unit, ctx),
-                sleep(UNIT_TOTAL_TIMEOUT).then(() => {
-                    console.warn(`${ScriptName} [${unit.name}] 整流程超时(${UNIT_TOTAL_TIMEOUT}ms), 记为失败`);
-                    if (!isSuccessToday(unit.id)) {
-                        writeStatus(unit.id, 'failed', '整流程超时');
-                    }
-                    return { status: 'failed', msg: '整流程超时', reason: 'timeout' };
-                })
-            ]);
+            const res = await Promise.race([runUnit(unit, ctx), timeoutPromise]);
+            settled = true;
+            clearTimeout(timer);
+            return res;
         } catch (e) {
+            settled = true;
+            clearTimeout(timer);
+            const emsg = (e.message || String(e)).slice(0, 200);
             console.error(`${ScriptName} [${unit.name}] 未捕获异常:`, e);
-            if (!isSuccessToday(unit.id)) writeStatus(unit.id, 'failed', e.message.slice(0, 200));
-            return { status: 'failed', msg: e.message.slice(0, 200), reason: 'exception' };
+            writeStatus(unit.id, 'unconfirmed', `执行异常, 未确认: ${emsg}`);
+            return { status: 'unconfirmed', msg: emsg, reason: 'exception' };
         }
     }
 
@@ -1635,6 +1994,7 @@ const K = {
             --ok: #16a34a;
             --err: #e5484d;
             --pend: #d97706;
+            --unc: #0284c7;
             --skip: #64748b;
             --shadow: 0 10px 30px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.08);
             --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -1646,6 +2006,7 @@ const K = {
                 --text: #e7eaf1;
                 --muted: #99a1b3;
                 --border: #2d3342;
+                --unc: #38bdf8;
                 --shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
             }
         }
@@ -1913,6 +2274,7 @@ const K = {
         .badge.ok   { background: rgba(22, 163, 74, 0.14); color: var(--ok); }
         .badge.err  { background: rgba(229, 72, 77, 0.14); color: var(--err); }
         .badge.pend { background: rgba(217, 119, 6, 0.16); color: var(--pend); }
+        .badge.unc  { background: rgba(14, 165, 233, 0.16); color: var(--unc); }
         .badge.skip { background: rgba(100, 116, 139, 0.16); color: var(--skip); }
         .badge.none { background: var(--surface-2); color: var(--muted); }
         /* 失败站重试入口: 悬停由「失败」切换为「↻ 重试」(琥珀警示 + 可点击); 点击=前台新标签强制重试 */
@@ -2012,6 +2374,7 @@ const K = {
                 case 'success': return { label: '已成功', cls: 'ok' };
                 case 'failed': return { label: '失败', cls: 'err' };
                 case 'suspect': return { label: '失败-待确认', cls: 'pend' }; // 签到按钮重现降级(见 P25)
+                case 'unconfirmed': return { label: '未确认', cls: 'unc' }; // 超时/无信号, 可复检可重试(见 P28)
                 case 'pending': return { label: '待确认', cls: 'pend' };
                 case 'skipped': return { label: '已跳过', cls: 'skip' };
                 default: return { label: '—', cls: 'none' };
@@ -2022,7 +2385,7 @@ const K = {
             const st = readStatus(unit.id);
             const todayHit = st && st.date === todayStr();
             const meta = statusMeta(todayHit ? st.status : '');
-            const cool = isFailedInCooldown(unit.id);
+            const cool = isPendingClickInCooldown(unit.id);
             const alert = readAlert(unit.id); // 按钮重现提醒(常驻标记)
             let sub = '今日未处理';
             if (todayHit && st) {
@@ -2035,11 +2398,15 @@ const K = {
                 // 重现提醒存在即当日已降级 suspect(失败-待确认): 前置警示按钮文案, 后附降级说明
                 sub = `⚠ 签到按钮重现: ${esc(alert.btnText || '')}${sub && sub !== '今日未处理' ? ' · ' + sub : ''}`;
             }
-            const retryable = todayHit && st.status === 'failed'; // 今日失败 → 提供「重试」入口(suspect 待确认/其余状态不提供)
+            const retryable = todayHit && (st.status === 'failed' || st.status === 'unconfirmed');
+            // 今日失败 / 未确认 → 提供「重试」入口(suspect 失败-待确认、pending、已成功不提供)
             const url = esc(unit.url);
             const fav = faviconSrc(unit);
+            const retryTitle = st.status === 'unconfirmed'
+                ? '点击: 在新标签页【强制重试】本站(未确认到结果, 无视 10 分钟冷却, 执行完不关闭标签)。风险提示: 站点持续不可用时反复强制重试可能触发风控/封号, 请先确认站点可访问'
+                : '点击: 在新标签页【强制重试】本站(无视 10 分钟冷却, 执行完不关闭标签)。风险提示: 站点持续不可用时反复强制重试可能触发风控/封号, 请先确认站点可访问';
             const badge = retryable
-                ? `<span class="badge err retry" data-uid="${esc(unit.id)}" title="点击: 在新标签页【强制重试】本站(无视 10 分钟冷却, 执行完不关闭标签)。风险提示: 站点持续不可用时反复强制重试可能触发风控/封号, 请先确认站点可访问">`
+                ? `<span class="badge ${meta.cls} retry" data-uid="${esc(unit.id)}" title="${retryTitle}">`
                     + `<span class="t-fail">${meta.label}</span><span class="t-retry">↻ 重试</span></span>`
                 : `<span class="badge ${meta.cls}">${meta.label}</span>`;
             return `<div class="row${cool ? ' cool' : ''}${alert ? ' alert' : ''}">`
@@ -2305,7 +2672,10 @@ const K = {
         function render() {
             if (!host) return;
             const c = countToday();
-            summaryEl.textContent = `今日 ${c.success}/${c.total} 已成功`;
+            // 未确认(超时/无信号)单列, 不与"失败"混为一谈(见 P28)
+            summaryEl.textContent = `今日 ${c.success}/${c.total} 已成功`
+                + (c.failed ? ` · ${c.failed} 失败` : '')
+                + (c.unconfirmed ? ` · ${c.unconfirmed} 未确认` : '');
             const alerts = alertUnits(); // 按钮重现提醒(今日有效, 跨站持久)
             applyFabSkin(c, alerts.length);
             let html = '';
@@ -2605,7 +2975,9 @@ const K = {
     // 全程低频(单站 1 次点击) + 站间可配缓冲, 不并行; 后台标签用完即关。
 
     // 待处理候选: enabled 且非今日成功且非"待确认(pending)未过期";
-    // 默认排除"今日失败且仍在冷却期"的站(避免白开标签重复点击), force=true 时纳入(强制重试)
+    // 默认排除"今日已点击但未确认(failed/unconfirmed)且仍在冷却期"的站(避免白开标签被冷却
+    // 直接跳过), force=true 时纳入(强制重试)。unconfirmed 不在冷却期时**会**被纳入普通批量 ——
+    // 语义与 failed 一致: 下次批量天然重试(见 P28)。
     function remainingCandidates(force) {
         const out = [];
         for (const u of UNITS) {
@@ -2617,7 +2989,7 @@ const K = {
             if (prev && prev.status === 'suspect' && prev.date === todayStr()) continue;
             if (prev && prev.status === 'pending' && prev.date === todayStr()
                 && Date.now() - prev.ts < MIN_INTERVAL) continue;
-            if (!force && isFailedInCooldown(u.id)) continue;
+            if (!force && isPendingClickInCooldown(u.id)) continue;
             out.push(u.id);
         }
         return out;
@@ -2677,12 +3049,13 @@ const K = {
 
             // 打开后台标签执行; 记录打开前该站状态时间戳, 用于识别"新写入"
             const prevTs = (readStatus(unit.id) || { ts: 0 }).ts;
+            const openedAt = Date.now();
             let tab = null;
             try {
                 tab = openTaskTab(unit, task.taskId);
             } catch (e) {
                 console.warn(`${ScriptName} [${unit.name}] 打开后台标签失败: ${e.message}`);
-                writeStatus(unit.id, 'failed', '打开后台标签失败');
+                writeStatus(unit.id, 'unconfirmed', '打开后台标签失败, 未确认(可重试)');
                 task.index += 1;
                 saveTask(task);
                 UI.render();
@@ -2693,20 +3066,36 @@ const K = {
             const deadline = Date.now() + PER_UNIT_TIMEOUT_MS;
             let settle = null;
             let pendingSince = 0;
+            let noProgress = false;
             while (Date.now() < deadline) {
                 if (UI.isCancelled()) break;
                 await sleep(POLL_INTERVAL_MS);
                 touchTask(task);
+                // 进度心跳(见 P28): 标签页每进入一个阶段写一次 → 面板显示"卡在哪一步 + 已耗时",
+                // 反馈不再是黑盒; 同时识别"零进度死站"(浏览器错误页/脚本未运行), 提前跳过,
+                // 不再白等整个调度窗口(旧实现死站要等满 50s)。
+                const pg = readProgress(unit.id);
+                const pgFresh = !!(pg && pg.ts > openedAt);
+                if (pgFresh) {
+                    UI.updateBatchText(`${unit.name} · ${progressLabel(pg.stage)} (${Math.round((Date.now() - pg.ts) / 1000)}s)`);
+                } else if (Date.now() - openedAt > NO_PROGRESS_SKIP_MS) {
+                    noProgress = true;
+                    break;
+                }
                 const st = readStatus(unit.id);
                 if (st && st.date === todayStr() && st.ts > prevTs) {
                     if (st.status === 'pending') {
                         // pending 需观察: 点击跳转型落地页稍后会改写 success/failed;
-                        // 若 PENDING_GRACE_MS 内未改写(如 confirmManual 站)则以 pending 结算
+                        // 若 PENDING_GRACE_MS 内未改写(如 confirmManual 站)则以 pending 结算。
+                        // 宽限期内只要进度心跳仍在刷新(页面还在工作)就顺延, 不误判为"卡住"。
                         if (!pendingSince) pendingSince = Date.now();
-                        else if (Date.now() - pendingSince > PENDING_GRACE_MS) { settle = st; break; }
+                        else if (Date.now() - pendingSince > PENDING_GRACE_MS) {
+                            if (pgFresh && Date.now() - pg.ts < 3000) pendingSince = Date.now();
+                            else { settle = st; break; }
+                        }
                         continue;
                     }
-                    settle = st; // success / failed / skipped
+                    settle = st; // success / failed / skipped / unconfirmed
                     break;
                 }
             }
@@ -2717,9 +3106,20 @@ const K = {
             if (UI.isCancelled()) break;
 
             if (!settle) {
-                // 调度窗口耗尽仍无回写: 站点无法访问/页面加载失败/脚本未运行 → 记为失败并跳过
-                writeStatus(unit.id, 'failed', '站点暂时无法访问或超时, 已跳过');
-                settle = { status: 'failed', msg: '站点暂时无法访问, 已跳过' };
+                // 窗口耗尽/零进度仍无回写: 站点无法访问、页面加载失败或脚本未运行
+                // → 记「未确认」(unconfirmed, 可重试), 而不是「失败」(见 P28: 不把"慢/没信号"当确定失败)
+                const now = readStatus(unit.id);
+                if (now && now.date === todayStr() && now.status === 'success') {
+                    settle = now; // 期间已被落地页结算成功
+                } else {
+                    const msg = noProgress
+                        ? `站点无响应(${Math.round(NO_PROGRESS_SKIP_MS / 1000)}s 无进度), 未确认(可重试)`
+                        : '站点暂时无法访问或超时, 未确认(可重试)';
+                    writeStatus(unit.id, 'unconfirmed', msg);
+                    // 写入可能被单向阶梯拒绝(期间已被落地页结算成功等) → 以存储里的真实状态结算
+                    const after = readStatus(unit.id);
+                    settle = (after && after.date === todayStr()) ? after : { status: 'unconfirmed', msg };
+                }
             }
             UI.updateBatchResult(unit.name, settle);
             UI.render();
@@ -2762,6 +3162,8 @@ const K = {
             console.warn(`${ScriptName} 后台标签页与任务不匹配, 终止`);
             return;
         }
+        // 进度心跳第一帧: 证明"脚本已在本标签跑起来"(调度页据此区分"慢"与"死站", 见 P28)
+        setProgress(unit, 'start', '已打开页面');
         const res = await runUnitWithTimeout(unit, { mode: 'batch', forceCooldown: !!task.force });
         console.log(`${ScriptName} [${unit.name}] 后台标签执行完成: ${res.status}(${res.reason || ''})`);
         // 跨天守卫触发: 本标签正在刷新重载(重载后重新执行本站), 此时不得把
@@ -2826,6 +3228,7 @@ const K = {
         UI.render(); // 状态已由 runUnit 落盘, 刷新面板呈现(失败 → 成功 / 仍失败 / 其它)
         if (res.status === 'success') UI.toast(`重试成功: ${unit.name}`, 3200);
         else if (res.status === 'failed') UI.toast(`重试失败: ${unit.name}${res.msg ? ' - ' + res.msg : ''}`, 4200, 'warn');
+        else if (res.status === 'unconfirmed') UI.toast(`重试未确认: ${unit.name}${res.msg ? ' - ' + res.msg : ''}`, 4200, 'warn');
         else UI.toast(`未触发点击: ${unit.name}(${res.msg || ''})`, 3200);
     }
 
@@ -2942,4 +3345,16 @@ const K = {
             console.error(`${ScriptName} 主流程异常:`, e);
         }
     })();
+
+    // 预算自检接线(见 P28): 启动时静默跑一次 ——
+    //   · 全部通过: 只打一行摘要(通过数 + 最紧的站及其剩余余量), 便于察觉配置逐渐逼近上限;
+    //   · 有越界/未声明成本: 打全量表格 + console.error 逐条报出。
+    // 不阻塞主流程; 放在 boot 之外是因为后台任务标签页(top 判定后 boot 会 early return)同样要被审计到。
+    // 注: 不提供 window 上的调试入口(conventions.md §8.2 禁止为诊断/测试把内部函数挂到 window);
+    //     需要逐站明细时, 提交前跑 `node tests/check-ptac-budget.js` 做静态校验。
+    try {
+        auditUnitBudgets({ summaryOnly: true });
+    } catch (e) {
+        console.warn(`${ScriptName} 预算自检异常:`, e);
+    }
 })();

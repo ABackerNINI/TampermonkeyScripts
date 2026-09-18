@@ -1,6 +1,6 @@
 # PTAutoCheckIn.user.js — PT 多站点自动签到
 
-> 源文件：`src/PTAutoCheckIn.user.js` ｜ 版本 `2026.09.16.1`(升级时同步更新)
+> 源文件：`src/PTAutoCheckIn.user.js` ｜ 版本 `2026.09.18.1`(升级时同步更新)
 > ⚠️ 状态：**v2 已并入正式版**。原 `src/PTAutoCheckIn-v2.user.js`（v2026.09.15.1）内容已并入 `PTAutoCheckIn.user.js` 并改回 `@name PTAutoCheckIn`（递增版本号）；`-v2` 暂存文件与旧 v1（v2026.08.30.1）均已删除, 生产脚本合并为单一 `PTAutoCheckIn.user.js`。
 
 ## 功能概述
@@ -9,9 +9,10 @@
 
 1. **被动模式**：访问匹配站点自动签到(同 v1)。
 2. **主动批量模式**：点击右下角悬浮按钮 → 面板「批量签到」→ **发起页常驻**, 由调度循环依次用 `GM_openInTab` 在**后台标签**打开各站执行签到, 发起页轮询 GM 状态逐个推进, 全部完成后停在发起页弹出完成面板。
-3. **结果查看**：FAB 面板展示**当日全量结果**(成功/失败/待确认/跳过), GM 存储跨域共享 → 任意已匹配站点打开面板看到的都是同一份数据。
+3. **结果查看**：FAB 面板展示**当日全量结果**(成功/失败/未确认/待确认/跳过), GM 存储跨域共享 → 任意已匹配站点打开面板看到的都是同一份数据。`unconfirmed`(未确认, P28)= 超时/无信号等**没有结论**的情况, 面板显青色「未确认」徽章, **不计入失败数**、可重试; 与「失败」(确定失败, 需人工排查)严格区分。
 4. **签到按钮重现降级提醒**(2026.09.08 .18/.19/.20)：当日记录已签(success)但按钮又呈可签态(服务器重置/换账号/误报)→ **.20 状态降级**: 把当日状态改为 `suspect`, 面板该站 badge 显「**失败-待确认**」且不再计入今日成功(仍不自动重签、不进批量); 同时 **.19 页面级呈现**仍生效: 琥珀警示 toast 一次 + 按钮琥珀高亮描边+⚠ 徽标「已标失败-待确认(仅提醒)」+ 页面底部居中常驻横条(可 ✕ 圆钮关闭本页); FAB 琥珀角标/面板警示条/行标记(.18)保留。页面确认已签 → 状态自动恢复已成功 + 提醒消除; 次日自然作废(见 P25)。**2026.09.08 .26 通用化改造**: 判定从「纯按钮可见文本翻转」重构为**载体无关入口状态信号**(`stateSignals`/`readEntryState`, 文本/attr/class/fn/exists), 旧文本站自动翻译**行为逐位一致**, no-text 属性/class 态站(NodeLoc)由此纳入重现通道(显式 `checkInSelector`+`stateSignals`); MTeam 系六无按钮站与 HHCLUB(无已签基准)仍结构排除(见校准项 19)。
-5. **行内单站强制重试(2026.09.08 .28)**：面板中今日「失败」的站点, badge「失败」悬停变琥珀「↻ 重试」→ 点击在**新标签页(前台)**打开 `?ptacRetry=<unitId>` 对该站执行一次**无视冷却**的强制签到(`forceCooldown`, 语义同批量「强制重试」), **执行完毕不关闭标签**(用户留在页面观察, 状态写回后即呈现成功/仍失败)。与批量任务完全隔离(不建任务/不参与调度/不关标签/不轮询)。一次性语义: 重试页执行前 `history.replaceState` 剥掉 `ptacRetry`(F5/刷新不重复强点); 跨标签 30s 互斥锁(`ptac_retry_<uid>`)防同站并发双点; 批量调度活跃且正处理该站时入口/执行页均拒绝; 点击前仍重写冷却, 再失败进入新一轮冷却(不连环); 仅今日 `failed` 提供(suspect「失败-待确认」疑似已签不提供, 防误重签)。
+5. **行内单站强制重试(2026.09.08 .28)**：面板中今日「失败」的站点, badge「失败」悬停变琥珀「↻ 重试」→ 点击在**新标签页(前台)**打开 `?ptacRetry=<unitId>` 对该站执行一次**无视冷却**的强制签到(`forceCooldown`, 语义同批量「强制重试」), **执行完毕不关闭标签**(用户留在页面观察, 状态写回后即呈现成功/仍失败)。与批量任务完全隔离(不建任务/不参与调度/不关标签/不轮询)。一次性语义: 重试页执行前 `history.replaceState` 剥掉 `ptacRetry`(F5/刷新不重复强点); 跨标签 30s 互斥锁(`ptac_retry_<uid>`)防同站并发双点; 批量调度活跃且正处理该站时入口/执行页均拒绝; 点击前仍重写冷却, 再失败进入新一轮冷却(不连环); 今日 `failed` 与 `unconfirmed` 均提供(suspect「失败-待确认」疑似已签不提供, 防误重签)。
+6. **慢站误判修复 + 预算不变式 + 结果分类(2026.09.18 .1, 见 P28)**：① 整流程超时定时器不再覆写已给出的结论(旧版会在 25s 后把 `skipped`/`detect_only`/`suspect` 一律改成 `failed('整流程超时')`, 这是「经常失败」的主因); ② `writeStatus` 加**状态单向阶梯**白名单; ③ 新增 `unconfirmed` 独立状态区分「慢」与「坏」; ④ 点击后观察窗由固定 800ms + 只认 `pagehide` 改为**事件驱动**(`pagehide`/`beforeunload`/URL 变化/成功特征任一命中即提前结束, 上限 4s) + **有界复检**(+5s/+12s 各一轮, **只检测不重复点击**); ⑤ 建立**超时预算不变式**并附双校验(运行时 `auditUnitBudgets()` 启动自检 + 提交前 `node tests/check-ptac-budget.js`); ⑥ `waitForElement` 增加可交互判定与慢页面超时自适应; ⑦ 后台标签写**进度心跳** `ptac_progress_<uid>`(调度页显示实时阶段/耗时), 20s 零进度即判死站(死站从 60s 降到 ~20s); ⑧ 整流程超时 25s→40s、调度窗口 50s→60s。
 
 核心设计不变：站点配置数据 + 通用执行引擎。**签到原子单位从「域名」细化为「页面入口 unit」**（解决贴吧多吧）。
 
@@ -54,12 +55,63 @@
 | `enabled` | 是否参与批量 |
 | `favicon` | 可选, 显式指定站点图标 URL(默认自动取用: 路过收集真实 icon → 站点根 /favicon.ico 兜底) |
 | `steps` | 步骤数组, 缺省 `[CLICK_CHECK_IN]` |
+| `budgetMs` | **`function` 步骤必填(P28)**: 该步骤内部的最坏耗时(ms)。`function` 步骤内部是任意代码, 引擎无法静态求和 → 必须声明; 未声明则运行时预算自检报 UNKNOWN 判为不通过 |
+| `alreadyCheckBudgetMs` | **配了 `alreadyCheck` 时必填(P28)**: 自定义已签判定的最坏耗时(ms); **纯同步 DOM 判定写 `0`**(如 NodeLoc), 含 `waitForTrue` 的按实际写(如 HHCLUB `3000`) |
+
+### 超时预算与状态阶梯(P28, 2026.09.18)
+
+**为什么**: 单站内部等待是**串行累加**的(已签检测 → 步骤 → 点击后观察窗 → 复检), 若声明的最坏成本之和超过整流程硬超时, 该站必然在等结果途中被硬超时打断 → 永远拿不到 success。旧 25s 上限下 NodeLoc(≈26.8s)已天生越界。
+
+**常量**:
+
+| 常量 | 值 | 作用 |
+|------|-----|------|
+| `UNIT_TOTAL_TIMEOUT` | 40000ms | 单站整流程硬超时(原 25s, 2026.09.18 提高) |
+| `UNIT_TIMEOUT_MARGIN_MS` | 5000ms | 预算余量; 必须 `>= POST_CLICK_WATCH_MS`(观察窗在内部 deadline 外仍有硬等待) |
+| `POST_CLICK_WATCH_MS` | 4000ms | 点击后观察窗上限(事件驱动, 命中即提前结束) |
+| `POST_CLICK_SETTLE` | 800ms | 最小观察时长(仅 `confirmManual` 分支用) |
+| `UNCONFIRMED_RECHECK_DELAYS` | `[5000, 12000]` | 未确认后的同页复检延迟(只复检不重点) |
+| `RECHECK_DETECT_CAP_MS` | 4000ms | 复检时单次成功检测上限(防复检吃光预算) |
+| `PER_UNIT_TIMEOUT_MS` | 60000ms | 调度窗口上限(原 50s); 须 `> UNIT_TOTAL_TIMEOUT + 结算余量` |
+| `NO_PROGRESS_SKIP_MS` | 20000ms | 零进度心跳提前跳过窗口(死站不再死等调度窗口) |
+| `SLOW_PAGE_WAIT_BONUS_MS` | 10000ms | 页面未 `complete` 时的元素等待放宽量 |
+
+**不变式**: `detectMs + stepsMs + AUDIT_RESERVE_MS <= UNIT_TOTAL_TIMEOUT`, 其中 `AUDIT_RESERVE_MS = 5000 + 4000 + (5000 + 4000) = 18000ms`(余量 + 观察窗 + 首轮复检)。即**留给站点自身的预算上限 = 22000ms**。
+
+**各 unit 实测预算**(`computeUnitBudget` 求和, 2026.09.18 自检全通过):
+
+| unit | 检测 | 步骤 | 预留 | 合计 / 40000 |
+|------|------|------|------|--------------|
+| HHCLUB | 3000 | 13400(头像 3×(2500+300)=8400 + click_checkin 5000) | 18000 | **34400** |
+| 蜂巢 pting | 0 | 15800(5000+5000+1000+2000+800+2000) | 18000 | **33800** |
+| HDBao / MuXueGe | 0 | 11500(5000+1500+5000) | 18000 | 29500 |
+| NodeLoc | 0(同步判定) | 10000(`waitForElement` 10s) | 18000 | 28000 |
+| 默认按钮站 / 贴吧 | 0 | 5000 | 18000 | 23000 |
+| 隐式签到站(MTeam 系六站) | 0 | 3000(仅 wait) | 18000 | 21000 |
+
+> 最紧的是 HHCLUB(余量 5600ms)。新增站点或调大某站超时后, 若自检摘要里的余量变红/变小, 需重新分配。
+
+**状态单向阶梯 `STATUS_TRANSITIONS`**(`writeStatus` 白名单, 非法迁移被拒 + `console.warn`):
+
+```text
+(初始 '')     -> success, failed, pending, skipped, suspect, unconfirmed
+skipped      -> success, failed, pending, suspect, unconfirmed
+failed       -> success, suspect, unconfirmed
+unconfirmed  -> success, suspect, failed, skipped
+pending      -> success, failed, suspect, unconfirmed
+suspect      -> success
+success      -> suspect
+```
+
+安全性质: ① `success` 只能转 `suspect`(P25 降级), 任何不确定结果都不得覆盖「已确认成功」; ② `suspect` 只能转 `success`(页面确认); ③ 任何「有结论」的状态都不得转回 `pending`(在途标记不可复活); ④ `skipped` 与初始态必须能转 `pending`(它们不是结论, 否则「上次无动作 → 这次真点击」会被拒)。
+
+**双校验**: 运行时 `auditUnitBudgets()`(启动时逐站求和, 通过则打一行摘要, 违规打全量表格 + `console.error`); 提交前 `node tests/check-ptac-budget.js`(零依赖, 校验常量不变式 + 阶梯结构 + 不透明成本声明 + 自测 `computeUnitBudget`)。**不提供 `window` 调试入口**(`conventions.md` §8.2)。
 
 ## 存储与状态层(GM, key 前缀 `ptac_`)
 
 | key | value | 用途 |
 |-----|-------|------|
-| `ptac_status_<unitId>` | `{date:'YYYY-MM-DD', status, msg, ts}` | 当日结果(面板展示), status ∈ success/failed/pending/skipped/suspect(suspect=签到按钮重现降级的「失败-待确认」, 见 P25) |
+| `ptac_status_<unitId>` | `{date:'YYYY-MM-DD', status, msg, ts}` | 当日结果(面板展示), status ∈ success/failed/pending/skipped/suspect/**unconfirmed**。`suspect`=签到按钮重现降级的「失败-待确认」(见 P25); `unconfirmed`=未确认(超时/无信号, 可复检可重试, 不计入失败, 见 P28)。**写入受单向阶梯 `STATUS_TRANSITIONS` 约束**(见下「超时预算与状态阶梯」) |
 | `ptac_cooldown_<unitId>` | 上次触发时间戳 | 10 分钟间隔 |
 | `ptac_alert_<unitId>` | `{date, btnText, ts, state:'on'\|'off'}` | **签到按钮重现提醒**(P25): 记录已签但按钮再现可签文案; state on=提醒中(每站每天至多一次, 清除置 off 当天不复写, 跨天读取时清理) |
 | `ptac_favicon_<unitId>` | 站点真实 icon URL | 路过收集(脚本跑在该站时读 `<link rel="icon">`), 面板列表图标用 |
@@ -72,29 +124,40 @@
 2. 已签到检测 —— 每次访问都执行, 不受冷却限制(检测≠点击, 无封号风险):
    按钮文案命中 / (noButtonMeansCheckedIn 站)找不到签到按钮 / (仅显式 alreadyPageCheck 的站)整页文案命中
    / (设了 landingCheckedInContent 的站)签到落地页(按钮 href 推导路径, isLandingPageOf)出现标记文本 → success
-3. 上次 pending 未确认且未过冷却、且第 2 步仍无已签证据 → failed(上次点击确实未生效)
+2.5 仅检测型站(detectOnly, 如 U2)      → skipped(需人工签到; 不点击/不写冷却/不记失败)
+3. 上次 pending 未确认且未过冷却、且第 2 步仍无已签证据 → unconfirmed(未确认, 可重试; P28 前写 failed)
 4. 冷却中(<10min)                  → skipped(冷却只防重复点击, 不阻止检测)
 5. 执行 steps                      → 点击前先写 cooldown(即使跳页丢页面, 冷却也已落盘)
-   → 点击后落盘 pending → POST_CLICK_SETTLE(0.8s) 观察:
-      · 发生 pagehide(整页跳转) → 保持 pending 返回; 落地页结算判定(已签→success)
-      · 同页存活 → successDetect 命中→success; confirmManual→pending; 否则→failed
+   · 步骤抛错: 消息含「超时|timeout」→ unconfirmed(慢/无信号, 可复检可重试)
+              其余(选择器失效/文案不符/函数步骤抛错)→ failed(需人工排查)
+   · **此处不做重试点击** —— 冷却已写入, 冷却期内绝不重复点击(用户决策)
+6. 点击后落盘 pending → confirmAfterClick(事件驱动观察 + 有界复检, 见 P28):
+   a) 观察窗 POST_CLICK_WATCH_MS(4000ms)内并发竞速「成功特征命中」/「确认发生跳转」
+      (跳转信号 = pagehide / beforeunload / **URL 变化**——SPA 软导航无 pagehide, 即 P22 的形态)
+      · 命中成功特征            → success
+      · 确认发生跳转            → 保持 pending 返回; 落地页结算判定(已签→success)
+   b) 观察窗内无结论 → 有界复检 UNCONFIRMED_RECHECK_DELAYS=[5s, 12s](**只检测, 绝不重复点击**):
+      每轮 detectAlreadyCheckedIn + detectSuccess(限时 4000ms); 命中 → success
+      预算不够或仍无结论        → unconfirmed(未确认, 可重试)
+   · confirmManual 站走旧路径: 只判「有没有跳转」(POST_CLICK_SETTLE 800ms), 其余 pending
 ```
 
 > 与 v1 关键差异：间隔 key 从「origin+pathname」改为**按 unitId**; 冷却命中时**跳过**而非 sleep 等待(批量场景需要); 「当日成功」由显式状态保证(需求: 须检测到特定成功条件才算成功)。
+> P28 差异(2026.09.18): 新增 `unconfirmed` 独立状态与单向阶梯; 步骤 3 与「点击后无结论」不再写 `failed`; 点击后观察窗由固定 800ms + 只认 pagehide 改为事件驱动 + 有界复检。
 
 ## 批量任务引擎(常驻发起页 + 后台标签串行调度)
 
 > 背景：v2026.09.07.2 的"接力导航"(单标签串行 `location.replace`)在下一站**网络层失败**(浏览器错误页无脚本运行)时会断链, 只能等 30min stale 清理。v2026.09.07.3 改为**发起页常驻 + 后台标签串行调度**, 断链被单站超时自动跳过吸收。
 
 1. 面板「批量签到」→ 候选 = enabled 且非今日成功且非未过期 pending → 建 `ptac_task`(含心跳 `hb`)。**发起页不再跳转**, 直接进入调度循环 `runBatchScheduler`。
-2. 调度循环逐个站：`GM_openInTab(unit.url + '?ptacTask=taskId', { active:false, insert:true })` 在**后台标签**打开目标站(记录打开前该站状态 `ts`)。后台标签页 `runBatchTabPage` 校验任务与页面归属后执行单站签到, **只写 GM 状态, 不推进任务、不渲染 UI**。
-3. 发起页轮询(1s)：读到该站"今日且比打开前新"的状态即结算 —— pending 先观察 **10s**(`PENDING_GRACE_MS`)等落地页改写; success/failed/skipped 直接结算。
+2. 调度循环逐个站：`GM_openInTab(unit.url + '?ptacTask=taskId', { active:false, insert:true })` 在**后台标签**打开目标站(记录打开前该站状态 `ts` 与 `openedAt`)。后台标签页 `runBatchTabPage` 校验任务与页面归属后执行单站签到, **只写 GM 状态与进度心跳, 不推进任务、不渲染 UI**。
+3. 发起页轮询(1s)：读到该站"今日且比打开前新"的状态即结算 —— pending 先观察 **10s**(`PENDING_GRACE_MS`)等落地页改写; success/failed/skipped/**unconfirmed** 直接结算。**进度心跳 `ptac_progress_<uid>`(P28)**: 后台标签每阶段写一次(阶段 + 时间戳), 调度页据此显示实时阶段(`等待签到按钮`/`已点击签到按钮`/`确认签到结果`…)与已用秒数; 若有新鲜心跳(3s 内)则**延后 pending 结算**, 避免把「正在确认中」误判为死站。
 4. **落地页结算**: 后台标签点击签到触发整页跳转(如 NexusPHP attendance.php, URL 无 ptacTask)后, 落地页以"普通访问"加载: 若任务在调度中(心跳新鲜)且当前页命中任务当前 unit → `settleUnitOnLandingPage` **只检测已签并写 success(不推进任务)**, 由调度页轮询读到后推进; 未命中已签不改写(保留 pending 观察)。
-5. **超时自动跳过(断链兜底)**: 单站调度窗口 50s(`PER_UNIT_TIMEOUT_MS`)内始终无回写(站点无法访问/页面加载失败/脚本未运行)→ 写 `failed('站点暂时无法访问或超时, 已跳过')` 并自动推进下一站 —— 被跳过的站记 failed, 下次批量天然重试。
+5. **超时自动跳过(断链兜底)**: 单站调度窗口 60s(`PER_UNIT_TIMEOUT_MS`)内始终无回写(站点无法访问/页面加载失败/脚本未运行)→ 写 `unconfirmed('站点暂时无法访问或超时, 已跳过')` 并自动推进下一站 —— 被跳过的站记未确认, 下次批量天然重试。**P28 提前失败检测**: 若 `openedAt` 起 `NO_PROGRESS_SKIP_MS(20s)` 内**零进度心跳**(死站/错误页/脚本没跑起来), 直接判定死站并推进 —— 死站耗时从 60s 降到 ~20s。打开后台标签失败(`GM_openInTab` 抛错)同样写 `unconfirmed`。
 6. 每站处理完按 `unit.batchDelayMs` 倒计时(芯片显示, 可点停止取消); 后台标签结算后即 `tab.close()` 关闭。
 7. 全部处理完：清任务 → **停在发起页弹出完成面板**; 可随时取消(单站窗口内亦可)。
 8. **中断恢复**: 调度页被关/崩溃后, 心跳 `hb` 15s(`HEARTBEAT_FRESH_MS`)内不再刷新; 30min(`TASK_STALE_MS`)内任意匹配页检测到过期心跳 → 横幅「检测到中断的批量任务(第 n/N 站)」+「恢复批量」按钮一键续跑(不自动重签, 防误触发)。30min 后视为 stale 自动清理。
-9. 安全与兜底: 任务只含 unitId 列表(不含任何凭据); 打开的后台标签 URL 均来自配置白名单; 单 unit 执行有 25s 整流程超时保护; 调度中其它页面命中任务当前站点时只结算/跳过被动点击, 防并行重复触发。
+9. 安全与兜底: 任务只含 unitId 列表(不含任何凭据); 打开的后台标签 URL 均来自配置白名单; 单 unit 执行有 **40s 整流程超时保护**(`UNIT_TOTAL_TIMEOUT`, 2026.09.18 由 25s 提高; 超时归 `unconfirmed` 而非 `failed`)与**内部预算 deadline**(`setRunDeadline`, 使内部等待在硬超时前自行收敛落盘); 调度中其它页面命中任务当前站点时只结算/跳过被动点击, 防并行重复触发。
 10. 实现要点: `GM_openInTab` 需 `@grant`(更新脚本时 Tampermonkey 会弹新增权限确认, 须接受); 后台标签为后续打开, 无用户手势, `window.open` 会被弹窗拦截故必须用 `GM_openInTab`。
 
 ## FAB / 面板 UI
@@ -174,9 +237,10 @@ boot()
 │       │   ├─ 当前页命中任务当前 unit(跳页落地页)→ settleUnitOnLandingPage 只检测写 success, 不推进
 │       │   └─ 否则 → 被动模式(跳过任务当前位置站点, 防并行)
 │       ├─ 有任务但心跳过期(调度者已离开)→ offerBatchResume: 横幅提示+恢复按钮(可选点); 当前页被动签到(跳过当前位置站)
-│       └─ 无任务 → 被动模式: 命中 unit 逐个 runUnit(25s 整流程超时保护)
-└─ 发起页调度循环 runBatchScheduler: 逐个 GM_openInTab 后台标签 → 轮询 GM 状态(1s)
-    → pending 观察 10s / success·failed·skipped 即结算 → 50s 无回写写 failed 自动跳过 → 站间缓冲
+│       └─ 无任务 → 被动模式: 命中 unit 逐个 runUnit(40s 整流程超时保护 + 内部预算 deadline)
+└─ 发起页调度循环 runBatchScheduler: 逐个 GM_openInTab 后台标签 → 轮询 GM 状态(1s) + 读进度心跳
+    → pending 观察 10s(有新鲜心跳则延后) / success·failed·skipped·unconfirmed 即结算
+    → 20s 零进度提前判死站 / 60s 无回写写 unconfirmed 自动跳过 → 站间缓冲
     → 全部完成停在发起页弹完成面板; 心跳 hb 节流(4s)刷新
 ```
 
@@ -205,9 +269,12 @@ boot()
 19. **重现检测通用化(.26 引擎重构, 待实测)**: 引擎按钮重现检测从「纯按钮可见文本翻转」(P25)重构为**载体无关入口状态信号** `deriveStateSignals`/`readEntryState`——文本站由旧字段自动翻译(**行为应逐位一致, 零回归**), NodeLoc 等 no-text 属性/class 态站由显式 `stateSignals` 纳入。待实测: ① 文本站回归抽查(任意 2-3 个: 已签态反复刷新不误报重现; 模拟按钮重现 → 降级 suspect + 提醒; 补签后恢复)——旧行为不变; ② NodeLoc 首次获得重现通道: 已签当日若按钮**又呈可签态**(title=每日签到)→ 应降级 suspect + toast/高亮/横条; 若按钮仍呈已签(checked-in/title 已签到)→ 保持已成功零打扰; ③ NodeLoc 补签恢复: 人工补签后再访问 → 状态从 suspect 恢复 success + 提醒消除; ④ MTeam 系六站/HHCLUB 仍无重现语义(无入口/无已签基准), 不应出现提醒; ⑤ 蜂巢(反向常驻)、BTSchool(noButton)不受影响(回归抽查)。
 20. **行内单站强制重试(.28, 待实测)**: ① 某站今日 failed(冷却中)→ 面板该站 badge「失败」hover 变「↻ 重试」; 点击 → 前台新标签打开且**不自动关闭**, 该站执行一次强制签到; ② 重试成功 → 状态变已成功, 原面板/新标签面板均转绿, badge 重试入口消失; 重试仍失败 → 保持失败 + 进入新一轮冷却, 可再次重试; ③ 同页连点(8s 防抖)与同站双标签并发(30s 锁)→ 仅执行一次, 后者 toast「已在进行中」; ④ 重试页停留后按 F5/刷新 → 不再重复强点(URL 参数已剥, 走普通访问, 冷却中则跳过); ⑤ 跳转型站点(点击签到跳落地页)→ 落地页自动结算, 不产生第二个重试页; ⑥ 批量调度进行中 → 该站行内重试被拒(批量优先); ⑦ suspect(失败-待确认)/已成功/待确认站 → 无重试入口; ⑧ detectOnly 站(U2)与 MTeam 系无按钮站 → 不出现重试入口。
 
+21. **慢站误判修复 + 预算不变式 + 结果分类(P28, 2026.09.18 .1, 待实测)**: ① **冷却站不再被改写**——被动访问一个冷却中的站, 记录 `skipped(冷却中…)`, 40 秒后该站当日状态应**保持不变**(P28 前会在 25s 后被改成 `failed(整流程超时)`); ② 同理 U2(`detect_only`)、suspect(失败-待确认)访问后 40s 状态不被改写, suspect **不**被翻成 failed(否则会被「强制批量」重新纳入并重复点击); ③ **慢加载不再误判**——人为让某站元素 8s 后才出现(或 DevTools 网络限速), 签到应记 success 或至少 `unconfirmed`, 不再秒判 failed; ④ **面板新状态**: `unconfirmed` 显示青色「未确认」徽章, 汇总行出现「· N 未确认」, **不计入失败数**; 今日 failed 或 unconfirmed 的站 badge 悬停均可「↻ 重试」; ⑤ **预算自检**: 打开任意匹配站 console 应有一行 `预算自检: n/n 通过; 最紧 <站> …/40000ms(余量 …ms)`; 若某站越界或有 `function` 步骤没写 `budgetMs`, 应打出全量表格 + 红色 error(可用 `node tests/check-ptac-budget.js` 复核); ⑥ **死站加速**: 批量中模拟某站断网 → 应在 ~20s(`NO_PROGRESS_SKIP_MS`)内被判定并跳到下一站(不再是 60s); ⑦ **进度可见**: 批量进行中面板应显示当前站阶段(`等待签到按钮`/`已点击签到按钮`/`确认签到结果`)与已用秒数; ⑧ **回归抽查**: 跨天守卫(P23)、P25 重现降级/恢复、P27 文本站信号等价性行为不变。
+
 ## 修改与扩展指南
 
 1. **新增简单站**：`SITES` 加单站对象 + `@match` 域名; 参考同类型站复制字段。
 2. **贴吧加吧**：`tieba` group 的 `units` 加一条(改 id/name/url 与 kw), `@match` 无需改。
-3. **失效排查**：先看 console 日志(`未匹配`→match; `步骤失败`→选择器/文案; `未检测到成功特征`→successDetect/文案; `整流程超时`→步骤卡死)。
-4. **改动后**：递增版本号, 更新本文档与站点表。
+3. **新增/修改 `function` 步骤或 `alreadyCheck`**：**必须**同时声明 `budgetMs` / `alreadyCheckBudgetMs`(同步判定写 `0`), 否则预算自检报 UNKNOWN(P28)。
+4. **失效排查**：先看 console 日志(`未匹配`→match; `步骤失败`→选择器/文案; `未检测到成功特征`→successDetect/文案; `整流程超时`→步骤卡死; `状态写入被拒(单向阶梯)`→P28 阶梯拦截, 检查是否有代码在写不合法的状态迁移; `预算自检未通过`→该站超时预算越界)。
+5. **改动后**：① 递增版本号; ② 跑 `node tests/check-ptac-budget.js`(必须全绿); ③ 更新本文档与站点表(含上面「各 unit 实测预算」表)。
