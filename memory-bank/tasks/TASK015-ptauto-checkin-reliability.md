@@ -258,4 +258,5 @@ T14 场景矩阵（每项都对应一个已发现缺陷，防止重构回归）�
 - `node --check` 语法通过；静态校验器全部不变式通过（A 6 项 / B 6 项 / C 2 项 / D 2 项）；预算自检 32 站全通过，最紧 HHCLUB 34400/40000ms。
 - 实施中发现并自纠 5 处设计缺陷：`setProgress` 同阶段不写导致心跳 `ts` 陈旧（改为每次必写）、`wait` 步骤 `Math.min` 方向错把 3000ms 压到 1000ms 下限、`func` 检测器复检需 `maxMs` 限时否则吃光预算、阶梯拒绝写入后调度页结算与存储不一致（改为写入后回读）、`window.__ptacAuditBudgets` 调试入口违反 `conventions.md` §8.2（已移除，改为启动打一行摘要 + 违规打全量表格）。
 - 知识库同步：新增 P28；`scripts/PTAutoCheckIn.md` 新增「超时预算与状态阶梯」章节 + 各 unit 预算表 + 校准项 21；`systemPatterns.md`/`conventions.md`/`tasks/_index.md`/`activeContext.md`/`progress.md` 同步。
-- **未提交**（遵守 `conventions.md` §0.2）：待用户审核 + 实测校准后由用户决定提交。
+- **已提交**（用户授权「提交」）：`ebb06bb`（分支 `dev`，未 push）。提交前 `@version` 已为 `2026.09.18.1`。
+- **待真实站点实测校准（校准项 21，8 项）**——静态自检已全绿，但引擎行为仍需在浏览器验证；发现问题再迭代提交。

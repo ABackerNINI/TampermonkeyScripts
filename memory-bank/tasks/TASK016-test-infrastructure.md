@@ -79,5 +79,5 @@
 - 新增 `tests/run-all.js`（零依赖运行器）与 `tests/README.md`（约定 + 技法 + 候选清单）。
 - 验证：`node tests/run-all.js` → 1 个测试通过（exit 0）；`--list` 正确；**故意造一个失败测试验证运行器的失败路径**（打印子进程输出 + exit 1 + 汇总列出失败项）后删除。
 - 知识库同步：`conventions.md` §8.1（测试统一放 `tests/`、零依赖、子目录约定）/§7（跑 `run-all.js`）/§10（自检步骤）、`techContext.md`（测试条目 + 开发环境）、`projectbrief.md`（仓库结构块）、`README.md`（快速提醒 9 + 如何阅读）。
-- **未提交**（`conventions.md` §0.2）：待用户审核。
+- **已提交**（用户授权「提交」）：`2b31377`（分支 `dev`，未 push）。
 - **注**：`src/PTAutoCheckIn.user.js` 仅改动**注释中的路径**（`scripts/` → `tests/`），属「纯注释」豁免，故 `@version` 仍为 `2026.09.18.1` 未再递增。
