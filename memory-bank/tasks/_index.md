@@ -13,7 +13,7 @@
 
 ## Pending（待办）
 
-- [TASK017] PTAutoCheckIn 本地仿真站与安全测试矩阵 — **`tests/sim/` 已建成，11 个用例随 `node tests/run-all.js` 全绿（13/13）**；已修 P29 面板空值崩溃 + S03 favicon 跨站信标 + S05 面板可被打穿 + S07 `?ptacRetry` 强制动作 + S09a 站外伪造入口（`@version` 2026.09.18.4，**待用户审核后提交**）；残留 S09b / S13 需真站回归。见 `TASK017-ptac-sim-site-security.md` 与 `pitfalls.md` P29/P30
+- [TASK017] PTAutoCheckIn 本地仿真站与安全测试矩阵 — **`tests/sim/` 已建成，11 个用例随 `node tests/run-all.js` 全绿（13/13）**；已修 P29 面板空值崩溃 + S03 favicon 跨站信标 + S05 面板可被打穿 + S07 `?ptacRetry` 强制动作 + S09a 站外伪造入口（`@version` 2026.09.18.4，**已提交 `e2d5f52`**）；残留 S09b / S13 需真站回归。见 `TASK017-ptac-sim-site-security.md` 与 `pitfalls.md` P29/P30
 - [TASK004] 签到站点覆盖扩展 — 待办（新增/校准站点）
 - [TASK005] BTSchoolHelper 快捷键增强（N/B 键 + 行高亮）— 待办（依赖 TASK003）
 - [TASK006] BilibiliEnterFullscreen 适配加固（MutationObserver）— 待办
