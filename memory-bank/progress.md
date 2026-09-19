@@ -147,6 +147,11 @@
     `git -c "http.https://github.com.proxy=" ...`（值给空即禁用）。`_sync-refs.js` 没做这层处理，故对 origin 会失败。
   - 推 Gitee 时曾遇 `RPC failed; curl 55 Send failure: Connection was reset`（挂起约 5.5 分钟后被重置）；仓库仅 4.4M、最大对象 210KB，**非体积问题**，属链路抖动。加 `http.version=HTTP/1.1` + `http.postBuffer=524288000` + `http.lowSpeedLimit=0` 后一次成功。Gitee 的 SSH 通道**未配公钥**（`Permission denied (publickey)`），只能用 HTTPS。
   - 本地跟踪引用 `refs/remotes/gitee/*` 由 `.workbuddy-ai/_sync-refs.js` 直接写 loose ref 落盘（本环境 `git fetch` 对 `refs/remotes/**` 的写入会静默丢失）。
+- **未 push 书账（2026-09-19 实测）**：`git rev-list --count dev --not gitee/dev` = **2**，
+  即只有 **`d56ffbb`（HDHomeUI .5~.10 换胶片墙，19 文件 +1423/-440）** 与 **`57034cd`（文档登记）**
+  未推送；`4e01743` / `66f48df` 已在远端（`git ls-remote gitee dev` = `66f48df`）。
+  ⚠️ 书账必须**用命令复核**，别凭印象写 —— 这次凭记忆写成 5 个，实测才对上（前 3 个早推过了）。
+  ⚠️ 推 gitee 用 HTTPS + `http.version=HTTP/1.1`；推 GitHub 记得先禁用那条失效代理（见上）。
 - 其余脚本功能稳定，处于增量维护状态。
 
 ## 待办 / 待修（Known Bugs & Left to Build）
