@@ -28,7 +28,7 @@
 配套仿真剧本 `tests/lib/sim/hdhome-ui-page.js`（**结构化复刻、零私有数据**，6 个变体）与
 `tests/lib/hdui-help.js`；`harness.withSim(fn, { scriptPath })` 由此支持测任意脚本。
 实施中由测试挖出**一处真实缺陷**：`validateContract` 只判 `map` 缺失，漏了「列齐全但行列数不符」——已修。
-**`.1` 已提交 `13266e0`、`.2` 已提交 `1b38510`**（分支 `dev`，**均已推 gitee**；GitHub 仍未推）。
+**`.1` 已提交 `13266e0`、`.2` 已提交 `1b38510`**（分支 `dev`，**gitee 与 GitHub 均已推**：GitHub 上是新建的同名分支 `dev`，公开 `master` 未动）。
 另用**真实页面**（已脱敏整页）离线核验过契约判定：
 12 列全部识别、数据行 12 格、4 个 A 级锚点齐全 ⇒ 仿真复刻与现实一致（脚本在 `.workbuddy-ai/`，不入库）。
 

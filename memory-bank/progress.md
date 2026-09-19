@@ -50,7 +50,11 @@
   **已修 5 处**（`@version` 2026.09.18.2 → **2026.09.18.4**，见 P30），残留 2 项（S09b / S13）需真站回归后定。
   **已提交**（`e2d5f52`，分支 `dev`）。
 - **分支 `dev` 共 12 个功能提交，2026-09-19 已全部推送到 `gitee` 的新分支 `dev`**（`ebb06bb` / `2b31377` / `8036f44` / `e2d5f52` / `18e0824` / `0bac142` / `d63fe0c` / `ab9701a` / `80e0f37` / **`13266e0`（HDHomeUI）** / **`b091e16`（铁律 5）** / **`1b38510`（HDHomeUI 安全复验 4 项改进）**；推送时 `dev` HEAD = `1b38510`，`git rev-list --count dev --not gitee/dev` = 0）。
-  - **GitHub（`origin`）仍未推送** —— 机械数 `git rev-list --count dev --not origin/master` 仍为 13，按仓库惯例**不含状态登记提交本身**（`9283295` / `6cd436b` / `854ea48` / `a0fa7cb`）。GitHub 走本地代理 `http://127.0.0.1:10808`，代理未开时 `git ls-remote origin` 直接超时。
+  - **GitHub（`origin`）已于 2026-09-19 推送**：按「推成同名新分支」的惯例新建 **`dev` 分支**（`97417cd`），
+    **公开 `master` 未动**（仍 `322d257`）。`refs/remotes/origin/*` 由 push 自身更新，`_sync-refs.js` 因代理失效取不到值。
+  - ⚠️ **全局那条 `http.https://github.com.proxy=http://127.0.0.1:10808` 当前是死的**：直连 `curl https://github.com`
+    0.36s/200，走代理 `000`（无人监听）。凡是要连 GitHub 的命令都得临时禁用：
+    `git -c "http.https://github.com.proxy=" ...`（值给空即禁用）。`_sync-refs.js` 没做这层处理，故对 origin 会失败。
   - 推 Gitee 时曾遇 `RPC failed; curl 55 Send failure: Connection was reset`（挂起约 5.5 分钟后被重置）；仓库仅 4.4M、最大对象 210KB，**非体积问题**，属链路抖动。加 `http.version=HTTP/1.1` + `http.postBuffer=524288000` + `http.lowSpeedLimit=0` 后一次成功。Gitee 的 SSH 通道**未配公钥**（`Permission denied (publickey)`），只能用 HTTPS。
   - 本地跟踪引用 `refs/remotes/gitee/*` 由 `.workbuddy-ai/_sync-refs.js` 直接写 loose ref 落盘（本环境 `git fetch` 对 `refs/remotes/**` 的写入会静默丢失）。
 - 其余脚本功能稳定，处于增量维护状态。
