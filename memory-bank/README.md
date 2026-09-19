@@ -41,7 +41,7 @@ flowchart TD
 | [scripts/BTSchoolHelper.md](./scripts/BTSchoolHelper.md) | BTSchool 种子列表高亮 + 快捷键滚动脚本 |
 | [scripts/BilibiliEnterFullscreen.md](./scripts/BilibiliEnterFullscreen.md) | B 站 Enter 键全屏切换脚本 |
 | [scripts/EnhanceVisitedLinks.md](./scripts/EnhanceVisitedLinks.md) | 全局已访问链接样式增强脚本 |
-| [scripts/HDHomeUI.md](./scripts/HDHomeUI.md) | HDHome 界面主题套件（5 套可切换 UI，纯样式层保功能，结构异常回退默认） |
+| [scripts/HDHomeUI.md](./scripts/HDHomeUI.md) | HDHome 界面主题「胶片墙」（纯样式层保功能，可切回原站默认，结构异常回退默认） |
 
 ## 如何阅读
 
@@ -69,7 +69,7 @@ flowchart TD
    issue、测试夹具、示例 HTML）；只描述结构、值脱敏为 `***`。详见 `conventions.md` 第 0.5 节、`pitfalls.md` P32。
 10. **HDHomeUI 换肤铁律（2026-09-19 起）**——它是**纯样式层**：不增删/移动/克隆站内节点、不挂事件、不改 `href`，
     站内功能靠「功能基线快照 + hit-test」两道仿真断言守住；页面结构不符时**必须提示并回退默认 UI**，
-    禁止带错上妆。新增主题必须有**不同的布局骨架**（不能只换配色），由 `sim-hdui-theme-switch.js` 钉死。
+    禁止带错上妆。主题必须有**可辨识的布局骨架**（不能只换配色），由 `sim-hdui-theme-switch.js` 逐条钉死。
     **入口必须内嵌**——量 `ul#mainmenu` 末尾空档摆成导航栏的小文字钮 `界面 · <主题名> ▾`，禁用 fixed 悬浮 FAB
     （`sim-hdui-inline-dock.js` 钉死「position:absolute + 与菜单垂直相交 + 右下角不被占用 + 换主题重摆」），
     重摆入口不整体重写 `cssText`（会清掉 `--ui-*` 配色变量）。

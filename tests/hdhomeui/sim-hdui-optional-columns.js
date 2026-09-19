@@ -75,7 +75,7 @@ function bannerVisible(page) {
     return page.eval('return !!document.getElementById("hdui-alert");');
 }
 
-/** 主题是否真的接管了某一格: 片库索引给 A 值格挂了 ::before 标签 "A" */
+/** 某一格的 ::before 内容(旧主题用它在数据格上挂「标签」; 胶片墙把栏名放在表头, 数据格不挂) */
 function cellBefore(page, index) {
     return page.eval([
         'const t = document.getElementById("torrenttable");',
@@ -100,10 +100,10 @@ function shape(page) {
 runCase('HDHomeUI · A/A·GB 由外部脚本注入(有/没有/晚到都能上妆)', async function () {
     await withSim(async function (sim) {
         // ---- 1. 只有 10 列: 必须照常上妆 ----
-        sim.seed({ 'hdui.theme': 'reel' });
+        sim.seed({ 'hdui.theme': 'film' });
         let page = await H.open(sim, 'hdhome-ui-nocalc');
         await H.waitState(page, 'applied');
-        assertEq(await H.themeOf(page), 'reel', '外部脚本没注入 A/A·GB 时仍然上妆');
+        assertEq(await H.themeOf(page), 'film', '外部脚本没注入 A/A·GB 时仍然上妆');
         assertEq(await bannerVisible(page), false, '不弹结构错误横幅(缺的是可选列)');
 
         let s = await shape(page);
@@ -111,15 +111,18 @@ runCase('HDHomeUI · A/A·GB 由外部脚本注入(有/没有/晚到都能上妆
         assertEq(s.head, 10, '表头 10 列, 实际 ' + s.head);
         assertEq(s.row, 10, '数据行 10 格, 实际 ' + s.row);
 
-        // 列映射必须跟着变: 10 列时「发布者」是第 10 格, 片库索引给它 text-align:right
+        // 列映射必须跟着变: 10 列时「发布者」是第 10 格, 胶片墙给它 11.5px + 省略号。
+        // 用"吃到主题样式"来验证映射 —— 若 colMap 没跟着 10 列走, nth-child 就指错了格子, 样式落空。
         const last = await cellBefore(page, 9);
         assert(!!last, '取到最后一格(发布者)');
-        const align = await page.eval([
+        const st = await page.eval([
             'const t = document.getElementById("torrenttable");',
             'const c = t.tBodies[0].rows[1].cells[9];',
-            'return getComputedStyle(c).textAlign;'
+            'const cs = getComputedStyle(c);',
+            'return { fs: cs.fontSize, ell: cs.textOverflow };'
         ].join('\n'));
-        assertEq(align, 'right', '发布者仍被摆到尾注区(列映射跟随 10 列), 实际 ' + align);
+        assertEq(st.fs, '11.5px', '发布者吃到胶片墙的排版(列映射跟随 10 列), 实际 ' + st.fs);
+        assertEq(st.ell, 'ellipsis', '发布者溢出用省略号, 实际 ' + st.ell);
         await page.close();
 
         // ---- 2. 之后外部脚本补进来: 自动重摆, 新格子要吃到主题样式 ----
@@ -132,19 +135,21 @@ runCase('HDHomeUI · A/A·GB 由外部脚本注入(有/没有/晚到都能上妆
 
         assertEq(await page.eval('return document.documentElement.dataset.hduiState;'), 'applied',
             '补列后仍处于上妆态(没有回退)');
-        assertEq(await H.themeOf(page), 'reel', '补列后主题不变');
+        assertEq(await H.themeOf(page), 'film', '补列后主题不变');
         assertEq(await bannerVisible(page), false, '补列过程没有误弹横幅');
 
-        // 关键: 补进来的 A 值格要吃到主题给它挂的 ::before 标签 —— 证明 colMap 重算过
+        // 关键: 补进来的 A 值格要吃到胶片墙给数值列的排版 —— 证明 colMap 重算过。
+        // (胶片墙把栏名放在表头, 数据格上不挂 ::before 标签, 所以改看对齐 / 字号 / 字族)
         const aCell = await page.eval([
             'const c = document.querySelector("#torrenttable [data-calc-a]");',
             'if (!c) return null;',
-            'return { before: getComputedStyle(c, "::before").content,',
-            '  font: getComputedStyle(c).fontFamily };'
+            'const cs = getComputedStyle(c);',
+            'return { align: cs.textAlign, fs: cs.fontSize, font: cs.fontFamily };'
         ].join('\n'));
         assert(!!aCell, '补进来的 A 值格存在');
-        assert(/A/.test(aCell.before), '补进来的 A 值格已吃到主题样式(::before=' + aCell.before + ')');
-        assert(/monospace|Consolas/i.test(aCell.font), 'A 值用等宽数字, 实际 ' + aCell.font);
+        assertEq(aCell.align, 'right', 'A 值格吃到了数值列的右对齐(列映射重算过)');
+        assertEq(aCell.fs, '11.5px', 'A 值格吃到胶片墙的字号, 实际 ' + aCell.fs);
+        assert(/Bahnschrift|DIN|Consolas/i.test(aCell.font), 'A 值用等宽数字, 实际 ' + aCell.font);
         await page.close();
 
         // ---- 3. 反过来撤走两列: 同样不回退 ----
@@ -156,7 +161,7 @@ runCase('HDHomeUI · A/A·GB 由外部脚本注入(有/没有/晚到都能上妆
         assertEq(await page.eval('return document.documentElement.dataset.hduiState;'), 'applied',
             '撤走两列后仍上妆');
         assertEq(await bannerVisible(page), false, '撤列不弹横幅');
-        assertEq(await H.themeOf(page), 'reel', '撤列后主题不变');
+        assertEq(await H.themeOf(page), 'film', '撤列后主题不变');
         await page.close();
 
         // ---- 4. 只补表头(补到一半): 不得立刻弹横幅, 等窗口内自行恢复 ----
@@ -167,7 +172,7 @@ runCase('HDHomeUI · A/A·GB 由外部脚本注入(有/没有/晚到都能上妆
         assertEq(await bannerVisible(page), false, '补列补到一半时**不**立刻弹横幅(有等待窗口)');
         assertEq(await page.eval('return document.documentElement.dataset.hduiState;'), 'pending',
             '补到一半时处于「等结构就绪」窗口(不是上妆也不是回退)');
-        assertEq(await H.themeOf(page), 'reel', '等窗口期间保留当前主题, 不卸妆闪一下');
+        assertEq(await H.themeOf(page), 'film', '等窗口期间保留当前主题, 不卸妆闪一下');
         // 补齐数据行后应自行恢复
         await page.eval(INJECT_ROW_ONLY);
         await new Promise(function (r) { setTimeout(r, 2500); });

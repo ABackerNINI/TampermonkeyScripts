@@ -24,7 +24,7 @@ function rssHits(sim) {
 
 runCase('HDHomeUI · 危险操作防护', async function () {
     await withSim(async function (sim) {
-        sim.seed({ 'hdui.theme': 'reel' });
+        sim.seed({ 'hdui.theme': 'film' });
         const page = await H.open(sim, 'hdhome-ui');
         await H.waitState(page, 'applied');
 

@@ -2,8 +2,8 @@
 // @name         HDHomeUI
 // @name:zh-CN   HDHome 界面主题套件
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.19.4
-// @description  HDHome 界面主题套件: 5 套可切换 UI(片库索引/电传纸带/大开本/瑞士网格/播控台)。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); A/A·GB 两列由其它脚本注入, 有或没有都能上妆、补进来会自动重摆; 页面结构异常时先等结构就绪, 超时才提示并回退默认界面。
+// @version      2026.09.19.10
+// @description  HDHome 界面主题: 胶片墙(齿孔片边 · 帧号 · 做种金), 可一键切回原站默认。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); A/A·GB 两列由其它脚本注入, 有或没有都能上妆、补进来会自动重摆; 页面结构异常时先等结构就绪, 超时才提示并回退默认界面。
 // @author       ABacker
 // @license      GNU GPL-3.0
 // @match        *://*.hdhome.org/*
@@ -19,7 +19,8 @@
     const ScriptName = 'HDHomeUI';
     const STORE_THEME = 'hdui.theme';
     const STORE_ERR = 'hdui.lastError';
-    const DEFAULT_ID = 'default';
+    const DEFAULT_ID = 'default';   // 「原站默认」: 不上妆, 用户可主动切到它
+    const FIRST_ID = 'film';        // 首次安装(存储里没有值)时默认上妆的主题
     const STYLE_ID = 'hdui-css';
     const BOOT_ID = 'hdui-boot';
     const ALERT_ID = 'hdui-alert';
@@ -47,6 +48,13 @@
     // 只等这一个码: E_COLUMN_UNKNOWN / E_ANCHOR_MISSING 都是"必需的东西没了",
     // 那是真坏了, 等也没用(拖 8 秒才报错只会让人以为脚本卡死), 直接回退。
     const STRUCT_CODES = Object.freeze(['ROW_CELL_COUNT_MISMATCH']);
+    // 配置类错误: 不是页面结构坏了, 是 GM 存储里的值失效(主题被删 / 被手改成乱值)。
+    // 与结构类分开 —— 结构类要「等窗口」, 配置类等也没用; 横幅措辞也不一样(见 showAlert)。
+    const CONFIG_CODES = Object.freeze(['E_BAD_THEME']);
+    // 2026.09.19.7 移除的旧 5 套。存储里还留着这些 id 的用户, 自动迁到胶片墙 ——
+    // 他们本来就是「选过主题、想用主题」的人, 不该因为主题被删就退回无样式。
+    const LEGACY_THEMES = Object.freeze(['reel', 'tape', 'sheet', 'swiss', 'signal']);
+    const LEGACY_MIGRATE_TO = 'film';
     const PENDING_FIRST_MS = 8000;   // 首装/刷新: 那个脚本可能压根还没跑
     const PENDING_LATE_MS = 4000;    // 已上妆后结构变化: 大概率是它正在补列
     const PENDING_TICK_MS = 700;
@@ -59,7 +67,7 @@
         { sel: 'ul#mainmenu', label: '主导航 ul#mainmenu' }
     ]);
 
-    // 类别色(按类别图标 class 前缀取色, 供卡片色条 / 播控台色点使用)
+    // 类别色(按类别图标 class 前缀取色, 供 --hdui-cat 写入行上, 主题可自行取用)
     const CAT_COLORS = Object.freeze([
         ['c_movie', '#8a7f6d'], ['c_movies', '#8a7f6d'],
         ['c_tvseries', '#5f7c96'], ['c_tv', '#5f7c96'],
@@ -70,6 +78,185 @@
         ['c_other', '#8a8a8a']
     ]);
     const CAT_FALLBACK = '#8a8a8a';
+
+    // ==================================================================
+    // 图标: 站内图片位一律换成内联 SVG(data URI), 实心 + 语义色
+    //   来源: .workbuddy-ai/hdui-mock/film.html —— 已在 96 / 48 / 24 / 16px 四档对照下定稿,
+    //         语义与形状都经过多轮用户选型(详见 memory-bank/pitfalls.md P38~P41)。
+    //   铁律: 只改 CSS 的 content / background-image, 不增删站点 DOM —— 保持纯样式层。
+    // ==================================================================
+    const ICONS = Object.freeze({
+        /* —— 类别 7 个 —— */
+        movie: '<path fill-rule="evenodd" d="M5.6 3h12.8A2.6 2.6 0 0 1 21 5.6v12.8A2.6 2.6 0 0 1 18.4 21H5.6A2.6 2.6 0 0 1 3 18.4V5.6A2.6 2.6 0 0 1 5.6 3zm1.9 3.4v11.2h1.7V6.4zm8.5 0v11.2h1.7V6.4z"/>',
+        tv: '<path d="M4.6 6.4h14.8A2.6 2.6 0 0 1 22 9v7.6A2.6 2.6 0 0 1 19.4 19H4.6A2.6 2.6 0 0 1 2 16.6V9a2.6 2.6 0 0 1 2.6-2.6z"/><path d="M8.4 2.6h7.2l-1.4 3.2H9.8z"/>',
+        music: '<circle cx="7.3" cy="17.4" r="3.3"/><circle cx="17.6" cy="15.7" r="3.3"/>'
+            + '<rect x="9.4" y="6" width="2.3" height="11.6" rx=".4"/><rect x="19.7" y="4.3" width="2.3" height="11.6" rx=".4"/>'
+            + '<path d="M9.4 6.1l12.6-1.9v2.5L9.4 8.6z"/>',
+        doc: '<path d="M13.6 2.6H6.9A1.9 1.9 0 0 0 5 4.5v15A1.9 1.9 0 0 0 6.9 21.4h10.2A1.9 1.9 0 0 0 19 19.5V8z"/>'
+            + '<path d="M19 8.3h-5.1V3z" fill-opacity=".5"/>'
+            + '<rect x="8.2" y="11.9" width="7.6" height="1.8" rx=".9" fill-opacity=".5"/>'
+            + '<rect x="8.2" y="15.6" width="5.1" height="1.8" rx=".9" fill-opacity=".5"/>',
+        anime: '<path d="M12 2.4l2.75 5.9 6.35.72-4.75 4.32 1.28 6.32L12 16.6l-5.63 3.06 1.28-6.32L3 9.02l6.35-.72z"/>',
+        sport: '<path fill-rule="evenodd" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M4.2 8.4h15.6v2H4.2z M4.2 13.6h15.6v2H4.2z"/>',
+        other: '<rect x="4" y="6.3" width="16" height="2.5" rx="1.25"/><rect x="4" y="10.75" width="16" height="2.5" rx="1.25"/>'
+            + '<rect x="4" y="15.2" width="11" height="2.5" rx="1.25"/>',
+        /* —— 表头指标 8 个 —— */
+        /* 评论: 三个点必须是 evenodd 镂空 —— 同色图形叠画等于看不见(pitfalls P35) */
+        comment: '<path fill-rule="evenodd" d="M2.5 6.5A2.5 2.5 0 0 1 5 4h14a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 19 17H9.5L5 21v-4H5A2.5 2.5 0 0 1 2.5 14.5z'
+            + ' M4.2 10.4a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0-4.8 0z'
+            + ' M9.7 10.4a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0-4.8 0z'
+            + ' M15.2 10.4a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0-4.8 0z"/>',
+        clock: '<path fill-rule="evenodd" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M11 6.6h2v5.3l3.5 2.1-.9 1.6-4.6-2.8z"/>',
+        /* 大小 = 硬盘: 卡尺/表盘/柱图都被读成别的语义 */
+        size: '<path fill-rule="evenodd" d="M4.5 5.5h15a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z M6.2 9.6h7.2v3.2H6.2z"/>'
+            + '<circle cx="17.2" cy="15.4" r="1.5"/>',
+        up: '<path d="M12 3.6l7.2 7.2h-4.4v9.6H9.2v-9.6H4.8z"/>',
+        down: '<path d="M12 20.4L4.8 13.2h4.4V3.6h5.6v9.6h4.4z"/>',
+        check: '<path d="M20.4 6.3L9.9 16.8 4.2 11.1l1.85-1.85L9.9 13.1l8.65-8.65z"/>',
+        user: '<circle cx="12" cy="8" r="4"/><path d="M4.6 20.6c0-4.1 3.3-7.4 7.4-7.4s7.4 3.3 7.4 7.4z"/>',
+        rss: '<circle cx="5.8" cy="18.2" r="2.3"/>'
+            + '<path d="M3.5 10.6a10.9 10.9 0 0 1 10.9 10.9h-3.3a7.6 7.6 0 0 0-7.6-7.6z"/>'
+            + '<path d="M3.5 4.6a16.9 16.9 0 0 1 16.9 16.9h-3.3A13.6 13.6 0 0 0 3.5 7.9z"/>',
+        /* —— 导航 16 个 —— */
+        home: '<path d="M12 2.5l9 8v11.5h-5.8V15H8.8v7H3V10.5z"/>',
+        forum: '<path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h13A2.5 2.5 0 0 1 21 5.5v9a2.5 2.5 0 0 1-2.5 2.5H10L4 21v-4a2.5 2.5 0 0 1-1-2z"/>',
+        /* 种子 = 一叠碟片; 磁铁/光盘都容易读错 */
+        discs: '<path d="M3.8 17v2.6c0 1.55 3.67 2.8 8.2 2.8s8.2-1.25 8.2-2.8V17z"/><ellipse cx="12" cy="17" rx="8.2" ry="2.8"/>'
+            + '<path d="M3.8 11v2.6c0 1.55 3.67 2.8 8.2 2.8s8.2-1.25 8.2-2.8V11z"/><ellipse cx="12" cy="11" rx="8.2" ry="2.8"/>'
+            + '<path d="M3.8 5v2.6c0 1.55 3.67 2.8 8.2 2.8s8.2-1.25 8.2-2.8V5z"/><ellipse cx="12" cy="5" rx="8.2" ry="2.8"/>',
+        live: '<circle cx="12" cy="12" r="2.7"/>'
+            + '<path d="M7.2 7.2a6.8 6.8 0 0 0 0 9.6l1.5-1.5a4.7 4.7 0 0 1 0-6.6z"/>'
+            + '<path d="M16.8 7.2l-1.5 1.5a4.7 4.7 0 0 1 0 6.6l1.5 1.5a6.8 6.8 0 0 0 0-9.6z"/>',
+        leaf: '<path d="M20.5 3.5c-10 0-16.5 5-16.5 12 0 2.2.9 4.2 1.3 5 .3.6 1 .6 1.3 0 .4-.9 1.6-7.3 8.2-10.4 0 0-3.7 3-5.6 7.9 5.7 1.4 11.4-4.4 11.3-12.5z"/>',
+        /* 断种 = 保种同一片叶形 + 右下锯齿缺角(缺口直接拼进路径, 不是内部挖孔 —— pitfalls P40) */
+        wilt: '<path d="M 20.5 3.5 C 10.5 3.5, 4 8.5, 4 15.5 C 4 17.7, 4.9 19.5, 5.3 20.5 C 5.6 21.1, 6.3 21.1, 6.6 20.5 C 7 19.6, 8.2 13.2, 14.8 10.1 C 14.8 10.1, 11.1 13.1, 9.2 18 C 10.45 18.31, 11.71 18.27, 12.9 17.93 L 12.19 15.22 L 14.16 16.08 L 13.88 13.95 L 15.85 14.81 L 15.58 12.68 L 17.99 14.13 C 19.56 11.9, 20.54 8.9, 20.5 5.5 Z"/>',
+        medal: '<circle cx="12" cy="9.2" r="6.6"/><path d="M12 14.4l-2.6 7 2.6-2 2.6 2z"/>',
+        /* 求种 = 喇叭(吆喝求档); 放大镜更像"搜索" */
+        horn: '<path d="M3.6 9.2v5.4c0 .9.7 1.6 1.6 1.6h2L15.6 22V2.2L7.2 7.6H5.2c-.9 0-1.6.7-1.6 1.6z"/>'
+            + '<path d="M17.6 9.4a4.8 4.8 0 0 1 0 5.2l1.9 1.3a7.3 7.3 0 0 0 0-7.8z"/>',
+        upload: '<path d="M12 2.6l6.6 6.6h-3.8v8.2H9.2V9.2H5.4z"/><rect x="3.4" y="19.2" width="17.2" height="2.8" rx="1.4"/>',
+        subtitle: '<path d="M3.2 5h17.6a1.8 1.8 0 0 1 1.8 1.8v8a1.8 1.8 0 0 1-1.8 1.8H3.2A1.8 1.8 0 0 1 1.4 14.8v-8A1.8 1.8 0 0 1 3.2 5z"/>'
+            + '<rect x="4.8" y="18.2" width="14.4" height="2.4" rx="1.2"/>',
+        sliders: '<rect x="3" y="6.2" width="18" height="2.6" rx="1.3" fill-opacity=".5"/>'
+            + '<rect x="3" y="10.7" width="18" height="2.6" rx="1.3" fill-opacity=".5"/>'
+            + '<rect x="3" y="15.2" width="18" height="2.6" rx="1.3" fill-opacity=".5"/>'
+            + '<circle cx="9" cy="7.5" r="2.5"/><circle cx="15.2" cy="12" r="2.5"/><circle cx="8" cy="16.5" r="2.5"/>',
+        chart: '<rect x="3" y="10.5" width="4.4" height="10.5" rx="1.2"/><rect x="9.8" y="3.5" width="4.4" height="17.5" rx="1.2"/>'
+            + '<rect x="16.6" y="14" width="4.4" height="7" rx="1.2"/>',
+        logdoc: '<path d="M13.4 2.6H6.8A1.8 1.8 0 0 0 5 4.4v15.2a1.8 1.8 0 0 0 1.8 1.8h10.4a1.8 1.8 0 0 0 1.8-1.8V8.2z"/>'
+            + '<path d="M19 8.4h-5.3V3z" fill-opacity=".5"/>',
+        shield: '<path fill-rule="evenodd" d="M12 2.6l8.5 3.1v6.4c0 5.2-3.7 8.4-8.5 9.5-4.8-1.1-8.5-4.3-8.5-9.5V5.7z'
+            + ' M16.6 9.4l-5.4 5.4-2.7-2.7 1.5-1.5 1.2 1.2 3.9-3.9z"/>',
+        book: '<path d="M12 6.6C10.4 5.3 8.4 4.6 6 4.6H3.4v13.2H6c2.4 0 4.4.7 6 2 1.6-1.3 3.6-2 6-2h2.6V4.6H18c-2.4 0-4.4.7-6 2z"/>'
+    });
+
+    // 类别图标配色(按站内 class 前缀取色)
+    const ICON_CAT = Object.freeze([
+        ['c_movie', 'movie', '#e05b4a'], ['c_movies', 'movie', '#e05b4a'],
+        ['c_tv', 'tv', '#5b9fd4'], ['c_tvseries', 'tv', '#5b9fd4'],
+        ['c_music', 'music', '#9b7fd4'],
+        ['c_document', 'doc', '#4fb89a'], ['c_doc', 'doc', '#4fb89a'],
+        ['c_animate', 'anime', '#e27ba6'], ['c_anime', 'anime', '#e27ba6'],
+        ['c_sport', 'sport', '#7fb84e'],
+        ['c_other', 'other', '#8b857c']
+    ]);
+
+    // 表头指标配色(按语义给, 全部有彩度 —— 不留灰)
+    const ICON_MET = Object.freeze({
+        comments: ['comment', '#5b9fd4'],
+        alive: ['clock', '#9b7fd4'],
+        size: ['size', '#c98f4a'],
+        seeders: ['up', '#f5b342'],
+        leechers: ['down', '#e05b4a'],
+        snatched: ['check', '#4fb89a'],
+        user: ['user', '#7c8fd6'],
+        rss: ['rss', '#c9a86a']
+    });
+
+    // 导航 16 项: [href 片段, 图标, 颜色]
+    //   顺序有讲究: 先给 torrents.php 兜底(种子), 再用 mystat=keep / mystat=dead 覆盖(保种/断种)
+    //   配色纪律: 16 个色位要互不混淆 —— 判据是「色相差<=8 且 饱和差<=20 且 亮度差<=15」,
+    //   三者都接近才算真分不出(只看色相会把"低饱和灰 vs 高饱和金"误判成撞色)。
+    //   已避开的两处坑: ① logdoc 原 #57c9a8 与 discs #4fb89a 色相完全相同(163°);
+    //                  ② 橙黄区原挤了 4 个, shield 往黄推会撞 wilt —— 干脆降饱和变灰而不是挪色相。
+    const ICON_NAV = Object.freeze([
+        ['index.php', 'home', '#eda23c'],
+        ['forums.php', 'forum', '#5b9fd4'],
+        ['torrents.php', 'discs', '#4fb89a'],
+        ['live.php', 'live', '#e05b4a'],
+        ['mystat=keep', 'leaf', '#7fb84e'],
+        ['mystat=dead', 'wilt', '#b8933a'],
+        ['offers.php', 'medal', '#e27ba6'],
+        ['viewrequests.php', 'horn', '#9b7fd4'],
+        ['upload.php', 'upload', '#e0762c'],
+        ['subtitles.php', 'subtitle', '#3fb0c4'],
+        ['usercp.php', 'sliders', '#7c8fd6'],
+        ['topten.php', 'chart', '#a3c14a'],
+        ['log.php', 'logdoc', '#94a3b8'],
+        ['rules.php', 'shield', '#a99e8b'],
+        ['faq.php', 'book', '#b48ad6'],
+        ['staff.php', 'user', '#d4636f']
+    ]);
+
+    /**
+     * 生成内联 SVG 的 data URI(实心 + 指定色)。
+     * ⚠️ 必须带 width/height: 这些图是给 `img{content:url(...)}` 用的,
+     *    SVG 只写 viewBox 的话**没有固有尺寸**, 替换内容后 img 宽高会算成 0,
+     *    把外面包它的 <a> 一起压没了(hit-test 失败、点不到)。主题再用自己的规则缩到 12/16px。
+     */
+    function iconUri(name, color) {
+        const body = ICONS[name] || ICONS.other;
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="'
+            + (color || '#8b857c') + '">' + body + '</svg>';
+        return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+    }
+
+    /** #rrggbb + alpha -> rgba() */
+    function rgba(hex, alpha) {
+        let h = String(hex).replace('#', '');
+        if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+        const r = parseInt(h.substr(0, 2), 16), g = parseInt(h.substr(2, 2), 16), b = parseInt(h.substr(4, 2), 16);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    }
+
+    /**
+     * 图标替换 CSS(类别 / 表头指标)。
+     * 只写 content, 不写死尺寸 —— 各主题用更高特异性的选择器自己定 width/height。
+     */
+    function iconCss() {
+        const out = [];
+        ICON_CAT.forEach(function (x) {
+            out.push('html[data-hdui-theme] #torrenttable img[class*="' + x[0] + '"]{content:'
+                + iconUri(x[1], x[2])
+                + ';display:inline-block;vertical-align:middle;padding:3px;box-sizing:content-box;'
+                + 'border-radius:8px;background:' + rgba(x[2], 0.16) + ';}');
+        });
+        for (const k in ICON_MET) {
+            if (!Object.prototype.hasOwnProperty.call(ICON_MET, k)) continue;
+            const pair = ICON_MET[k];
+            out.push('html[data-hdui-theme] #torrenttable img.' + k + '{content:' + iconUri(pair[0], pair[1]) + ';}');
+        }
+        // RSS 角标(标题行内的小图标)不套色块, 只换图形
+        out.push('html[data-hdui-theme] #torrenttable .torrentname img{content:'
+            + iconUri('rss', ICON_MET.rss[1]) + ';}');
+        return out.join('\n');
+    }
+
+    /**
+     * 导航图标(::before)。tape 主题用 ::before/::after 画方括号, 会冲突 —— 由 theme.navIcons 关掉。
+     */
+    function navIconCss() {
+        const out = [
+            'html[data-hdui-theme] ul#mainmenu li a{display:flex;align-items:center;gap:5px;}',
+            'html[data-hdui-theme] ul#mainmenu li a::before{content:"";flex:0 0 14px;width:14px;height:14px;'
+            + 'background-repeat:no-repeat;background-position:center;background-size:contain;opacity:.88;}'
+        ];
+        ICON_NAV.forEach(function (x) {
+            out.push('html[data-hdui-theme] ul#mainmenu li a[href*="' + x[0] + '"]::before{background-image:'
+                + iconUri(x[1], x[2]) + ';}');
+        });
+        return out.join('\n');
+    }
 
     // ==================================================================
     // 诊断账本: 所有异常的唯一出口。禁止空 catch、禁止静默吞错
@@ -124,320 +311,147 @@
 
     function C(m, k) { return ':nth-child(' + m[k] + ')'; }
 
-    /**
-     * 指标块(标签在上, 值在下): 用于卡片/网格里需要对齐的数值。
-     * 列不在 colMap 里(外部脚本没注入 A / A/GB)时返回空串 —— 绝不能生成 :nth-child(undefined)。
-     */
-    function statStack(m, key, label, extra) {
-        if (!m[key]) return '';
-        const s = R + ' > td' + C(m, key);
-        return [
-            s + '{display:flex;flex-direction:column;justify-content:flex-end;gap:2px;min-width:0;' + (extra || '') + '}',
-            s + '::before{content:"' + label + '";font-size:9px;line-height:1.2;letter-spacing:.04em;color:var(--hdui-muted);white-space:nowrap;}'
-        ].join('\n');
-    }
-
-    /** 指标块(标签在前, 值在后, 同一行): 用于成行排版(纸带/大开本)。同样对缺列免疫 */
-    function statInline(m, key, label, extra) {
-        if (!m[key]) return '';
-        const s = R + ' > td' + C(m, key);
-        return [
-            s + '{display:block;min-width:0;' + (extra || '') + '}',
-            s + '::before{content:"' + label + ' ";font-size:10px;color:var(--hdui-muted);}'
-        ].join('\n');
-    }
-
-    /** 表头行统一压成一行小标签(列名字典), 不再是一整条色块。grid-column 供卡片网格主题跨满整行 */
-    function headStrip(cols, extra) {
-        return [
-            H + '{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;'
-            + 'background:transparent;border:0;border-bottom:1px solid var(--hdui-line);'
-            + 'padding:0 2px 6px;margin-bottom:8px;' + (extra || '') + '}',
-            H + ' > td{border:0;padding:0;background:transparent;font-size:10px;line-height:1.4;'
-            + 'letter-spacing:.06em;color:var(--hdui-muted);' + (cols || '') + '}'
-        ].join('\n');
-    }
-
     // ==================================================================
-    // 主题定义: 5 套, 布局骨架 / 字体体系 / 信息层级各不相同
+    // 主题: 胶片墙 —— 一条种子 = 一格胶片帧
+    //   片基左右各一条齿孔轨道; 帧号打在左侧片边; 片头(表头)吸顶且每列可排序;
+    //   做种数是唯一的视觉锚点(20px 金色 + 内嵌占比条); 数值靠字号分层, 不靠色相。
     // ==================================================================
 
-    /** 片库索引: 暗色卡片网格 —— 一条记录 = 一张索引卡(类别色条 + 衬线标题 + 指标带) */
-    function reelCss(m) {
-        const td = function (k) { return R + ' > td' + C(m, k); };
-        return [
-            '#torrenttable{display:block;}',
-            '#torrenttable > tbody{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;}',
-            headStrip(''),
-            R + '{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px 8px;padding:12px 14px;'
-            + 'background:var(--hdui-card);border:1px solid var(--hdui-line);'
-            + 'border-top:3px solid var(--hdui-cat,' + CAT_FALLBACK + ');border-radius:var(--hdui-radius);align-items:end;}',
-            R + ':hover{border-color:var(--hdui-accent);}',
-            R + ' > td{border:0;padding:0;background:transparent;font-size:var(--hdui-fs-sm);color:var(--hdui-muted);}',
-            td('type') + '{grid-column:1;grid-row:1;align-self:center;}',
-            td('type') + ' img{width:16px;height:16px;}',
-            td('title') + '{grid-column:2/-1;grid-row:1;align-self:end;font-family:var(--hdui-font-title);'
-            + 'font-size:15px;line-height:1.45;color:var(--hdui-fg);min-width:0;}',
-            statStack(m, 'seeders', '做种', 'grid-column:1;grid-row:2;font-size:20px;'),
-            R + ' > td' + C(m, 'seeders') + ' a{font-family:var(--hdui-font-num);font-size:20px;line-height:1;color:var(--hdui-accent);}',
-            statStack(m, 'leechers', '下载', 'grid-column:2;grid-row:2;'),
-            statStack(m, 'snatched', '完成', 'grid-column:3;grid-row:2;'),
-            statInline(m, 'size', '大小', 'grid-column:4;grid-row:2;align-self:end;white-space:nowrap;'),
-            statStack(m, 'alive', '存活', 'grid-column:5;grid-row:2;'),
-            statStack(m, 'comments', '评论', 'grid-column:6;grid-row:2;'),
-            statInline(m, 'progress', '进度', 'grid-column:1;grid-row:3;align-self:end;'),
-            statInline(m, 'a', 'A', 'grid-column:2;grid-row:3;align-self:end;font-family:var(--hdui-font-num);'),
-            statInline(m, 'ave', 'A/GB', 'grid-column:3;grid-row:3;align-self:end;font-family:var(--hdui-font-num);'),
-            statInline(m, 'uploader', '发布者', 'grid-column:4/-1;grid-row:3;align-self:end;text-align:right;'),
-            '#torrenttable table.torrentname{display:flex;width:100%;}',
-            '#torrenttable table.torrentname > tbody{display:flex;width:100%;}',
-            '#torrenttable table.torrentname > tbody > tr{display:flex;width:100%;align-items:baseline;}',
-            '#torrenttable table.torrentname td{border:0;padding:0;}',
-            '#torrenttable table.torrentname td.rss{margin-left:auto;}',
-            'ul#mainmenu li a{border-bottom:2px solid transparent;}',
-            'ul#mainmenu li.selected a{border-bottom-color:var(--hdui-accent);}'
-        ].join('\n');
+    // 列宽: 表头与数据行共用同一套 flex-basis, 数值才能成列对齐(0 = 占满剩余宽度)
+    const FILM_W = {
+        type: 44, title: 0, comments: 54, alive: 64, size: 78, seeders: 72,
+        leechers: 58, snatched: 64, progress: 40, a: 52, ave: 56, uploader: 104
+    };
+    const FILM_GAP = 10;
+
+    /** 数据行某列的选择器; 列缺席时返回空串 —— 绝不能生成 :nth-child(undefined) */
+    function tdSel(m, k) { return m[k] ? (R + ' > td' + C(m, k)) : ''; }
+
+    /** 一组列合成一条规则; 整组都缺席时返回空串(避免产生裸 "{}") */
+    function tdRule(m, keys, decl) {
+        const s = keys.filter(function (k) { return !!m[k]; })
+            .map(function (k) { return R + ' > td' + C(m, k); });
+        return s.length ? s.join(',') + '{' + decl + '}' : '';
     }
 
-    /** 电传纸带: 唯一保留真表格语义的一套 —— 全等宽、密排、反白表头、数字右对齐成列 */
-    function tapeCss(m) {
-        const c = function (k) { return C(m, k); };
-        // 只挑真正存在的列(A / A·GB 可能没被外部脚本注入)
-        const nums = ['comments', 'alive', 'size', 'seeders', 'leechers', 'snatched', 'a', 'ave']
-            .filter(function (k) { return !!m[k]; }).map(c);
-        const rules = ['comments', 'alive', 'size', 'seeders', 'leechers']
-            .filter(function (k) { return !!m[k]; }).map(c);
-        return [
-            '#torrenttable{display:table;}',
-            '#torrenttable > tbody{display:table-row-group;}',
-            '#torrenttable > tbody > tr{display:table-row;}',
-            '#torrenttable > tbody > tr > td{display:table-cell;border:0;padding:2px 6px;font-size:12px;'
-            + 'line-height:1.35;vertical-align:middle;color:var(--hdui-fg);font-variant-numeric:tabular-nums;}',
-            '#torrenttable > tbody > tr:not(:first-child):nth-child(odd){background:var(--hdui-zebra1);}',
-            '#torrenttable > tbody > tr:not(:first-child):nth-child(even){background:var(--hdui-zebra2);}',
-            // 表头是唯一一条反白横条: 纸带机的栏位标尺
-            '#torrenttable > tbody > tr:first-child > td{background:var(--hdui-headbg);color:var(--hdui-headfg);'
-            + 'letter-spacing:.04em;border-bottom:2px solid var(--hdui-fg);}',
-            '#torrenttable > tbody > tr > td' + c('title') + '{max-width:560px;overflow:hidden;'
-            + 'text-overflow:ellipsis;white-space:nowrap;}',
-            // 数字成列靠右 + 细点竖线分栏(不是挤成一团)
-            nums.map(function (s) { return '#torrenttable > tbody > tr > td' + s + '{text-align:right;}'; }).join('\n'),
-            rules.map(function (s) {
-                return '#torrenttable > tbody > tr:not(:first-child) > td' + s
-                    + '{border-right:1px dotted var(--hdui-rule);}';
-            }).join('\n'),
-            '#torrenttable > tbody > tr > td' + c('seeders') + ' a{color:var(--hdui-accent);font-weight:700;}',
-            '#torrenttable > tbody > tr > td' + c('uploader') + ',#torrenttable > tbody > tr > td' + c('progress')
-            + '{color:var(--hdui-muted);}',
-            '#torrenttable img{width:12px;height:12px;vertical-align:middle;}',
-            'ul#mainmenu li a::before{content:"[";}',
-            'ul#mainmenu li a::after{content:"]";}',
-            'ul#mainmenu li.selected a{color:var(--hdui-accent);}'
-        ].join('\n');
-    }
+    /** 胶片墙: 齿孔片边 + 帧号 + 吸顶片头; 数值成列右对齐, 做种数是唯一大字 */
+    function filmCss(m) {
+        const HOLE = '#6a5a48';   // 齿孔: 比片基明显亮, 做出"透光"感
+        const GAP = FILM_GAP + 'px';
 
-    /** 大开本: 报纸 —— 一行 = 一条新闻(衬线标题 / 署名行 / 规格行), 双细线分隔 */
-    function sheetCss(m) {
-        const td = function (k) { return R + ' > td' + C(m, k); };
+        // 片头: 原本只有图标没有栏名的列, 补中文标签(纯 CSS ::after, 不写 DOM)
+        const LABEL = { comments: '评论', alive: '存活', size: '大小', seeders: '做种',
+            leechers: '下载', snatched: '完成', uploader: '发布者' };
+        const headLabels = [];
+        Object.keys(LABEL).forEach(function (k) {
+            if (!m[k]) return;
+            const h = H + ' > td' + C(m, k);
+            headLabels.push(h + ' a::after{content:"' + LABEL[k] + '";font-size:10.5px;letter-spacing:0;}');
+            headLabels.push(h + ' a[href*="type=desc"]::after{content:"' + LABEL[k] + ' ↓";}');
+            headLabels.push(h + ' a[href*="type=asc"]::after{content:"' + LABEL[k] + ' ↑";}');
+        });
+
+        // 列宽: 表头与数据行各一份
+        const basis = [];
+        Object.keys(FILM_W).forEach(function (k) {
+            if (!m[k]) return;
+            const decl = FILM_W[k] ? 'flex:0 0 ' + FILM_W[k] + 'px' : 'flex:1 1 0';
+            basis.push(H + ' > td' + C(m, k) + '{' + decl + ';min-width:0;}');
+            basis.push(R + ' > td' + C(m, k) + '{' + decl + ';min-width:0;}');
+        });
+
         return [
-            '#torrenttable{display:block;}',
-            '#torrenttable > tbody{display:block;}',
-            '#torrenttable > tbody > tr{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;padding:12px 0;}',
-            '#torrenttable > tbody > tr:not(:first-child){border-top:2px solid var(--hdui-line);}',
-            '#torrenttable > tbody > tr:last-child{border-bottom:1px solid var(--hdui-line);}',
-            // 两个零高满宽伪元素 = 版面换行点: order 3 之后是署名行, order 8 之后是规格行
-            R + '::before{content:"";order:3;flex:0 0 100%;height:0;}',
-            R + '::after{content:"";order:8;flex:0 0 100%;height:0;}',
-            '#torrenttable > tbody > tr > td{border:0;padding:0;font-size:var(--hdui-fs-sm);color:var(--hdui-muted);}',
-            headStrip(''),
-            td('type') + '{order:1;}',
-            td('type') + ' img{width:9px;height:9px;}',
-            td('title') + '{order:2;flex:1 1 auto;min-width:0;font-family:var(--hdui-font-title);'
-            + 'font-size:17px;line-height:1.5;color:var(--hdui-fg);}',
-            td('uploader') + '{order:4;font-style:italic;}',
-            statInline(m, 'size', '大小', 'order:9;white-space:nowrap;'),
-            statInline(m, 'alive', '存活', 'order:10;white-space:nowrap;'),
-            statInline(m, 'comments', '评论', 'order:11;'),
-            statInline(m, 'seeders', '做种', 'order:12;font-size:15px;'),
-            R + ' > td' + C(m, 'seeders') + ' a{font-size:15px;font-weight:700;color:var(--hdui-fg);}',
-            statInline(m, 'leechers', '下载', 'order:13;'),
-            statInline(m, 'snatched', '完成', 'order:14;'),
-            statInline(m, 'progress', '进度', 'order:15;'),
-            statInline(m, 'a', 'A', 'order:16;font-family:var(--hdui-font-num);'),
-            statInline(m, 'ave', 'A/GB', 'order:17;font-family:var(--hdui-font-num);'),
+            '#torrenttable{display:block;padding:8px 0 20px;}',
+            // 片基
+            '#torrenttable > tbody{display:flex;flex-direction:column;position:relative;'
+            + 'counter-reset:frame;padding-left:34px;padding-right:26px;}',
+            '#torrenttable > tbody::before,#torrenttable > tbody::after{content:"";position:absolute;'
+            + 'top:0;bottom:0;width:11px;background-image:repeating-linear-gradient(180deg,'
+            + HOLE + ' 0 9px,transparent 9px 22px);}',
+            '#torrenttable > tbody::before{left:0;}',
+            '#torrenttable > tbody::after{right:0;}',
+            // 片头: 吸顶可排序栏
+            H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-gap:' + GAP
+            + ';padding:10px 0 9px;width:100%;background:var(--hdui-headbg);'
+            + 'border-bottom:1px solid var(--hdui-line);font-size:10.5px;letter-spacing:.12em;'
+            + 'color:var(--hdui-headfg);}',
+            H + ' > td{display:block;align-self:stretch;padding:0;overflow:hidden;white-space:nowrap;}',
+            H + ' > td a{display:flex;align-items:center;gap:5px;justify-content:flex-end;height:100%;'
+            + 'padding:0 8px;margin:0 -8px;border-radius:7px;color:inherit;font:inherit;}',
+            H + ' > td a:hover{color:var(--hdui-accent);}',
+            tdSel(m, 'uploader') ? H + ' > td' + C(m, 'uploader') + ' a{justify-content:flex-start;}' : '',
+            // 帧
+            R + '{position:relative;display:flex;align-items:center;column-gap:' + GAP
+            + ';width:100%;min-height:50px;padding:7px 10px;background:var(--hdui-card);'
+            + 'border-bottom:1px solid var(--hdui-bg);}',
+            R + ':hover{background:var(--hdui-rule);}',
+            // 帧号: 打在左侧片边上(counter, 纯 CSS 不写 DOM)
+            R + '::before{counter-increment:frame;content:counter(frame,decimal-leading-zero);'
+            + 'position:absolute;left:-24px;top:50%;transform:translateY(-50%);width:18px;'
+            + 'text-align:center;font-family:var(--hdui-font-num);font-size:9.5px;'
+            + 'letter-spacing:.06em;color:var(--hdui-muted);}',
+            // 置顶: 左侧金色内阴影(不占流, 不把列推开)
+            R + '.sticky_top{box-shadow:inset 3px 0 0 var(--hdui-accent);}',
+            R + ' > td{overflow:hidden;min-width:0;}',
+            basis.join('\n'),
+            // 标题
+            // ⚠️ max-width 不能省: 站点外层是 table-layout:auto, 会被内容的 max-content 撑开 ——
+            //    不限的话长标题把整页撑到 1503px(原站仅 1260), 窄屏得多横向滚 240px。
+            //    900 = 固定列宽和(686) + 列间距(110) + 片基左右留白(60) 的约数, 改动列宽时要同步调。
+            tdSel(m, 'title') + '{max-width:max(240px,calc(100vw - 900px));'
+            + 'font-family:var(--hdui-font-title);font-size:13.5px;line-height:1.45;}',
+            tdSel(m, 'title') + ' a{color:var(--hdui-fg);}',
+            tdSel(m, 'title') + ' .embedded{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+            tdSel(m, 'title') + ' img{width:12px;height:12px;opacity:.55;}',
+            tdSel(m, 'type') + ' img{width:16px;height:16px;}',
+            // 数值成列: 等宽 + 右对齐, 靠字号分层级(不靠色相, 配色才不打架)
+            tdRule(m, ['comments', 'alive', 'size', 'seeders', 'leechers', 'snatched', 'a', 'ave'],
+                'text-align:right;font-family:var(--hdui-font-num);font-variant-numeric:tabular-nums;'),
+            tdRule(m, ['comments', 'alive', 'a', 'ave'], 'font-size:11.5px;color:var(--hdui-muted);'),
+            tdRule(m, ['leechers', 'snatched'], 'font-size:13px;color:var(--hdui-fg);'),
+            tdSel(m, 'size') + '{font-size:12px;color:var(--hdui-fg);white-space:nowrap;}',
+            tdSel(m, 'size') + ' br{display:none;}',
+            // 做种: 唯一的大字锚点 + 内嵌占比条
+            tdSel(m, 'seeders') + '{display:block;font-size:20px;line-height:1.1;font-weight:600;color:var(--hdui-accent);}',
+            tdSel(m, 'seeders') + '::after{content:"";display:block;height:3px;margin-top:4px;margin-left:auto;'
+            + 'border-radius:2px;width:calc(var(--hdui-ratio,0) * 100%);background:var(--hdui-accent);opacity:.85;}',
+            tdSel(m, 'progress') + '{text-align:center;font-size:11px;color:var(--hdui-muted);}',
+            tdSel(m, 'uploader') + '{font-size:11.5px;color:var(--hdui-muted);overflow:hidden;text-overflow:ellipsis;}',
+            // 促销标记: 药丸(对应 --hdui-accent #f5b342)
+            '.tags.tfree{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;'
+            + 'font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--hdui-accent);'
+            + 'background:rgba(245,179,66,.14);vertical-align:1px;}',
+            headLabels.join('\n'),
+            // 标题格的内嵌表(站内自带结构, 摊平成行内)
             '#torrenttable table.torrentname{display:block;}',
             '#torrenttable table.torrentname > tbody{display:block;}',
             '#torrenttable table.torrentname > tbody > tr{display:block;}',
             '#torrenttable table.torrentname td{border:0;padding:0;display:inline;}',
-            'ul#mainmenu{text-align:center;justify-content:center;}',
-            'ul#mainmenu li.selected a{font-weight:700;border-top:2px solid var(--hdui-accent);}'
-        ].join('\n');
-    }
-
-    /** 瑞士网格: 零线条, 全靠留白 —— 左侧文字块, 右侧数字锚点(做种数 28px) */
-    function swissCss(m) {
-        const td = function (k) { return R + ' > td' + C(m, k); };
-        return [
-            '#torrenttable{display:block;}',
-            '#torrenttable > tbody{display:block;}',
-            '#torrenttable > tbody > tr{display:grid;'
-            + 'grid-template-columns:auto minmax(0,1fr) repeat(3,96px) 118px;'
-            + 'column-gap:28px;row-gap:4px;align-items:end;padding:22px 0;border:0;}',
-            '#torrenttable > tbody > tr > td{border:0;padding:0;font-size:11px;color:var(--hdui-muted);min-width:0;}',
-            headStrip('text-transform:none;'),
-            td('type') + '{grid-column:1;grid-row:1;align-self:start;}',
-            td('type') + ' img{width:14px;height:14px;}',
-            td('title') + '{grid-column:2;grid-row:1;font-size:14px;line-height:1.4;color:var(--hdui-fg);}',
-            td('uploader') + '{grid-column:2;grid-row:2;}',
-            statStack(m, 'size', '大小', 'grid-column:3;grid-row:1;'),
-            statStack(m, 'alive', '存活', 'grid-column:3;grid-row:2;'),
-            statStack(m, 'comments', '评论', 'grid-column:4;grid-row:1;'),
-            statStack(m, 'progress', '进度', 'grid-column:4;grid-row:2;'),
-            statStack(m, 'leechers', '下载', 'grid-column:5;grid-row:1;'),
-            statStack(m, 'snatched', '完成', 'grid-column:5;grid-row:2;'),
-            statStack(m, 'a', 'A 值', 'grid-column:3;grid-row:3;'),
-            statStack(m, 'ave', 'A/GB', 'grid-column:4;grid-row:3;'),
-            // 唯一的视觉锚点: 做种数 28px, 跨两行, 右对齐
-            td('seeders') + '{grid-column:6;grid-row:1/span 2;text-align:right;align-self:center;font-size:28px;}',
-            R + ' > td' + C(m, 'seeders') + ' a{font-size:28px;font-weight:700;line-height:1;color:var(--hdui-accent);}',
-            '#torrenttable table.torrentname{display:block;}',
-            '#torrenttable table.torrentname > tbody{display:block;}',
-            '#torrenttable table.torrentname > tbody > tr{display:block;}',
-            '#torrenttable table.torrentname td{border:0;padding:0;display:inline;}',
-            'ul#mainmenu li a{padding:2px 0;font-size:13px;}',
-            'ul#mainmenu li.selected a{color:var(--hdui-accent);}'
-        ].join('\n');
-    }
-
-    /** 播控台: 深石板 + 青 —— 行分 4 轨道, 类别色点 + 做种电平条 */
-    function signalCss(m) {
-        const td = function (k) { return R + ' > td' + C(m, k); };
-        return [
-            '#torrenttable{display:block;}',
-            '#torrenttable > tbody{display:block;}',
-            '#torrenttable > tbody > tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));'
-            + 'align-items:center;gap:6px 12px;padding:8px 12px;margin-bottom:5px;'
-            + 'background:var(--hdui-card);border-radius:4px;border-top:1px solid var(--hdui-line);}',
-            '#torrenttable > tbody > tr > td{border:0;padding:0;font-size:12px;color:var(--hdui-muted);'
-            + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
-            headStrip(''),
-            td('type') + '{grid-column:1;grid-row:1;}',
-            td('type') + ' img{display:none;}',
-            // 类别改成色点: 一眼扫过整个列表的类别分布
-            td('type') + ' a{display:inline-block;width:9px;height:9px;border-radius:50%;'
-            + 'background:var(--hdui-cat,' + '#5fd4e4' + ');vertical-align:middle;}',
-            td('title') + '{grid-column:2/-1;grid-row:1;font-size:13px;color:var(--hdui-fg);white-space:normal;}',
-            statStack(m, 'seeders', '做种', 'grid-column:1;grid-row:2;overflow:visible;font-size:18px;'),
-            R + ' > td' + C(m, 'seeders') + ' a{font-family:var(--hdui-font-num);font-size:18px;line-height:1;color:var(--hdui-accent);}',
-            // 电平条: 做种占比, 长度由行上的 --hdui-ratio 驱动
-            R + ' > td' + C(m, 'seeders') + '::after{content:"";display:block;'
-            + 'width:calc(var(--hdui-ratio,0) * 56px);max-width:56px;height:4px;margin-top:4px;'
-            + 'border-radius:2px;background:var(--hdui-accent);}',
-            statStack(m, 'leechers', '下载', 'grid-column:2;grid-row:2;'),
-            statStack(m, 'snatched', '完成', 'grid-column:3;grid-row:2;'),
-            statStack(m, 'comments', '评论', 'grid-column:4;grid-row:2;'),
-            statStack(m, 'size', '大小', 'grid-column:1;grid-row:3;'),
-            statStack(m, 'alive', '存活', 'grid-column:2;grid-row:3;'),
-            statStack(m, 'progress', '进度', 'grid-column:3;grid-row:3;'),
-            statStack(m, 'a', 'A 值', 'grid-column:4;grid-row:3;'),
-            statStack(m, 'ave', 'A/GB', 'grid-column:1;grid-row:4;'),
-            td('uploader') + '{grid-column:2/-1;grid-row:4;text-align:right;}',
-            '#torrenttable table.torrentname{display:block;}',
-            '#torrenttable table.torrentname > tbody{display:block;}',
-            '#torrenttable table.torrentname > tbody > tr{display:block;}',
-            '#torrenttable table.torrentname td{border:0;padding:0;display:inline;}',
-            'ul#mainmenu{display:flex;gap:2px;background:var(--hdui-card);padding:3px;border-radius:5px;}',
-            'ul#mainmenu li{flex:0 0 auto;}',
-            'ul#mainmenu li a{padding:5px 9px;border-radius:4px;font-size:12px;color:var(--hdui-muted);}',
-            'ul#mainmenu li.selected a{background:var(--hdui-accent);color:#06202a;}'
-        ].join('\n');
+            '#torrenttable table.torrentname td.rss{padding-left:8px;}',
+            // 导航药丸
+            'ul#mainmenu li a{border-radius:9px;font-weight:500;}',
+            'ul#mainmenu li.selected a{background:var(--hdui-accent);color:#17130e;}'
+        ].filter(Boolean).join('\n');
     }
 
     const THEMES = Object.freeze([
         {
-            id: 'reel', name: '片库索引', note: '索引卡网格 · 衬线标题 · 暗金',
+            id: 'film', name: '胶片墙', note: '齿孔片边 · 帧号 · 做种金',
             vars: {
-                '--hdui-bg': '#16181c', '--hdui-panel': '#1b1e23', '--hdui-card': '#1e2126',
-                '--hdui-fg': '#ece7de', '--hdui-muted': '#8b8f96', '--hdui-accent': '#c8a35a',
-                '--hdui-link': '#d8d2c6', '--hdui-line': '#2c3037', '--hdui-rule': '#3a3f47',
-                '--hdui-headbg': 'transparent', '--hdui-headfg': '#8b8f96',
-                '--hdui-zebra1': '#1e2126', '--hdui-zebra2': '#22262c',
-                '--hdui-font': '"Songti SC","Noto Serif SC",Georgia,"Microsoft YaHei",serif',
-                '--hdui-font-title': '"Songti SC","Noto Serif SC",Georgia,serif',
-                '--hdui-font-num': 'ui-monospace,Consolas,monospace',
+                '--hdui-bg': '#100e0d', '--hdui-panel': '#191512', '--hdui-card': '#201c18',
+                '--hdui-fg': '#f2ede5', '--hdui-muted': '#a79e93', '--hdui-accent': '#f5b342',
+                '--hdui-link': '#f2ede5', '--hdui-line': '#332c26', '--hdui-rule': '#2a241f',
+                '--hdui-headbg': '#191512', '--hdui-headfg': '#a79e93',
+                '--hdui-zebra1': '#201c18', '--hdui-zebra2': '#23201b',
+                '--hdui-font': '"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif',
+                '--hdui-font-title': '"Source Han Sans CN Medium","Noto Sans SC",sans-serif',
+                '--hdui-font-num': 'Bahnschrift,"DIN Alternate",Consolas,monospace',
                 '--hdui-fs': '13px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '8px 6px', '--hdui-navitem': '6px 10px', '--hdui-navgap': '2px',
-                '--hdui-radius': '3px'
+                // 导航 16 项 + 内嵌入口要放进 ~1262px 视口, 间距不能再放宽(原型 11px 会把第 16 项挤出屏)
+                '--hdui-navpad': '8px 12px', '--hdui-navitem': '6px 9px', '--hdui-navgap': '2px',
+                '--hdui-radius': '9px'
             },
-            css: reelCss
-        },
-        {
-            id: 'tape', name: '电传纸带', note: '真表格密排 · 全等宽 · 纸黄 · 反白标尺',
-            vars: {
-                '--hdui-bg': '#f4efe3', '--hdui-panel': '#f4efe3', '--hdui-card': '#efeae0',
-                '--hdui-fg': '#1b1a17', '--hdui-muted': '#6b665d', '--hdui-accent': '#a12a20',
-                '--hdui-link': '#1b1a17', '--hdui-line': '#1b1a17', '--hdui-rule': '#b3aa97',
-                '--hdui-headbg': '#1b1a17', '--hdui-headfg': '#f4efe3',
-                '--hdui-zebra1': '#f6f3ec', '--hdui-zebra2': '#efeae0',
-                '--hdui-font': 'ui-monospace,Consolas,"Courier New","Microsoft YaHei",monospace',
-                '--hdui-font-title': 'ui-monospace,Consolas,"Courier New",monospace',
-                '--hdui-font-num': 'ui-monospace,Consolas,monospace',
-                '--hdui-fs': '12px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '6px 4px', '--hdui-navitem': '6px 6px', '--hdui-navgap': '0px',
-                '--hdui-radius': '0px'
-            },
-            css: tapeCss
-        },
-        {
-            id: 'sheet', name: '大开本', note: '报纸三行 · 衬线标题 · 双细线',
-            vars: {
-                '--hdui-bg': '#fbfaf7', '--hdui-panel': '#fbfaf7', '--hdui-card': '#fbfaf7',
-                '--hdui-fg': '#14120f', '--hdui-muted': '#5c5751', '--hdui-accent': '#8f2b21',
-                '--hdui-link': '#14120f', '--hdui-line': '#14120f', '--hdui-rule': '#c9c3b6',
-                '--hdui-headbg': 'transparent', '--hdui-headfg': '#5c5751',
-                '--hdui-zebra1': '#fbfaf7', '--hdui-zebra2': '#f6f4ef',
-                '--hdui-font': '"Songti SC","Noto Serif SC","Microsoft YaHei",serif',
-                '--hdui-font-title': '"Songti SC","Noto Serif SC",serif',
-                '--hdui-font-num': 'ui-monospace,Consolas,monospace',
-                '--hdui-fs': '13px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '10px 0', '--hdui-navitem': '8px 0', '--hdui-navgap': '18px',
-                '--hdui-radius': '0px'
-            },
-            css: sheetCss
-        },
-        {
-            id: 'swiss', name: '瑞士网格', note: '零线条 · 28px 做种锚点 · 钴蓝',
-            vars: {
-                '--hdui-bg': '#ffffff', '--hdui-panel': '#ffffff', '--hdui-card': '#ffffff',
-                '--hdui-fg': '#111111', '--hdui-muted': '#9a9a9a', '--hdui-accent': '#1a35d8',
-                '--hdui-link': '#111111', '--hdui-line': '#e6e6e6', '--hdui-rule': '#e6e6e6',
-                '--hdui-headbg': 'transparent', '--hdui-headfg': '#9a9a9a',
-                '--hdui-zebra1': '#ffffff', '--hdui-zebra2': '#ffffff',
-                '--hdui-font': 'Inter,"Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif',
-                '--hdui-font-title': 'Inter,"Helvetica Neue","PingFang SC",sans-serif',
-                '--hdui-font-num': 'Inter,"Helvetica Neue",sans-serif',
-                '--hdui-fs': '13px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '16px 0', '--hdui-navitem': '2px 0', '--hdui-navgap': '26px',
-                '--hdui-radius': '0px'
-            },
-            css: swissCss
-        },
-        {
-            id: 'signal', name: '播控台', note: '4 轨道 · 电平条 · 类别色点 · 青',
-            vars: {
-                '--hdui-bg': '#0f1620', '--hdui-panel': '#131c27', '--hdui-card': '#16202c',
-                '--hdui-fg': '#dce6ef', '--hdui-muted': '#7d8fa1', '--hdui-accent': '#5fd4e4',
-                '--hdui-link': '#bcd2e0', '--hdui-line': '#24313f', '--hdui-rule': '#24313f',
-                '--hdui-headbg': 'transparent', '--hdui-headfg': '#7d8fa1',
-                '--hdui-zebra1': '#16202c', '--hdui-zebra2': '#18232f',
-                '--hdui-font': '"PingFang SC","Microsoft YaHei",system-ui,sans-serif',
-                '--hdui-font-title': '"PingFang SC","Microsoft YaHei",sans-serif',
-                '--hdui-font-num': 'ui-monospace,Consolas,monospace',
-                '--hdui-fs': '13px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '4px', '--hdui-navitem': '5px 9px', '--hdui-navgap': '2px',
-                '--hdui-radius': '4px'
-            },
-            css: signalCss
+            css: filmCss
         }
     ]);
 
@@ -612,9 +626,12 @@
             'html[data-hdui-theme] #info_block a{color:var(--hdui-link);}',
             'html[data-hdui-theme] #footer{color:var(--hdui-muted);font-size:var(--hdui-fs-sm);}',
             // 导航: flex + 显式列间距 —— 旧的 inline-block 紧挨排列会把 16 个入口挤成一坨
+            // max-width:100vw 不能省: 站点外层是固定宽布局(文档宽 ~1260), 导航条会跟着拿到 1248px;
+            // flex 单行排下去, 窄屏(<1248)时后面的入口就排到视口外点不到了。
+            // 原站是 inline 布局会自然换行, 换成 flex 后必须显式给上限才会 wrap。
             'html[data-hdui-theme] ul#mainmenu{display:flex;flex-wrap:wrap;align-items:center;'
             + 'row-gap:4px;column-gap:var(--hdui-navgap);margin:0;padding:var(--hdui-navpad);'
-            + 'background:var(--hdui-panel);list-style:none;}',
+            + 'background:var(--hdui-panel);list-style:none;max-width:100vw;box-sizing:border-box;}',
             'html[data-hdui-theme] ul#mainmenu li{display:block;}',
             'html[data-hdui-theme] ul#mainmenu li a{display:block;padding:var(--hdui-navitem);'
             + 'color:var(--hdui-muted);white-space:nowrap;}',
@@ -630,6 +647,10 @@
             'html[data-hdui-theme] table.torrents td,html[data-hdui-theme] #torrenttable td{border:0;padding:0;background:transparent;}',
             'html[data-hdui-theme] #torrenttable img{max-width:100%;}'
         ].join('\n');
+        // 图标替换(类别 / 表头指标)—— 所有主题通用, 且放在主题 CSS 之前,
+        // 让主题能用更高特异性的选择器覆盖尺寸
+        out += '\n' + iconCss();
+        if (theme.navIcons !== false) out += '\n' + navIconCss();
         if (colMap) out += '\n' + theme.css(colMap);
         return out;
     }
@@ -676,22 +697,38 @@
         }
         while (box.firstChild) box.removeChild(box.firstChild);
 
+        // 配置类(存储值失效) ≠ 结构类(页面长得不对): 措辞要分开, 否则把人往"页面坏了"上引
+        const isCfg = CONFIG_CODES.indexOf(code) >= 0;
+
         const txt = document.createElement('span');
         txt.setAttribute('data-hdui', 'alert-text');
-        txt.textContent = '[' + ScriptName + '] 页面结构与预期不符(' + code + '), 已恢复站点默认界面。' + (detail ? ' ' + detail : '');
+        txt.textContent = '[' + ScriptName + '] ' + (isCfg ? '主题设置无效' : '页面结构与预期不符')
+            + '(' + code + '), 已恢复站点默认界面。' + (detail ? ' ' + detail : '');
         box.appendChild(txt);
 
         const retry = document.createElement('button');
         retry.setAttribute('type', 'button');
         retry.setAttribute('data-hdui', 'alert-retry');
-        retry.textContent = '重新尝试';
         retry.style.cssText = 'background:#fff;color:#7a1f1a;border:0;border-radius:3px;padding:4px 10px;cursor:pointer;font-size:12px;';
-        retry.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            dismissAlert();
-            applyStored(true);
-        });
+        if (isCfg) {
+            // 重试是没用的(值还是那个值) —— 直接给一条能走通的路
+            retry.textContent = '改用胶片墙';
+            retry.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dismissAlert();
+                storeSet(STORE_THEME, LEGACY_MIGRATE_TO);
+                applyTheme(LEGACY_MIGRATE_TO);
+            });
+        } else {
+            retry.textContent = '重新尝试';
+            retry.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dismissAlert();
+                applyStored(true);
+            });
+        }
         box.appendChild(retry);
 
         const close = document.createElement('button');
@@ -781,7 +818,7 @@
                     return;
                 }
                 // 到点主动试一次: 外部脚本可能已经补完但没有再触发 mutation
-                const id = storeGet(STORE_THEME, DEFAULT_ID);
+                const id = storeGet(STORE_THEME, FIRST_ID);
                 if (id !== DEFAULT_ID) applyTheme(id);
                 if (pendingUntil) tickPending();
             } catch (e) { Diag.fail('E_PENDING_FAILED', e); }
@@ -811,10 +848,18 @@
 
     /** 应用主题。结构类失败先进「等结构就绪」窗口, 不再立刻弹横幅 */
     function applyTheme(id, silentRetry) {
-        const theme = themeById(id);
+        let theme = themeById(id);
+        if (!theme && LEGACY_THEMES.indexOf(id) >= 0) {
+            // 旧主题已移除: 静默迁到胶片墙并写回存储。
+            // 不弹横幅 —— 用户没做错任何事, 是我们把主题删了。
+            Diag.info('THEME_MIGRATED', '旧主题 ' + id + ' 已移除, 改用「' + LEGACY_MIGRATE_TO + '」');
+            storeSet(STORE_THEME, LEGACY_MIGRATE_TO);
+            id = LEGACY_MIGRATE_TO;
+            theme = themeById(id);
+        }
         if (!theme) {
-            Diag.warn('UNKNOWN_THEME', '未知主题 ' + id + ', 回落默认');
-            fallbackToDefault('E_UNKNOWN_THEME', '未知主题 ' + id);
+            Diag.warn('BAD_THEME', '存储里的主题值无效: ' + id + ', 回落默认');
+            fallbackToDefault('E_BAD_THEME', '存储里的主题值「' + id + '」已不存在');
             return false;
         }
         if (theme.id === DEFAULT_ID) stopPending();
@@ -871,8 +916,9 @@
     }
 
     function applyStored(isRetry) {
-        // 首次安装默认「原站默认」: 不擅自改用户看到的界面, 由用户自己选主题
-        const id = storeGet(STORE_THEME, DEFAULT_ID);
+        // 首次安装直接上妆胶片墙: 装这个脚本就是为了用它, 且面板里随时可切回「原站默认」。
+        // ⚠️ 只有**无存储**时才走 FIRST_ID; 用户一旦选过(含选「原站默认」)就以存储值为准。
+        const id = storeGet(STORE_THEME, FIRST_ID);
         applyTheme(id, !!isRetry);
     }
 
@@ -905,7 +951,7 @@
     function onStructureChange() {
         try {
             if (pendingUntil) {
-                const id = storeGet(STORE_THEME, DEFAULT_ID);
+                const id = storeGet(STORE_THEME, FIRST_ID);
                 if (id !== DEFAULT_ID) applyTheme(id);
                 return;
             }
@@ -1281,7 +1327,7 @@
      * 若连 <html> 都尚未创建(注入点比真实 Tampermonkey 更早时会出现), 返回 false。
      */
     function paintBootBg() {
-        const theme = themeById(storeGet(STORE_THEME, DEFAULT_ID));
+        const theme = themeById(storeGet(STORE_THEME, FIRST_ID));
         if (!theme || !theme.vars['--hdui-bg']) return false;
         if (!document.documentElement) return false;
         injectCss(BOOT_ID, 'html{background:' + theme.vars['--hdui-bg'] + ';}');
@@ -1304,7 +1350,19 @@
             Diag.error('UNCAUGHT', (ev && ev.message) ? ev.message : 'unknown');
         });
         window.addEventListener('unhandledrejection', function (ev) {
-            Diag.warn('UNHANDLED_REJECTION', ev && ev.reason ? String(ev.reason) : 'unknown');
+            // 本脚本没有任何 Promise / async(静态校验 §10 钉死这一点), 所以这里捕获到的 rejection
+            // **一定来自页面自身或其它脚本** —— 它是全局兜底, 不是我们的 bug。
+            // 因此必须: ① 带上首个堆栈帧, 让人能找到真正的来源;
+            //          ② 明确标注"来自外部", 否则 [HDHomeUI] 前缀会把人引到错误的脚本上。
+            const r = ev && ev.reason;
+            const msg = r ? String((r && r.message) || r) : 'unknown';
+            let frame = '';
+            if (r && r.stack) {
+                const m = /^\s*at\s+(.+)$/m.exec(String(r.stack));
+                if (m) frame = ' @ ' + m[1].trim().slice(0, 160);
+            }
+            Diag.warn('UNHANDLED_REJECTION', msg + frame
+                + ' —— 来自页面或其它脚本(本脚本无异步代码), 非 HDHomeUI 故障');
         });
 
         // 底色已在 document-start 铺过; 若那时连 <html> 都还没建则在这里补最后一次

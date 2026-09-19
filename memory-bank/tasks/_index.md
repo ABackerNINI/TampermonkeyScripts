@@ -5,14 +5,28 @@
 
 ## In Progress（进行中）
 
-- [TASK018] HDHome 界面主题套件（5 套可切换 UI） — **已实施**（`.1` 提交 `13266e0`，
-  `.2` 提交 `1b38510` 已推 gitee，`.3` 提交 `bc2c0cd` 已推 gitee，`.4` 提交 `4e01743` 已推 gitee）——
-  `.3` 全面重构: 入口内嵌+版式重画；`.4` A/A·GB 改可选列 + 等结构就绪窗口），
-  `src/HDHomeUI.user.js` `2026.09.19.4`，分支 `dev`；设计 + 脚本 + 仿真剧本 + 7 个测试
-  （含 `sim-hdui-inline-dock`、`sim-hdui-optional-columns`）全就位，
-  `node tests/run-all.js` **23/23 全绿**；真实页面离线核验契约通过(含「外部脚本未注入」的
-  10 列场景) + 仿真视觉复核截图覆盖 5 套.
-  见 `TASK018-hdhome-ui-themes.md`、`scripts/HDHomeUI.md` 与 `pitfalls.md` P33。
+- [TASK018] HDHome 界面主题（胶片墙） — **已实施**（`.1` 提交 `13266e0`，
+  `.2` 提交 `1b38510` 已推 gitee，`.3` 提交 `bc2c0cd` 已推 gitee，`.4` 提交 `4e01743` 已推 gitee；
+  **`.5` + `.6` + `.7` 已改码待审核提交**；`.7` **移除旧 5 套改为单一主题「胶片墙」**—— `.3` 全面重构: 入口内嵌+版式重画；`.4` A/A·GB 改可选列 + 等结构就绪窗口；
+  **`.5` 新增 SVG 图标体系**（类别 7 + 指标 8 + 导航 16，原型在 `.workbuddy-ai/hdui-mock/film.html`
+  经 96/48/24/16px 四档选型定稿；移植踩坑 P42「SVG 固有尺寸为 0 压塌 `<a>`」已修）；
+  **`.6` 修 `UNHANDLED_REJECTION` 归因误导**（页面级事件会把别的脚本的异常打成 `[HDHomeUI]` 前缀，
+  现补 stack 首帧 + 显式免责，并把「零异步」钉成静态不变量 —— P43）。
+  **`.7` 移除旧 5 套(片库索引/电传纸带/大开本/瑞士网格/播控台), 改为单一主题「胶片墙」`film`** ——
+  原型即 `.workbuddy-ai/hdui-mock/film.html`(`.5` 只移植了图标层, 主题本身没落地, `.7` 补上);
+  骨架: 齿孔轨道 / 帧号 counter / 表头 sticky / 内嵌占比条 / 置顶 inset 金条, 每条都钉进测试;
+  配套删 `statStack`/`statInline`/`headStrip`, 改 `tdSel`/`tdRule`;
+  踩坑: 原型导航 `navitem:7px 11px` 真站放不下(第 16 项被挤出 1262px 视口), 收到 `6px 9px`。
+  `.9` 首装直接上妆（`FIRST_ID='film'`，只在存储无值时生效）+ 导航配色去撞色（方案 B，真撞 4→0）。
+  `.10` 两个布局陷阱（页面被 max-content 撑宽 1260→1503；flex 导航窄屏不换行导致入口点不到，
+  见 P46）；新测试 `sim-hdui-layout-width.js`。
+  `src/HDHomeUI.user.js` `2026.09.19.10`，分支 `dev`；设计 + 脚本 + 仿真剧本 + 10 个测试
+  （含 `sim-hdui-inline-dock`、`sim-hdui-optional-columns`、**`sim-hdui-icons`**）全就位，
+  `.8` 旧主题 id 自动迁移（`LEGACY_THEMES` → film，配置类错误 `E_BAD_THEME` 与结构类分开，
+  横幅措辞按错误码分流；新测试 `sim-hdui-legacy-theme.js`，见 P44）；
+  `node tests/run-all.js` **26/26 全绿**；真实页面离线核验契约通过(含「外部脚本未注入」的
+  10 列场景)。
+  见 `TASK018-hdhome-ui-themes.md`、`scripts/HDHomeUI.md` §7 与 `pitfalls.md` P33–P43。
 
 - [TASK001] PTAutoCheckIn v2 实测校准并入正式版 — **已并入正式版**（1.10 完成），其余逐站实测校准继续（核心主线）
 - [TASK002] 修复 BTSchoolHelper 时魔数值恒为 0（P2）— 待实施

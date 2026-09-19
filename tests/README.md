@@ -148,6 +148,13 @@ runCase('Sxx 某某', async () => {
 - **独立 profile + 用完即删**：带 `--host-resolver-rules` 的实例里所有域名都指向本机，
   只能当一次性测试浏览器，测完关闭；不得日常浏览或登录真实账号。
 - **浏览器门禁不是弱化断言**：无 Chrome 时 `SKIP` 退 0 是环境分级；有浏览器时必须真过。
+- **新断言必须反向验证一次**：写完断言要故意把生产代码改错，确认它**真的会变红**，再改回来。
+  2026-09-19 就吃过亏：用 `l.indexOf('评论') >= 0` 断言栏名，把栏名改成 `评论X` 时测试**照样通过**
+  （子串匹配） —— 断言等于没写。文本断言要**完全匹配**，例如：
+  ```js
+  const re = new RegExp('^"?' + n + '(?:\\s*[↓↑])?"?$');   // "评论" / "评论 ↓" / "评论 ↑"
+  ```
+  （`getComputedStyle(...).content` 返回的字符串**带双引号**，匹配时要算进去。）
 - **P0 结论要回真机复核**：CDP 注入 + GM 垫片是近似的（沙箱世界、存储时机），
   关键结论用真实 Tampermonkey（装 `src/` 原文件、同样加 `--host-resolver-rules`）再验一次。
 
@@ -169,9 +176,11 @@ runCase('Sxx 某某', async () => {
 | `ptautocheckin/sim-security-s15-megatext.js` | 1MB 按钮文案下主流程仍有结论、后续面板不崩、不进存储 | P30 / S15 |
 | `ptautocheckin/sim-security-s17-static-baseline.js` | 无 `eval`/`new Function`/`document.write`/`insertAdjacentHTML`/`unsafeWindow`；无 `GM_xmlhttpRequest`/`@connect`；`@grant` 最小集 | P30 / S17 |
 | `ptautocheckin/sim-hdhome-pagetext.js` | HDHome 型站点（已签后入口变纯文本）四态：已签页零点击直判 success / 未签点击 → 落地页跳回 → success / 入口消失且无已签文本仍判已签（通道冗余）/ **未登录页（同样无入口）不得判已签**（`noButtonMeansCheckedIn` 的盲区，见 P31） | 站点回归（2026.09.19） |
-| `hdhomeui/check-hdui-static.js` | HDHomeUI 静态约束：元数据与最小权限（仅 `GM_getValue`/`GM_setValue`）/ **危险 API 禁令**（无 `.click()`、`dispatchEvent`、`.submit()`、`eval`、`innerHTML`、`cloneNode`、`fetch`、XHR、改站内 `href`、给站内挂 `onclick`）/ 无空 catch / 无 `window.__` 钩子 / 5 主题齐备且**布局声明互异** / 12 列契约与错误码齐备 | `scripts/HDHomeUI.md` §5 |
-| `hdhomeui/sim-hdui-function-parity.js` | 5 套主题逐个上妆后「功能基线快照」逐字段不变（导航/信息栏/行链接/表单/分页/页脚）+ 关键元素 hit-test 可点 + RSS 点击恰好 1 次请求 + 搜索箱折叠与表单提交仍工作 + 局部重排不误判 | `TASK018` §8.2 |
-| `hdhomeui/sim-hdui-theme-switch.js` | **版式签名两两不同**（表格/表体/行 display、网格轨道、字号、分隔线、字体族、底色）——证明不是只换配色；各套骨架特征；切回默认卸干净（无样式节点/无自定义属性残留）；记忆；面板真实点击；`Alt+Shift+T` 循环 | `TASK018` §4.6 |
+| `hdhomeui/check-hdui-static.js` | HDHomeUI 静态约束：元数据与最小权限（仅 `GM_getValue`/`GM_setValue`）/ **危险 API 禁令**（无 `.click()`、`dispatchEvent`、`.submit()`、`eval`、`innerHTML`、`cloneNode`、`fetch`、XHR、改站内 `href`、给站内挂 `onclick`）/ 无空 catch / 无 `window.__` 钩子 / 胶片墙**骨架特征逐条钉死** / 旧主题零残留 / 旧 id 迁移已登记 / 12 列契约与错误码齐备 | `scripts/HDHomeUI.md` §5 |
+| `hdhomeui/sim-hdui-function-parity.js` | 上妆后「功能基线快照」逐字段不变（导航/信息栏/行链接/表单/分页/页脚）+ 关键元素 hit-test 可点 + RSS 点击恰好 1 次请求 + 搜索箱折叠与表单提交仍工作 + 局部重排不误判 | `TASK018` §8.2 |
+| `hdhomeui/sim-hdui-theme-switch.js` | 胶片墙**骨架特征逐条钉死**（齿孔轨道 / 帧号 counter / 片头吸顶 / 做种占比条 —— 少一条就不叫胶片墙）；切回默认卸干净（无样式节点/无自定义属性残留）；记忆；面板真实点击；`Alt+Shift+T` 循环 | `TASK018` §4.6 |
+| `hdhomeui/sim-hdui-legacy-theme.js` | 旧主题 id（已删的 5 套）**静默迁到胶片墙**：上妆成功 + 不弹横幅 + 写回存储；真正无效的值才回落默认，且横幅说「主题设置无效」**而非**「页面结构与预期不符」、不进等待窗口、按钮是「改用胶片墙」 | P44 |
+| `hdhomeui/sim-hdui-layout-width.js` | **不撑宽页面 / 窄屏导航可点 / 片头吸顶**：上妆后文档宽度 ≤ 原站（防 max-content 顶宽，P46）；用 `Emulation` 改视口，1024 / 900 下导航 16 项 0 被挡（flex 导航需 `max-width:100vw` 才会 wrap）；滚动 600px 后片头 `top≈0` | P46 |
 | `hdhomeui/sim-hdui-structure-guard.js` | 缺列 `E_COLUMN_UNKNOWN` / 行列数不符 `ROW_CELL_COUNT_MISMATCH` / 缺锚点 `E_ANCHOR_MISSING` ⇒ 卸妆 + 红色横幅（含错误码）+ 控制台 error + 写 `hdui.lastError` + **零危险端点访问**；空表体与无种子表页不算错；运行中改坏结构自动回退 `E_STRUCTURE_CHANGED` | `TASK018` §5/§6 |
 | `hdhomeui/sim-hdui-danger-guard.js` | 点自持 UI（浮动开关/面板项）与按快捷键**不冒泡到站内 document 监听**；切换主题零站内请求；反向证明站内监听与 RSS 仍存活；签到/登出/魔力入口未被挂 `onclick` | `TASK018` §6.2 |
 

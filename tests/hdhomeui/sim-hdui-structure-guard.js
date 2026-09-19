@@ -30,7 +30,7 @@ function pageInfo(page) {
 
 runCase('HDHomeUI · 结构守卫与回退默认 UI', async function () {
     await withSim(async function (sim) {
-        sim.seed({ 'hdui.theme': 'reel' });
+        sim.seed({ 'hdui.theme': 'film' });
 
         // ---- 1. 表头缺一列 ----
         let page = await H.open(sim, 'hdhome-ui-broken');
@@ -69,7 +69,7 @@ runCase('HDHomeUI · 结构守卫与回退默认 UI', async function () {
         // ---- 3. 空表体不算结构错误 ----
         page = await H.open(sim, 'hdhome-ui-empty');
         await H.waitState(page, 'applied');
-        assertEq(await H.themeOf(page), 'reel', '空表体: 正常上妆(没有种子 != 结构损坏)');
+        assertEq(await H.themeOf(page), 'film', '空表体: 正常上妆(没有种子 != 结构损坏)');
         assertEq(await page.eval('return !!document.getElementById("hdui-alert");'), false, '空表体: 不误报横幅');
         await page.close();
 
@@ -78,7 +78,7 @@ runCase('HDHomeUI · 结构守卫与回退默认 UI', async function () {
         await H.waitState(page, 'applied');
         info = await pageInfo(page);
         assertEq(info.css, true, '无种子表: 仍应用全局样式');
-        assertEq(info.bg, 'rgb(22, 24, 28)', '无种子表: 全局底色生效');
+        assertEq(info.bg, 'rgb(16, 14, 13)', '无种子表: 全局底色生效(胶片墙片基 #100e0d)');
         assert(page.logs.some(function (l) { return /OK_NO_TABLE/.test(l); }), '无种子表: 日志记录"本页无种子表"');
         await page.close();
 

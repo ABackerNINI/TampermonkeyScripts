@@ -14,7 +14,7 @@ const { withSim } = require('../lib/sim/harness');
 const { runCase, assert, assertEq } = require('../lib/sim/tcase');
 const H = require('../lib/hdui-help');
 
-const THEMES = ['reel', 'tape', 'sheet', 'swiss', 'signal'];
+const THEMES = ['film'];
 
 // 换肤不允许改变的功能面
 const FIELDS = ['nav', 'infoLinks', 'rows', 'details', 'rssIds', 'rssHref', 'comments',
@@ -60,10 +60,10 @@ async function hitTest(page) {
     ].join('\n'));
 }
 
-runCase('HDHomeUI · 功能保持(5 套主题)', async function () {
+runCase('HDHomeUI · 功能保持(胶片墙)', async function () {
     await withSim(async function (sim) {
-        // ---- 基线(显式播种 reel: 首次安装默认已是「原站默认」, 不再自动上妆) ----
-        sim.seed({ 'hdui.theme': 'reel' });
+        // ---- 基线(显式播种 film: 首次安装默认已是「原站默认」, 不再自动上妆) ----
+        sim.seed({ 'hdui.theme': 'film' });
         const base = await H.open(sim, 'hdhome-ui');
         await H.waitState(base, 'applied');
         const baseSnap = await H.snapshot(base);
@@ -107,7 +107,7 @@ runCase('HDHomeUI · 功能保持(5 套主题)', async function () {
         }
 
         // ---- 搜索箱折叠(站内 klappe_news)仍然工作 ----
-        sim.seed({ 'hdui.theme': 'reel' });
+        sim.seed({ 'hdui.theme': 'film' });
         const p2 = await H.open(sim, 'hdhome-ui');
         await H.waitState(p2, 'applied');
         assertEq(await p2.eval('return getComputedStyle(document.getElementById("ksearchboxmain")).display;'),

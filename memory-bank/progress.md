@@ -6,12 +6,82 @@
 
 - **PTAutoCheckIn**（`2026.09.19.4`）：被动签到 + 批量调度（发起页常驻 + 后台标签串行）+ 跨站 FAB 结果面板 + 贴吧多吧（unit 级独立冷却/状态）+ 28 站 + 贴吧 6 吧。含：FAB 四皮肤（变色/数字/信号灯/光环）、站点图标、跨天守卫、仅检测型（U2）、无按钮访问即签型（MTeam 系六站）、no-text 按钮站（NodeLoc）、签到按钮重现降级提醒（suspect）、行内单站强制重试。**v2 已并入正式版**, 生产脚本为单一 `PTAutoCheckIn.user.js`（`@name PTAutoCheckIn`）。
   **2026-09-18 慢站误判修复（P28）**：整流程超时定时器不再覆写已给出的结论（旧版 25s 后把 `skipped`/`detect_only`/`suspect` 一律改成 `failed`，是「经常失败」主因）；新增 `unconfirmed` 独立状态（未确认，不计入失败、可重试）；`writeStatus` 状态单向阶梯；点击后观察窗改事件驱动（`pagehide`/`beforeunload`/URL 变化/成功特征，上限 4s）+ 有界复检（+5s/+12s，只检测不重复点击）；`waitForElement` 可交互判定 + 慢页面超时自适应；**超时预算不变式**（`detectMs + stepsMs + 18000ms <= 40000ms`）与双校验（运行时 `auditUnitBudgets()` + `tests/ptautocheckin/check-ptac-budget.js`）；进度心跳 + 20s 零进度判死站；整流程 25s→40s、调度窗口 50s→60s。**已提交**（`ebb06bb`，分支 `dev`），待真实站点实测校准。
-- **HDHomeUI**（`2026.09.19.4`，2026-09-19 新建，TASK018）：HDHome 界面主题套件，5 套可切换可记忆的 UI
-  （片库索引 / 电传纸带 / 大开本 / 瑞士网格 / 播控台）。**纯样式层**改造：不重建 DOM、不接管交互，
+- **HDHomeUI**（`2026.09.19.7`，2026-09-19 新建，TASK018）：HDHome 界面主题 —— **胶片墙**（一套，
+  可在面板切回「原站默认」）。原 5 套（片库索引 / 电传纸带 / 大开本 / 瑞士网格 / 播控台）用户判定
+  "已经没用"，`.7` 全部移除。**纯样式层**改造：不重建 DOM、不接管交互，
   列索引运行时探测后动态生成 CSS，原站功能（16 项导航、信息栏入口含签到、搜索箱与折叠、排序、
   RSS 增删、分页、页脚）由「功能基线快照 + hit-test」两道仿真断言守住。  结构契约（A 级锚点 + **必需**列齐全 + 行列数一致）任一不满足 ⇒ 卸妆 + 控制台 error + 顶部红色横幅 +
   写 `hdui.lastError`；运行时 MutationObserver 复查。诊断统一走 `Diag` 账本，禁止空 catch，
   挂载 window error/unhandledrejection 只记不吞。详见 `scripts/HDHomeUI.md` 与 `pitfalls.md` P33。
+  **`.5`（已改码，**待审核后提交**）：新增 SVG 图标体系**（原型在 `.workbuddy-ai/hdui-mock/film.html`，
+  96/48/24/16px 四档对照下经多轮用户选型定稿）。`ICONS`（31 个实心路径）+ `iconUri()` data URI 生成器；
+  类别 7 类换图 + 本色 16% 淡底圆角色块、表头指标 8 个按语义各一色、导航 16 项每项一色。
+  三条纪律：**图标层只写 `content` 不写死尺寸**（让主题用更高特异性覆盖，reel 16px / tape 12px 照旧）、
+  `tape` 加 `navIcons:false`（它的 `[ ]` 方括号是设计语言，挂图标会顶掉）、
+  导航 `href*=` 靠**顺序覆盖**（先 `torrents.php` 兜底，再 `mystat=keep`/`dead` 覆盖成保种/断种）。
+  **移植踩坑 P42**：`iconUri()` 只写 `viewBox` 没写 `width/height` ⇒ `img{content:url(svg)}` 替换后
+  固有尺寸 0×0，包它的 `<a>` 塌成零宽，站内 RSS 按钮点不到（两个仿真测试立刻抓到）。修：SVG 加 `width/height="16"`。
+  **新测试 `sim-hdui-icons.js`（第 24 个）**：补上"图标真的画出来了"这一层断言 ——
+  原有测试只能证明"没回归"，没有任何一条断言图标生效。5 套主题下逐项验 content 是 SVG 且宽度>0、
+  保种≠断种、tape 导航挂 0 个、signal 色点设计保留、RSS 链接不被压塌。
+  图标选型方法论固化在 `pitfalls.md` **P34–P42**（16px 幸存信号三类 / 同色叠画不可见 / 列宽吃掉图标 /
+  "椭圆+竖槽≈手" / 倒置辨识度不足 / evenodd 越界 / **边缘缺 vs 内部缺** / 无图验证手段 / SVG 固有尺寸）。
+  `scripts/HDHomeUI.md` 新增 §7「图标体系」。
+  **`.6`（已改码，**待审核后提交**）：修正 `UNHANDLED_REJECTION` 的**归因误导**。**
+  用户贴来 `[HDHomeUI] WARN UNHANDLED_REJECTION TypeError: ... reading 'innerText'`，但本脚本
+  既无 `innerText` 也无任何异步代码 —— 它只是 `unhandledrejection` 的**观察方**，而这个事件是**页面级**的，
+  别的脚本（本例是 `PTAutoCheckIn` 的 `visibleText()` 上层调用方）抛的异常同样会进来，
+  日志前缀却写着 `[HDHomeUI]` ⇒ 把外部故障伪装成本脚本故障。
+  修：日志补 **stack 首帧** + 显式「来自页面或其它脚本（本脚本无异步代码），非 HDHomeUI 故障」；
+  `check-hdui-static.js` 新增 3 条断言 —— ① **脚本零异步**（无 `async`/`await`/`new Promise`/`.then`，
+  这是免责的前提，将来引入异步即变红提醒同步改措辞）② 日志含免责措辞 ③ 日志取 stack。
+  三断言均做过反向验证（注入 `async` / 删措辞 ⇒ 确实变红）。方法论见 `pitfalls.md` **P43**。
+  **`.7`（已改码，**待审核后提交**）：移除旧 5 套, 改为单一主题「胶片墙」`film`。**
+  原型 `.workbuddy-ai/hdui-mock/film.html` 早就存在（图标体系就是在它上面定稿的）, 但 `.5` 只移植了
+  **图标层**、没落地主题本身 —— 用户一句"为什么还是之前的 5 套 UI, 新 UI 呢"才暴露这个疏漏。
+  骨架: tbody 纵向 flex + 左右齿孔轨道(::before/::after 重复渐变) / 帧号 counter 打在片边 /
+  表头 sticky 吸顶 + `a::after` 补中文栏名 / 行内嵌占比条 / 置顶 inset 金条 / 数值靠字号分层不靠色相。
+  配套删除 `statStack` / `statInline` / `headStrip`（改由 `tdSel` / `tdRule`, 同样对缺列免疫）。
+  **移植踩坑**: 原型导航 `navitem:7px 11px` 在真站放不下 —— 视口 1262px 时第 16 项被挤出屏
+  （`elementFromPoint` 返回 null, `sim-hdui-inline-dock` 抓到）, 收到 `6px 9px` 才通过。
+  **测试改造**: `sim-hdui-theme-switch` 的「签名两两不同」在只剩一套时失去意义, 改为**逐条钉死
+  胶片墙骨架**（齿孔/帧号/吸顶/占比条, 少一条就不叫胶片墙）; 另有 4 处断言硬编码旧主题值
+  （底色 `rgb(22,24,28)`、发布者 `text-align:right`、A 值 `::before` 标签）同步换成胶片墙的等价语义。
+  全量 24/24 全绿。
+  **`.8`（已改码，**待审核后提交**）：旧主题 id 自动迁移 —— 删主题的收尾。**
+  用户实测 `[HDHomeUI] 页面结构与预期不符(E_UNKNOWN_THEME) ... 未知主题 tape`: 他以前选的就是 `tape`,
+  `.7` 删了主题但 GM 存储里的旧值还在。两个错: ① **不该报错** —— 用户没做错事, 是我们删的,
+  老用户本就"选过主题、想用主题", 应静默迁到胶片墙并写回存储; ② **错误码张冠李戴** ——
+  `E_UNKNOWN_THEME` 被当结构类处理(「页面结构与预期不符」横幅 + 等结构就绪窗口),
+  可这是**配置值失效**, 等也不会变好(与 P43 同类归因误导)。
+  修: `LEGACY_THEMES`(旧 5 套) + `LEGACY_MIGRATE_TO='film'` 静默迁移并写回存储;
+  `CONFIG_CODES=['E_BAD_THEME']` 与 `STRUCT_CODES` 分开; `showAlert` 按错误码分流措辞
+  (配置类「主题设置无效」, 按钮「改用胶片墙」而非没用的「重新尝试」)。
+  **新测试 `sim-hdui-legacy-theme.js`（第 25 个）**: 逐个旧 id 验「上妆成功 + 无横幅 + 存储已改写」,
+  并验无效值走「主题设置无效」而非「结构不符」、不进等待窗口。静态新增 §11。
+  全量 **25/25** 全绿。详见 `pitfalls.md` **P44**。
+  **`.9`（已改码，**待审核后提交**）：① 首装直接上妆；② 导航配色去撞色（方案 B）。**
+  ① `FIRST_ID = 'film'` —— 旧行为首装不上妆, 装完还得手动切一次才看得到界面, 与"全面改为新 UI"不符。
+     ⚠️ 只在**存储无值**时生效; 用户选过(含选「原站默认」)一律以存储为准, 不会被强推回胶片墙。
+     四处读取(`applyStored` / 等待窗口重试 / `tickPending` / `paintBootBg`)**必须全部**用 FIRST_ID,
+     漏一处就会出现"首装读成 default"的矛盾(静态 §4 加了断言)。
+  ② `ICON_NAV` 改 4 行: home→#eda23c(饱和 90→83)、upload→#e0762c(H39→25 推成橙)、
+     shield→#a99e8b(降饱和变暖灰)、logdoc→#94a3b8(中性石板灰, 青绿让给种子独占)。真撞 **4→0**。
+     ⚠️ 判据必须**三维**(Δh≤8 且 Δs≤20 且 Δl≤15), 只看色相会得到虚高问题数(7 vs 真实 4)。
+     见 `pitfalls.md` **P45**。
+  **`.10`（已改码，**待审核后提交**）：两个"宽屏测不出、窄屏才暴露"的布局陷阱。**
+  ⚠️ 同源根因: 站点外层**固定宽 + table-layout:auto**, 会被内容的 max-content 撑开。
+  ① **上妆把整页撑宽**: 文档宽 **1260 → 1503**。因为 `min-width:0` 只管**收缩**(min-content),
+     **管不住 max-content** —— 长标题顶宽容器。修: 标题列
+     `max-width:max(240px,calc(100vw - 900px))`(900 = 固定列宽和+间距+留白的约数, 改列宽要同步调)。
+     实测回落 **1260, 与原站持平**, 窄屏还会自适应收缩。
+  ② **窄屏导航点不到**: 脚本把 `ul#mainmenu` 改 flex 防挤, 但导航条拿到 1248px, `flex-wrap` 不触发
+     ⇒ 单行排到 1218; 视口 1024 时最后 2–3 项 `elementFromPoint` 返回 null。
+     **原站 inline 布局会自然换行, 换 flex 后必须显式给 `max-width:100vw` 才会 wrap。**
+     修后 1024/900 均 **0/16 被挡**, 宽屏无影响。
+  **新测试 `sim-hdui-layout-width.js`（第 26 个）**: 用 `Emulation.setDeviceMetricsOverride` 改视口,
+  钉死「文档宽 ≤ 原站 / 窄屏导航 0 被挡 / 滚动后片头吸顶」。全量 **26/26** 全绿。
+  `tests/README.md` 测试清单同步。详见 `pitfalls.md` **P46**。
   **`.4`（已提交 `4e01743`, 分支 `dev`, 已推 gitee, 10s）**：真站首装报 `E_COLUMN_UNKNOWN: a,ave`、点重试就好 ——
   A / A·GB 是**别的脚本运行时注入**的列（`#calcTHeadA` / `#calcTHeadAve`），比本脚本晚，**纯时序问题**。
   ① `a`/`ave` 改**可选列**（`REQUIRED_COLUMNS` 由全集剔除得出），缺了返回成功码 `OK_NO_CALC` 照常上妆，

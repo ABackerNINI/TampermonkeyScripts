@@ -63,7 +63,7 @@ function navHitTest(page) {
 
 runCase('HDHomeUI · 入口内嵌(不悬浮 / 不压站内内容)', async function () {
     await withSim(async function (sim) {
-        sim.seed({ 'hdui.theme': 'reel' });
+        sim.seed({ 'hdui.theme': 'film' });
         const page = await H.open(sim, 'hdhome-ui');
         await H.waitState(page, 'applied');
 
@@ -88,7 +88,7 @@ runCase('HDHomeUI · 入口内嵌(不悬浮 / 不压站内内容)', async functi
         const blocked = hits.filter(function (x) { return !x; }).length;
         assertEq(blocked, 0, '导航栏条目全部可点, 被遮住 ' + blocked + ' 个');
 
-        // ---- 4. 换主题后重摆: 瑞士网格的导航排版与片库不同, 位置必须跟着变 ----
+        // ---- 4. 切回「原站默认」后入口要重摆(导航排版变了, 位置必须跟着变) ----
         const before = await H.dockRect(page);
         await H.clickDock(page);
         let changed = await H.clickFirstPanelItemThatChanges(page);

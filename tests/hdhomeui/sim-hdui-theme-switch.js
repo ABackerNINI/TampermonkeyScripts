@@ -1,65 +1,93 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * 仿真: 5 套主题切换、版式差异、切回默认、记忆与快捷键
+ * 仿真: 胶片墙上妆、骨架特征、切回默认、记忆与快捷键
  * ------------------------------------------------------------------
- * 关键断言: 5 套主题的**版式签名**(表格/tbody/行的 display、网格轨道、字号、分隔线、
- * 字体族、底色)两两不同 —— 用来证明它们是不同版式, 而不只是换了个配色。
+ * 旧版断言「5 套主题的版式签名两两不同」; 现在只有一套主题, 那个断言失去意义,
+ * 改为**逐条钉死胶片墙的骨架特征** —— 齿孔轨道 / 帧号 / 吸顶片头 / 做种占比条,
+ * 少任何一条就不叫胶片墙(防止哪次改动把它悄悄改回普通列表)。
  */
 
 const { withSim } = require('../lib/sim/harness');
 const { runCase, assert, assertEq } = require('../lib/sim/tcase');
 const H = require('../lib/hdui-help');
 
-const THEMES = ['reel', 'tape', 'sheet', 'swiss', 'signal'];
+const THEMES = ['film'];
 const ALL_IDS = ['default'].concat(THEMES);
 
-runCase('HDHomeUI · 主题切换 / 版式差异 / 记忆', async function () {
+runCase('HDHomeUI · 胶片墙上妆 / 骨架特征 / 记忆', async function () {
     await withSim(async function (sim) {
-        // ---- 逐个上妆, 收集版式签名 ----
-        const sigs = {};
-        for (const id of THEMES) {
-            sim.seed({ 'hdui.theme': id });
-            const page = await H.open(sim, 'hdhome-ui');
-            await H.waitState(page, 'applied');
-            assertEq(await H.themeOf(page), id, '主题 ' + id + ' 已生效');
-            sigs[id] = await H.signature(page);
-            assert(!!sigs[id], '主题 ' + id + ' 取到版式签名');
-            await page.close();
-        }
+        // ---- 上妆胶片墙, 收集版式签名 + 骨架探针 ----
+        sim.seed({ 'hdui.theme': 'film' });
+        const page = await H.open(sim, 'hdhome-ui');
+        await H.waitState(page, 'applied');
+        assertEq(await H.themeOf(page), 'film', '胶片墙已生效');
 
-        // ---- 签名两两不同 ----
-        const seen = new Map();
-        for (const id of THEMES) {
-            const key = JSON.stringify(sigs[id]);
-            assert(!seen.has(key), '主题 ' + id + ' 的版式签名与 ' + seen.get(key) + ' 完全相同(等于只换配色)');
-            seen.set(key, id);
-        }
+        const sig = await H.signature(page);
+        assert(!!sig, '取到版式签名');
+        assertEq(sig.table, 'block', '片基: 表格摊平成块(不再有 table 语义)');
+        assertEq(sig.tbody, 'flex', '片基: 表体纵向 flex —— 一帧一行, 左右留齿孔轨道');
+        assertEq(sig.row, 'flex', '帧: 行是横向 flex 长条');
+        assertEq(sig.seedFont, '20px', '做种数 20px —— 这一屏唯一的视觉锚点');
+        assert(/^#[0-9a-f]{6}$/i.test(sig.cat), '写入了类别色: ' + sig.cat);
+        assert(sig.ratio !== '', '写入了做种占比(--hdui-ratio)');
 
-        // ---- 各套的骨架特征(具体而非笼统) ----
-        assertEq(sigs.tape.table, 'table', '电传纸带: 保持表格语义');
-        assertEq(sigs.tape.row, 'table-row', '电传纸带: 行仍是表格行');
-        assertEq(sigs.reel.tbody, 'grid', '片库索引: 表体是卡片网格');
-        assertEq(sigs.reel.row, 'grid', '片库索引: 行是 6 轨网格(主行/指标带/尾注)');
-        assertEq(sigs.sheet.row, 'flex', '大开本: 行是三段式长条');
-        assertEq(sigs.signal.row, 'grid', '播控台: 行是网格');
-        assertEq(sigs.swiss.row, 'grid', '瑞士网格: 行是 6 列网格');
-        assert(sigs.signal.cols.split(' ').length === 4, '播控台: 行分 4 轨道, 实际 ' + sigs.signal.cols);
-        assert(sigs.reel.cols.split(' ').length === 6, '片库索引: 行分 6 轨道, 实际 ' + sigs.reel.cols);
+        // 运行时探针: 齿孔 / 帧号 / 吸顶片头 / 中文栏名 / 置顶金条 / 占比条
+        const frame = await page.eval([
+            'const t = document.getElementById("torrenttable");',
+            'const tb = t.tBodies[0];',
+            'const rows = Array.prototype.slice.call(tb.rows);',
+            'const head = rows[0];',
+            'const row = rows[1];',
+            'const labels = Array.prototype.slice.call(head.cells).map(function (c) {',
+            '  const a = c.querySelector("a");',
+            '  return a ? getComputedStyle(a, "::after").content : "";',
+            '});',
+            'const sticky = rows.filter(function (r) { return /sticky_top/.test(r.className || ""); });',
+            'const seedCell = row.cells[5];',
+            'return {',
+            '  holeBefore: getComputedStyle(tb, "::before").backgroundImage,',
+            '  holeAfter: getComputedStyle(tb, "::after").backgroundImage,',
+            '  frameNo: getComputedStyle(row, "::before").content,',
+            '  headPos: getComputedStyle(head).position,',
+            '  labels: labels,',
+            '  stickyShadow: sticky.length ? getComputedStyle(sticky[0]).boxShadow : null,',
+            '  normalShadow: rows.length > 3 ? getComputedStyle(rows[3]).boxShadow : null,',
+            '  barW: parseFloat(getComputedStyle(seedCell, "::after").width) || 0,',
+            '  cellW: seedCell.getBoundingClientRect().width,',
+            '  ratio: parseFloat(row.style.getPropertyValue("--hdui-ratio")) || 0',
+            '};'
+        ].join('\n'));
+        assert(/repeating-linear-gradient/.test(frame.holeBefore),
+            '左齿孔轨道是重复渐变, 实际: ' + String(frame.holeBefore).slice(0, 70));
+        assert(/repeating-linear-gradient/.test(frame.holeAfter),
+            '右齿孔轨道是重复渐变, 实际: ' + String(frame.holeAfter).slice(0, 70));
+        // Chrome 对伪元素上的 counter() 只返回未求值的表达式, 拿不到 "01"/"02",
+        // 所以这里只能验规则挂上了; 实际是否递增需看截图(骨架形态由 CSS 保证)
+        assert(/counter\(frame/.test(frame.frameNo),
+            '帧号由 counter(frame) 生成, 实际: ' + frame.frameNo);
+        assertEq(frame.headPos, 'sticky', '片头(表头)吸顶, 长列表滚动后仍能排序');
 
-        const fonts = new Set(THEMES.map(function (id) { return sigs[id].bodyFont; }));
-        assert(fonts.size >= 3, '字体族 >= 3 种, 实际 ' + fonts.size);
-        const bgs = new Set(THEMES.map(function (id) { return sigs[id].bodyBg; }));
-        assertEq(bgs.size, 5, '5 套底色互不相同');
-        const seedFonts = new Set(THEMES.map(function (id) { return sigs[id].seedFont; }));
-        assert(seedFonts.size >= 4, '做种数字号 >= 4 种, 实际 ' + Array.from(seedFonts).join('/'));
-        const borders = new Set(THEMES.map(function (id) { return sigs[id].rowBorder; }));
-        assert(borders.size >= 3, '行分隔手段 >= 3 种, 实际 ' + Array.from(borders).join('/'));
+        // 片头中文栏名: 原本只有图标没有栏名的列, 由 ::after 补上。
+        // ⚠️ 必须**完全匹配**("评论" / "评论 ↓" / "评论 ↑"), 用 indexOf 子串会把"评论X"也放过。
+        ['评论', '存活', '大小', '做种', '下载', '完成', '发布者'].forEach(function (n) {
+            const re = new RegExp('^"?' + n + '(?:\\s*[↓↑])?"?$');
+            assert(frame.labels.some(function (l) { return re.test(l.trim()); }),
+                '片头补出中文栏名「' + n + '」(实际: ' + JSON.stringify(frame.labels) + ')');
+        });
 
-        for (const id of THEMES) {
-            assert(/^#[0-9a-f]{6}$/i.test(sigs[id].cat), '主题 ' + id + ' 写入了类别色: ' + sigs[id].cat);
-            assert(sigs[id].ratio !== '', '主题 ' + id + ' 写入了电平比例');
-        }
+        // 置顶: 金色 inset 内阴影, 且不占流(普通行没有阴影)
+        assert(/inset/.test(frame.stickyShadow || '') && /245, 179, 66/.test(frame.stickyShadow || ''),
+            '置顶行有金色 inset 标记, 实际: ' + frame.stickyShadow);
+        assert(frame.normalShadow === 'none' || !frame.normalShadow,
+            '普通行没有阴影(置顶标记只给置顶行), 实际: ' + frame.normalShadow);
+
+        // 占比条宽度 = --hdui-ratio × 格宽(误差 <=2px, 可能是取整)
+        const want = frame.ratio * frame.cellW;
+        assert(Math.abs(frame.barW - want) <= 2,
+            '占比条宽度 = ratio × 格宽: ' + frame.barW + ' ≈ ' + Math.round(want)
+            + ' (ratio ' + frame.ratio + ', 格宽 ' + Math.round(frame.cellW) + ')');
+        await page.close();
 
         // ---- 切回「原站默认」必须卸干净 ----
         sim.seed({ 'hdui.theme': 'default' });
@@ -84,17 +112,17 @@ runCase('HDHomeUI · 主题切换 / 版式差异 / 记忆', async function () {
         await p.close();
 
         // ---- 记忆: 记住上次选择 ----
-        sim.seed({ 'hdui.theme': 'sheet' });
+        sim.seed({ 'hdui.theme': 'film' });
         p = await H.open(sim, 'hdhome-ui');
         await H.waitState(p, 'applied');
-        assertEq(await H.themeOf(p), 'sheet', '重新打开记住上次选择: sheet');
+        assertEq(await H.themeOf(p), 'film', '重新打开记住上次选择: film');
 
         // ---- 面板: 真实鼠标点击可切换 ----
         await H.clickDock(p);
         const top = await H.panelTop(p);
         assert(top !== null, '点内嵌开关后面板展开(hit-test 命中 shadow 宿主)');
         const changed = await H.clickFirstPanelItemThatChanges(p);
-        assert(changed !== null && changed !== 'sheet', '点面板条目可切换主题: sheet -> ' + changed);
+        assert(changed !== null && changed !== 'film', '点面板条目可切回原站默认: film -> ' + changed);
         assert(ALL_IDS.indexOf(changed) >= 0, '切换结果是合法主题 id: ' + changed);
 
         // ---- 快捷键循环切换 ----
