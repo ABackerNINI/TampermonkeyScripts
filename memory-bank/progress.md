@@ -12,7 +12,7 @@
   RSS 增删、分页、页脚）由「功能基线快照 + hit-test」两道仿真断言守住。  结构契约（A 级锚点 + **必需**列齐全 + 行列数一致）任一不满足 ⇒ 卸妆 + 控制台 error + 顶部红色横幅 +
   写 `hdui.lastError`；运行时 MutationObserver 复查。诊断统一走 `Diag` 账本，禁止空 catch，
   挂载 window error/unhandledrejection 只记不吞。详见 `scripts/HDHomeUI.md` 与 `pitfalls.md` P33。
-  **`.4`（改完待审核未提交）**：真站首装报 `E_COLUMN_UNKNOWN: a,ave`、点重试就好 ——
+  **`.4`（已提交 `4e01743`, 分支 `dev`, 已推 gitee, 10s）**：真站首装报 `E_COLUMN_UNKNOWN: a,ave`、点重试就好 ——
   A / A·GB 是**别的脚本运行时注入**的列（`#calcTHeadA` / `#calcTHeadAve`），比本脚本晚，**纯时序问题**。
   ① `a`/`ave` 改**可选列**（`REQUIRED_COLUMNS` 由全集剔除得出），缺了返回成功码 `OK_NO_CALC` 照常上妆，
   排版函数在列缺席时 `return ''`（绝不生成 `:nth-child(undefined)`）；
@@ -22,7 +22,7 @@
   （A/A·GB 变可选后这两个码只可能是真坏了）；
   ④ 新测试 `sim-hdui-optional-columns.js`（10 列照常上妆 / 补进来重摆 / 撤走不回退 / 半状态不弹横幅且自愈）
   + 剧本 `hdhome-ui-nocalc` + 静态校验 §9「可选列与等待窗口」12 条；仿真测试 22 → 23。
-  **`.3`（已提交 `bc2c0cd`，分支 `dev`，**未 push**）**：2026-09-19 用户报两件事 ——
+  **`.3`（已提交 `bc2c0cd`, 分支 `dev`, 已推 gitee, 10s）**：2026-09-19 用户报两件事 ——
   ① 右下角浮动圆钮与 PTAutoCheckIn v2 等脚本的 FAB 抢同一个位置;
   ② 5 套主题风格与原 UI 太接近, 12 个格子挤同一行 + 新 UI 按钮都堆到一起, 与设计初衷背道而驰。
   三件事: ① **入口内嵌** —— FAB 删, 量 `ul#mainmenu` 最后一个 li 的右边空档, 把入口摆成导航栏末尾的小文字钮
@@ -32,8 +32,9 @@
   导航全部改成 `flex+wrap`+`--hdui-navgap` 显式列间距;
   ③ **新测试** `sim-hdui-inline-dock.js`(内嵌入口+不压站内内容+换主题重摆+右下角不被占用),
   静态校验新增 §7「入口内嵌」+ §8「版式不再堆成一坨」, 仿真测试 21 → 22; 视觉复核
-  `.workbuddy-ai/_shot-hdui.js`(不入库)截 5 套顶部+中部+面板图. **`.2`(已提交 `1b38510`, 分支 `dev`, 已推 gitee)**:
-  安全性全面复验后的 4 项改进 —— `unload()` 补 `stopWatch()`、铺底色移到真正的 document-start、
+  `.workbuddy-ai/_shot-hdui.js`(不入库)截 5 套顶部+中部+面板图.
+  **`.2`(已提交 `1b38510`, 分支 `dev`, 已推 gitee)**: 安全性全面复验后的 4 项改进 ——
+  `unload()` 补 `stopWatch()`、铺底色移到真正的 document-start、
   首次安装默认 `default`、修 `scripts/HDHomeUI.md` 的文档漂移; 静态校验同步新增第 6 组断言.
   另用**真实页面**(`resources-do-not-track/` 下已脱敏的整页)离线核验过契约判定: 12 列全部识别、
   数据行 12 格、4 个 A 级锚点齐全 ⇒ 仿真复刻与现实一致(核验脚本在 `.workbuddy-ai/`, 不入库)。
