@@ -436,6 +436,23 @@ ok(/div\.niceTitle\{[^}]*color:var\(--hdui-fg\) !important/.test(src),
 ok(/div\.smilies td\{background:var\(--hdui-panel\) !important/.test(src),
     '论坛表情面板(div.smilies td)已深色化(.24: 与提示框同是 #7c98ae)');
 
+// ---- .25 三个用户实拍问题(.25): dock / 嵌套置顶 / 搜索箱 ----
+// dock: 旧版 background opacity .045 太低调, 用户说"切换按钮在原版 UI 中不明显"
+ok(/\.dock\{display:flex;[^}]*background:rgba\(245,179,66,\.22\)/.test(src)
+    || /\.dock\{[^}]*background:rgba\(245,179,66,\.22\)/.test(src),
+    '切换按钮 (.dock) 用实底色金 22% opacity + 粗体(.25: 原 4.5% opacity 看不见)');
+ok(/\.dock \.dot\{width:7px;height:7px;[^}]*box-shadow:0 0 6px/.test(src),
+    'dock 加了发光 dot(.25)');
+// 嵌套置顶: 标题格里嵌套的 tr.sticky_top 之前漏了, 露出站点默认白底
+ok(/table\.searchbox[\s\S]*TN \+ '\.sticky_top/.test(src)
+    || /\bTN \+ '\.sticky_top\{background:var\(--hdui-card\)/.test(src),
+    '嵌套 tr.sticky_top 也加了背景(.25: 之前 43 个透明)');
+// 搜索箱重新设计: 表格改卡片, 不能用 !important 破坏折叠
+ok(/table\.searchbox\{[\s\S]*display:block/.test(src),
+    '搜索箱改成卡片布局(.25: 用户说"完全重新设计")');
+ok(/tbody\[id\^="ksearchbox"\]:not\(\[style\*="display: none"\]\)/.test(src),
+    '搜索箱折叠态仍受尊重(.25: 不能用 !important 把折叠破坏)');
+
 // ---- .23 进度指示器的状态色: 底色被压平后必须靠文字补回"做种/下载"的线索 ----
 // 站点原靠底色区分(做种青 #44cef6 / 下载粉 #CC0066), 被 `[bgcolor]` 压成统一深色后两种状态一样了。
 // 靠 translateLeeching() 打的 `data-hdui-prog` 标记给文字染色补回。

@@ -114,7 +114,7 @@
 
 ## 现状（Current Status）
 
-- **2026-09-19 HDHomeUI UA 渲染界面的深色化（`2026.09.19.24`，已改码，**已提交**）**：四档扫描只覆盖 DOM
+- **2026-09-19 HDHomeUI UA 渲染界面的深色化（`2026.09.19.25`，已改码，**已提交**）**：四档扫描只覆盖 DOM
   元素，滚动条/下拉弹层/自动填充/`::selection` 是浏览器画的（P56）。补 `color-scheme:dark`（主力，零几何
   改动）+ autofill 用 inset box-shadow 盖掉浅黄底 + `::selection`/`::placeholder`/`:focus-visible` +
   输入框选择器补 password/number/email/url/search/tel。踩坑：显式 `::-webkit-scrollbar{width:10px}` 会把

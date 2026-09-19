@@ -2,7 +2,7 @@
 // @name         HDHomeUI
 // @name:zh-CN   HDHome 界面主题套件
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.19.24
+// @version      2026.09.19.25
 // @description  HDHome 界面主题: 胶片墙(齿孔片边 · 帧号 · 做种金), 可一键切回原站默认。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); A/A·GB 两列由其它脚本注入, 有或没有都能上妆、补进来会自动重摆; 搜索 / 下拉框 / 按钮等表单元素全部深色化(站点的白底在深色片基上刺眼); 标题格四个动作按钮(豆瓣/IMDb/下载/收藏)跟在标题后面同行; 导航栏页签(首页/论坛等)清掉站点的浅灰底; 站点自绘的图标(类别/促销/置顶图钉/推荐星/排序箭头/信箱等)全部换成主题 SVG; 表头六个指标列的概念图标(评论/存活/大小/做种/下载/完成)用概念图而非上下方向图标, 避免与「激活排序方向」混淆; 下载进度指示器的英文 "Leeching" 替换为中文「下载中」; 分享率、魔力值等统计值与数据行的暗红标记按主题重新上色(站点原色在深色底上几乎看不见); 滚动条 / 下拉弹层 / 自动填充等浏览器自带界面一并深色化; 非种子页(我的/论坛等)同样铺深色底, 站点用 inline style 画的白底/分页/工具栏容器一并压深, 不留大面积浅色块; 页面结构异常时先等结构就绪, 超时才提示并回退默认界面。
 // @author       ABacker
 // @license      GNU GPL-3.0
@@ -731,6 +731,13 @@ H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-ga
             // 置顶: 左侧金色内阴影(不占流, 不把列推开)
             R + '.sticky_top{box-shadow:inset 3px 0 0 var(--hdui-accent);}',
             R + ' > td{overflow:hidden;min-width:0;}',
+            // ⚠️ .25: 上面那条 R + '.sticky_top' **只匹配外层** `tr.sticky_top`(`R` 是直接子代选择器)。
+            //    标题格里**嵌套的** `<table class="torrentname">` 也有 `tr.sticky_top`(共 86 个里有 43 个),
+            //    它们拿不到这条规则, 露出站点默认**白底** — 用户实拍"第二段置顶种子背景为白色"。
+            //    真站探测证实: 86 个 tr.sticky_top, 父级全在 tbody 下, 但只有 43 个背景 rgb(32,28,24)(themed),
+            //    另 43 个透明 —— 嵌套那批全裸奔。
+            //    修: 给嵌套 tr.sticky_top **显式背景**(不加金边, 避免外内双金边), 让它和外层一致。
+            TN + '.sticky_top{background:var(--hdui-card);}',
             basis.join('\n'),
             // 数据行对齐: 站点 `table.torrents td.rowfollow{text-align:center}` 会把标题也居中
             tdRule(m, ['type', 'title', 'uploader'], 'text-align:left;'),
@@ -1175,9 +1182,63 @@ function detectColumns(table) {
             + 'border-radius:0 10px 10px 10px;padding:4px;font-size:12.5px;}',
             'html[data-hdui-theme] div.smilies td{background:var(--hdui-panel) !important;'
             + 'color:var(--hdui-fg) !important;border-color:var(--hdui-line);}',
-            'html[data-hdui-theme] table.searchbox{background:var(--hdui-panel);color:var(--hdui-fg);border:1px solid var(--hdui-line);}',
-            'html[data-hdui-theme] table.searchbox td.colhead{background:var(--hdui-panel);color:var(--hdui-fg);}',
-            'html[data-hdui-theme] table.searchbox td.rowfollow{background:transparent;border-color:var(--hdui-line);}',
+            // ---- .25 搜索箱「完全重新设计」 ----
+            // 站点 table.searchbox 是**表格布局**, 每行每格都套 `<td class="embedded">`,
+            // 表格+默认样式在深色主题上东拼西凑(色虽压深, 但布局/间距/控件外观与卡片胶片墙不搭) ——
+            // 用户原话"不符合当前主题的风格, 需要完全重新设计"。
+            // 改: 整张表 → flex 卡片(标题一行 + 表单一行 + 标签带可选折叠);
+            //     控件统一深色 + 圆角 + 紧凑间距 + 搜索框做略大高度; 标题行左对齐 + 强调下边线。
+            'html[data-hdui-theme] table.searchbox{',
+            '  display:block;background:var(--hdui-panel);color:var(--hdui-fg);',
+            '  border:1px solid var(--hdui-line);border-radius:12px;padding:0;overflow:hidden;',
+            '  margin:8px 0;font-family:var(--hdui-font);}',
+            // 标题行: 卡片头, 一条金底线划分, 不要站点那个"链接+小图标"的折叠式标签
+            'html[data-hdui-theme] table.searchbox > tbody:first-child > tr:first-child > td.colhead{',
+            '  display:block;background:rgba(245,179,66,.06);color:var(--hdui-accent);',
+            '  border:0;border-bottom:1px solid var(--hdui-line);padding:10px 14px;',
+            '  font-size:12.5px;font-weight:600;letter-spacing:.04em;}',
+            // 折叠开关小图标(原版是站点图片 + text link): 隐藏站点样式, 用主题风的 caret
+            'html[data-hdui-theme] table.searchbox img.plus{display:none;}',
+            'html[data-hdui-theme] table.searchbox td.colhead a{',
+            '  color:inherit;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}',
+            'html[data-hdui-theme] table.searchbox td.colhead a::after{',
+            '  content:"";width:0;height:0;border:4px solid transparent;',
+            '  border-top-color:currentColor;transition:transform .14s;}',
+            // 折叠展开 tbody#ksearchboxmain: 改成 padding 卡片内边距
+            // ⚠️ **不能**写 `display:block !important` —— 站点折叠机制是把 tbody 的
+            // `style="display: none"` 当内联样式, 用户点「搜索箱」标题时 JS 切换。
+            // 用 !important 会破坏折叠(用户能看到的搜索箱永远展开)。
+            // 改: 只在**展开态**(内联 style 不含 "display: none")时才铺成卡片,
+            // 折叠态照旧(只是我的 padding/卡片样式不应用)。
+            'html[data-hdui-theme] table.searchbox tbody[id^="ksearchbox"]:not([style*="display: none"]){',
+            '  display:block;padding:14px;}',
+            'html[data-hdui-theme] table.searchbox tbody[id^="ksearchbox"] table{',
+            '  display:flex;flex-wrap:wrap;align-items:center;column-gap:14px;row-gap:10px;width:100%;}',
+            'html[data-hdui-theme] table.searchbox tbody[id^="ksearchbox"] table > tbody{',
+            '  display:contents;}',
+            'html[data-hdui-theme] table.searchbox tbody[id^="ksearchbox"] table > tbody > tr{',
+            '  display:flex;flex-wrap:wrap;align-items:center;column-gap:14px;row-gap:10px;width:100%;}',
+            // 文字标签(「搜索关键字:」「范围:」「匹配模式:」「标签:」): 紧凑灰色
+            'html[data-hdui-theme] table.searchbox td.embedded{',
+            '  background:transparent;border:0;padding:0;color:var(--hdui-muted);',
+            '  font-size:12.5px;white-space:nowrap;}',
+            'html[data-hdui-theme] table.searchbox td.embedded b{',
+            '  font-weight:500;color:var(--hdui-fg);}',
+            // 复选框组(类型): 同样按 flex 一行展开, 不挤
+            'html[data-hdui-theme] table.searchbox td.bottom{',
+            '  background:transparent;border:0;padding:2px 6px;}',
+            // 隐藏 tag 胶囊: 原型/老主题保留 23 分类色(刻意的), 这里**不要**覆写,
+            // 让 `span.tags` 的色块直接当分类按钮用, 跟种子页一致。
+            // "给我搜" 提交按钮: 站点默认浅蓝渐变, 改用主题金
+            'html[data-hdui-theme] table.searchbox input[type=submit],'
+            + 'html[data-hdui-theme] table.searchbox input.btn{',
+            '  background:rgba(245,179,66,.18);color:var(--hdui-accent);',
+            '  border:1px solid rgba(245,179,66,.55);border-radius:8px;',
+            '  padding:6px 16px;font:600 12.5px/1 var(--hdui-font);cursor:pointer;',
+            '  transition:background .14s,border-color .14s,color .14s;}',
+            'html[data-hdui-theme] table.searchbox input[type=submit]:hover,'
+            + 'html[data-hdui-theme] table.searchbox input.btn:hover{',
+            '  background:var(--hdui-accent);color:#17130e;border-color:var(--hdui-accent);}',
             // ---- 表单元素(深色化): 搜索框 / 下拉框 / 按钮 ----
             // 站点默认 `input[type=text]` / `select` 是白色背景 + 黑字(白底在深色片基上刺眼),
             // `input.btn` 是浅蓝底白字(没跟着主题变深) —— 用户实拍截图反馈「给我搜按钮仍是白色」。
@@ -1774,20 +1835,25 @@ function detectColumns(table) {
     function panelCss() {
         return [
             // ---- 入口: 导航栏预留槽位里的胶囊钮 ----
-            '.dock{display:flex;align-items:center;gap:6px;width:100%;height:100%;padding:0 11px;',
+            // .25: 原版背景 opacity .045、border .32、text muted ⇒ **太低调了**,
+            //      用户实拍说"切换按钮在原版 UI 中不明显"。改成实底色 + 更明显的色位 + 更亮的字,
+            //      让胶囊"想不被看见都难"。
+            '.dock{display:flex;align-items:center;gap:7px;width:100%;height:100%;padding:0 12px;',
             'box-sizing:border-box;border-radius:999px;cursor:pointer;white-space:nowrap;',
-            'user-select:none;overflow:hidden;background:rgba(255,255,255,.045);',
-            'border:1px solid rgba(245,179,66,.32);color:var(--ui-muted);',
-            'font:11.5px/1 var(--ui-font,"Microsoft YaHei",sans-serif);',
-            'transition:background .14s,border-color .14s,color .14s;}',
-            '.dock:hover,.dock:focus-visible{background:rgba(245,179,66,.13);',
-            'border-color:var(--ui-accent);color:var(--ui-fg);}',
-            '.dock .dot{width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:var(--ui-accent);}',
-            '.dock .label{opacity:.85;}',
-            '.dock .name{overflow:hidden;text-overflow:ellipsis;color:var(--ui-accent);font-weight:600;}',
+            'user-select:none;overflow:hidden;background:rgba(245,179,66,.22);',
+            'border:1px solid rgba(245,179,66,.7);color:#f5b342;',
+            'font:600 11.5px/1 var(--ui-font,"Microsoft YaHei",sans-serif);',
+            'letter-spacing:.02em;',
+            'transition:background .14s,border-color .14s,color .14s,box-shadow .14s;}',
+            '.dock:hover,.dock:focus-visible{background:rgba(245,179,66,.34);',
+            'border-color:#f5b342;color:#fff;box-shadow:0 0 0 4px rgba(245,179,66,.16);}',
+            '.dock .dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#f5b342;',
+            'box-shadow:0 0 6px rgba(245,179,66,.7);}',
+            '.dock .label{opacity:.9;color:rgba(245,179,66,.85);font-weight:500;}',
+            '.dock .name{overflow:hidden;text-overflow:ellipsis;color:#fff;font-weight:600;}',
             // 三角 caret 用边框画(原型的 em)
             '.dock .caret{width:0;height:0;flex:0 0 auto;border:3.5px solid transparent;',
-            'border-top-color:currentColor;margin-top:3px;opacity:.7;}',
+            'border-top-color:currentColor;margin-top:3px;opacity:.85;}',
             // ---- 面板: 卡片式浮层 ----
             '.panel{position:fixed;display:none;grid-template-columns:1fr 1fr;gap:8px;width:340px;',
             'max-height:min(430px,calc(100vh - 24px));overflow:auto;padding:12px;box-sizing:border-box;',
