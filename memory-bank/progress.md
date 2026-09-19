@@ -12,7 +12,7 @@
   RSS 增删、分页、页脚）由「功能基线快照 + hit-test」两道仿真断言守住。结构契约（A 级锚点 + 12 列 +
   行列数一致）任一不满足 ⇒ 卸妆 + 控制台 error + 顶部红色横幅 + 写 `hdui.lastError`；运行时
   MutationObserver 复查。诊断统一走 `Diag` 账本，禁止空 catch，挂载 window error/unhandledrejection 只记不吞。
-  详见 `scripts/HDHomeUI.md`。**`.3`（改完待审核未提交）**：2026-09-19 用户报两件事 ——
+  详见 `scripts/HDHomeUI.md`。**`.3`（已提交 `bc2c0cd`，分支 `dev`，**未 push**）**：2026-09-19 用户报两件事 ——
   ① 右下角浮动圆钮与 PTAutoCheckIn v2 等脚本的 FAB 抢同一个位置;
   ② 5 套主题风格与原 UI 太接近, 12 个格子挤同一行 + 新 UI 按钮都堆到一起, 与设计初衷背道而驰。
   三件事: ① **入口内嵌** —— FAB 删, 量 `ul#mainmenu` 最后一个 li 的右边空档, 把入口摆成导航栏末尾的小文字钮
