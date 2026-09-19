@@ -45,6 +45,24 @@ function readBody(req) {
     });
 }
 
+// 站内图片占位。
+// 真站的图标几乎都是 1×1 的 `trans.gif` + CSS 雪碧图(尺寸由 CSS 给), 不是真的图片文件。
+// 必须返回一张**能解码的** 1×1 透明图: 否则 <img> 变成"加载失败", 浏览器会把 alt 文字画出来,
+// 把格子撑得比真站宽/高得多 —— 截图复核和几何断言都会被这个假象带偏。
+const BLANK_GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+const BLANK_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64');
+
+function image(res, buf, type) {
+    res.writeHead(200, {
+        'Content-Type': type,
+        'Content-Length': buf.length,
+        'Cache-Control': 'no-store'
+    });
+    res.end(buf);
+}
+
 function createSimServer() {
     const store = new Map();
     const log = [];
@@ -79,6 +97,16 @@ function createSimServer() {
                 const obj = JSON.parse((await readBody(req)) || '{}');
                 for (const [k, v] of Object.entries(obj)) store.set(k, v);
                 return json(res, { ok: true });
+            }
+
+            // 站内静态图: 一律给 1×1 透明占位(尺寸由站点 CSS 决定, 与真站一致)。
+            // ⚠️ 必须在 renderPage **之前**拦下来: 站点剧本对未知路径是兜底渲染整页 HTML 的,
+            //    把 HTML 当成图片响应, <img> 就是"加载失败" —— 浏览器改用 alt 文字排版,
+            //    一个 16px 的图标会变成 83px 宽("download" 那串字), 布局与几何断言全被带偏。
+            if (path.startsWith('/static/')) {
+                return /\.gif$/i.test(path)
+                    ? image(res, BLANK_GIF, 'image/gif')
+                    : image(res, BLANK_PNG, 'image/png');
             }
 
             const out = await renderPage({ host, path, url, req });

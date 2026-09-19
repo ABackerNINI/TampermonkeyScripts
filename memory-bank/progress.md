@@ -6,7 +6,7 @@
 
 - **PTAutoCheckIn**（`2026.09.19.4`）：被动签到 + 批量调度（发起页常驻 + 后台标签串行）+ 跨站 FAB 结果面板 + 贴吧多吧（unit 级独立冷却/状态）+ 28 站 + 贴吧 6 吧。含：FAB 四皮肤（变色/数字/信号灯/光环）、站点图标、跨天守卫、仅检测型（U2）、无按钮访问即签型（MTeam 系六站）、no-text 按钮站（NodeLoc）、签到按钮重现降级提醒（suspect）、行内单站强制重试。**v2 已并入正式版**, 生产脚本为单一 `PTAutoCheckIn.user.js`（`@name PTAutoCheckIn`）。
   **2026-09-18 慢站误判修复（P28）**：整流程超时定时器不再覆写已给出的结论（旧版 25s 后把 `skipped`/`detect_only`/`suspect` 一律改成 `failed`，是「经常失败」主因）；新增 `unconfirmed` 独立状态（未确认，不计入失败、可重试）；`writeStatus` 状态单向阶梯；点击后观察窗改事件驱动（`pagehide`/`beforeunload`/URL 变化/成功特征，上限 4s）+ 有界复检（+5s/+12s，只检测不重复点击）；`waitForElement` 可交互判定 + 慢页面超时自适应；**超时预算不变式**（`detectMs + stepsMs + 18000ms <= 40000ms`）与双校验（运行时 `auditUnitBudgets()` + `tests/ptautocheckin/check-ptac-budget.js`）；进度心跳 + 20s 零进度判死站；整流程 25s→40s、调度窗口 50s→60s。**已提交**（`ebb06bb`，分支 `dev`），待真实站点实测校准。
-- **HDHomeUI**（`2026.09.19.7`，2026-09-19 新建，TASK018）：HDHome 界面主题 —— **胶片墙**（一套，
+- **HDHomeUI**（`2026.09.19.11`，2026-09-19 新建，TASK018/TASK019）：HDHome 界面主题 —— **胶片墙**（一套，
   可在面板切回「原站默认」）。原 5 套（片库索引 / 电传纸带 / 大开本 / 瑞士网格 / 播控台）用户判定
   "已经没用"，`.7` 全部移除。**纯样式层**改造：不重建 DOM、不接管交互，
   列索引运行时探测后动态生成 CSS，原站功能（16 项导航、信息栏入口含签到、搜索箱与折叠、排序、
@@ -114,6 +114,50 @@
 
 ## 现状（Current Status）
 
+- **2026-09-19 HDHomeUI UA 渲染界面的深色化（`2026.09.19.24`，已改码，**待审核**）**：四档扫描只覆盖 DOM
+  元素，滚动条/下拉弹层/自动填充/`::selection` 是浏览器画的（P56）。补 `color-scheme:dark`（主力，零几何
+  改动）+ autofill 用 inset box-shadow 盖掉浅黄底 + `::selection`/`::placeholder`/`:focus-visible` +
+  输入框选择器补 password/number/email/url/search/tel。踩坑：显式 `::-webkit-scrollbar{width:10px}` 会把
+  文档宽 1247→1252（内容区宽 5px），已改为只着色不改几何并加反断言。
+- **2026-09-19 HDHomeUI 站点 `<font>` 着色的对比度修复（`2026.09.19.17`，已改码，**待审核**）**：新增真站
+  第四档扫描「对比度」，扫出 24 处看不见的字（P55）：底栏 `font.color_*` 统计值一律站点 `#1900d1`（差 9）、
+  数据行暗红 `<font color>`（最暗 `#550000`，差 3）。修：`INFO_COLORS` 7 类各给可读色位 +
+  `FONT_DARK_RED` 15 个暗红值枚举提亮。真站四档扫描（漏白 / 小件近白 / 残留装饰 / 对比度）**全部无 ✓**。
+- **2026-09-19 HDHomeUI 补齐「站点自绘、脚本完全没接管」的图标族（`2026.09.19.16`，已改码，**待审核**）**：
+  由 P53 教训①延伸出的主动排查（真站整页「残留装饰」扫描：凡 `background-image` 仍是 `url(http…)` 的
+  `<img>` 都没接管），扫出 10 族。其中 **`img.time` 是真 bug**（P54）：列映射把 `time` 归一化成逻辑键
+  `alive`，但 CSS 按**键名**生成 `img.alive`，真站 DOM 是 `<img class="time">` ⇒ 一条都不命中，
+  6 个指标图标里偏偏「存活」还挂着站点雪碧图。修：`ICON_MET` 的 `alive`/`time` 都写。
+  其余 9 族新增 `ICON_MISC`（新字形 pin/star/mail/people/plus），content + background-image 双写，
+  且不加 `#torrenttable` 前缀（箭头与信箱在底栏 `td.bottom`）。真站：残留装饰**无 ✓**。
+- **2026-09-19 HDHomeUI 导航页签白底修复（`2026.09.19.15`，已改码，**待审核**）**：用户第三张截图
+  「首页/论坛等标签仍是白色」。真站整页小件扫描定位到 `ul#mainmenu > li > a` 共 **15 个 `rgb(222,222,222)`**。
+  根因（新 P53）：站点 `ul.menu li a` 自带 1px 白边 + `#dedede` 底，脚本**只 `border:0` 没清 background**；
+  而原型导航项默认无底 ⇒ 仿真页也没有这条底 ⇒ **仿真测不出来**。修：显式 `background:transparent`。
+  仿真页补上这条（从真站量出来），`sim-hdui-film-fidelity` 加断言并**验证去掉修复会红（实际 15）**；
+  真站「小件近白」清零。`.14` 补的是 inline style / toolbar / 分页一族兜底（同样只能靠用户截图驱动）。
+- **2026-09-19 HDHomeUI 表单深色化 + 动作区改回标题后面（`2026.09.19.13`，已改码，**待审核**）**：
+  用户第二张截图反馈两点：
+  ① **搜索框 / 下拉框 / 单选 / 复选 / 「给我搜」按钮仍是白色**（原先对表单只设了 font-family/font-size，
+     完全没管背景/边框/文字色 —— 站点白底在深色片基上刺眼）：input/select/textarea 深色底 + 金边
+     + fg 字（focus 转金边），按钮深色底 + 金边 + hover 转金底深字；radio/checkbox 用 accent-color 跟主题金。
+  ② **豆瓣/IMDb/下载/收藏应在标题后面**（`.12` 的 `flex:1 1 100%` 把动作按钮挤到第二行，**被用户否决**）：
+     改 `flex:0 0 auto` 与标题**同行**，标题 `flex:1 1 0 + min-width:0` 让出空间（长标题缩成省略号），
+     chip 内部仍是两列竖排。
+  真站验收：表单 16 个、仍是近白底 **0**；4 chip 与标题**同行 ✓**；雪碧图 100/100 清 none；
+  动作图标 100/100 双写；漏白扫描无；文档宽 1247 未撑宽。新断言「meta 与标题同行」+ 静态防回退。
+- **2026-09-19 HDHomeUI 真站三处画错修复（`2026.09.19.12`，已改码，**待审核**）**：用户贴图报「未能完整复刻
+  `film.html`」——大面积白底 / 图标未替换 / 豆瓣·IMDb·下载·收藏挤成一坨。三条**均非原型差异（原型里没有那四个
+  按钮）**，是「原型派生的仿真测不到」的又一批实例（P48/P49）：
+  ① **图标（新 P50）**：站点 `img[class*="c_"]{background-image:url(catsprites.png) !important}` 带 `!important`，
+     脚本用 `background:rgba()` 简写清底（普通声明）压不过 ⇒ 45×46 的雪碧图透在 SVG 底下（裁到 22px 即碎片）。
+     改为显式 `background-image:none !important` + 单独 `background-color`；下载/收藏（站点用 `background` 画）
+     改成 content 与 background-image **双写同一张**。② **非种子页白底（新 P51）**：真凶不是 `body`（早盖住了），
+     是站点通配 `table{background-color:#bccad6}` ⇒ 补通配 `table` / `td.rowfollow` / `td.colhead` / `[bgcolor]`
+     + `<html>` 铺底。③ **动作按钮（新 P52）**：`<tr>` 摊平成 flex + 隐藏 `<br>` 毁掉了竖排
+     ⇒ 改回 `flex-direction:column` 两列竖排（评分列 | 操作列）+ 每个动作独立 chip。
+  新增真站独有的 4 个图标（豆瓣 / IMDb / 下载 / 收藏；豆瓣·IMDb **无 class**，按 `src*=` 选）。
+  新测试 `sim-hdui-meta-actions.js` + 静态 §13 防回退。**待真站实测**（见 `activeContext.md` 下一步 ⑦⑧⑨）。
 - **2026-09-19 主面板交互调整（`2026.09.19.4`，已改未提交，待实测校准项 23）**：① **主面板失焦自动关闭** ——
   点面板外（`document` 捕获阶段 `mousedown`）或切标签页/窗口（`window` `blur`）即收起，监听随面板展开/收起挂摘；
   点在 UI 自身（`host.contains(e.target)`）与**带操作钮的横幅（中断恢复）**豁免。② **签到按钮重现不弹主面板** ——

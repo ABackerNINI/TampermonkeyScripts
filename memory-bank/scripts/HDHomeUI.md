@@ -4,8 +4,33 @@
 > **不重建 DOM、不接管交互**，原站功能全部保留；页面结构一旦与预期不符，**提示并回退站点默认界面**。
 > 设计依据与实施计划见 `tasks/TASK018-hdhome-ui-themes.md`。
 
-- 当前版本：`2026.09.19.10`（`.4` 已提交 `4e01743`、`.3` 已提交 `bc2c0cd`、`.2` 已提交 `1b38510`，
-  分支 `dev`，均已推 gitee；`.5`–`.10` **均已提交 d56ffbb**）
+- 当前版本：`2026.09.19.11`（`.4` 已提交 `4e01743`、`.3` 已提交 `bc2c0cd`、`.2` 已提交 `1b38510`，
+  分支 `dev`，均已推 gitee；`.5`–`.10` **均已提交 d56ffbb**；**`.11` 已改码、待审核**）
+- **2026.09.19.11：与原型 `film.html` 的保真度对齐（TASK019）** —— 用户报「未能完整复刻原型」。
+  查出三类差异，共 29 条，根因是**「原型」被当成了「真站」**（详见 `pitfalls.md` P48/P49）：
+  · **A 类 真站适配缺失（11 条，真站上真的画错）**：类别家族只覆盖 7 族（真站 12 族，
+    漏 `c_cartoon`/`c_misc`/`c_4kuhd_remux`/`c_tvshows`/`c_tvmusics`）且**无兜底** ⇒
+    未命中时只压尺寸不换图，而 `catsprites.css` 是按 45×46 算的 `background-position` ⇒ 碎片；
+    促销 `.tags.tfree` 在真站**一条也匹配不到**（真站是 `img.pro_*`）；真站标签 `span.tags`
+    （`float:left` + 23 分类底色）完全没样式；列头「发布者」**重复**（真站该格自带文字）；
+    `td.colhead{color:#fff;font-weight:bold}` 与 `table.torrents td.rowfollow{text-align:center}`
+    未重置 ⇒ 列头白粗、标题居中；`torrentname` 内层行其实是**三格**却被摊平成 inline 乱流；
+    `tdSel(title) img` 通杀压掉图钉/促销/下载图标；RSS 被站点 `filter:grayscale` 去色；
+    `table{background:#bccad6}` 通配命中嵌套小表 ⇒ 深色底上冒浅蓝块。
+  · **B 类 原型细节未搬运（13 条，观感差异）**：列头 **6 个 `::before` 图标**（类型/标题/进度/A/A·GB/发布者）
+    全缺；灰阶**少一层**（补 `--hdui-dim:#7a7267`）；类别色块 16+3 → 22+6(34px)；列头图标尺寸；
+    列头 hover 药丸底；数据行/列头对齐；上传者与标题的 hover 链（全局 `a:hover` 被更高特异性**压死**）；
+    `#nav_block`/`#info_block` 整块缺失；导航末 6 项弱化；**入口 chip 胶囊化 + 面板卡片化**；
+    入口落位（改为锚在导航右端的**预留槽位**，不再掉到第二行压住信息栏）。
+  · **C 类 测试保真度不足（5 条）**：仿真页是「原型的简化副本」而非「真站的子集」⇒ 26/26 全绿但真站画错。
+  **根治手段**：① 仿真页按真站脱敏页重写（类别 12 族 + 未知家族探针、真站标签类名、
+  三格标题格 + 图钉 + 促销图 + 别名、站点 CSS 补齐）；② `#torrenttable{contain:inline-size}`
+  切断 min-content 传播（表格不再被内容撑宽，标题列自动拿到剩余宽度，不再依赖 `calc(100vw-900px)` 魔数）；
+  ③ 新增第 27 个用例 `sim-hdui-film-fidelity.js`（14 条运行时断言）+ 静态 §12，并**逐条反向验证**
+  （13 项改坏→变红→改回，`.workbuddy-ai/_verify-fidelity-assertions.js`）。
+  **已知取舍**：行高 ~110px（原型 ~50px）—— 真站标题格含图钉/促销/6~8 标签/别名/豆瓣IMDb/下载收藏，
+  内容量本就远多于原型；标签 23 分类色保留、促销改用 3 个金徽章（`<img>` 是替换元素，伪元素不渲染，
+  带文字的"药丸"纯 CSS 做不到）。全量 **27/27**。
 - **2026.09.19.10：两个布局陷阱（都是"宽屏测不出、窄屏才暴露"）。**
   ⚠️ 根因同源：站点外层是**固定宽 + `table-layout:auto`**，会被内容的 `max-content` 撑开。
   ① **上妆把整页撑宽**：文档宽 **1260 → 1503**，窄屏得多横向滚 240px。
@@ -87,6 +112,11 @@
     超时才 `E_STRUCT_TIMEOUT` 回退；等待期间 `data-hdui-state="pending"`，**已上妆的不卸妆**（免闪一下）；
   · `E_COLUMN_UNKNOWN` / `E_ANCHOR_MISSING` **不进等待窗口** —— 那两个码在 A/A·GB 变可选之后
     只可能是「必需的东西真没了」，等也没用，直接回退。
+- **导航项必须显式 `background:transparent`**（`.15` / pitfalls **P53**）：站点 `ul.menu li a`
+  自带 **1px 白边 + `#dedede` 浅灰底**，只写 `border:0` 不清底 ⇒ 首页/论坛等就是一排白页签。
+  原型 `film.html` 的导航项**默认无底**（只有 hover 的 5.5% 白），所以从原型派生的仿真页也没有这条底
+  —— **仿真页已在 `.15` 补上 `ul.menu li a{border:1px solid #fff;background:#dedede}`（真站量出来的）**。
+  共通教训：清样式要**成对清**（border / background / box-shadow / outline），漏一个就是一块原站色漏出来。
 - 入口**内嵌**在导航栏末尾（`ul#mainmenu` 最后一个 li 的右侧空档），不再用右下角浮动圆钮 ———
   与 PTAutoCheckIn v2 等脚本的 FAB 抢同一个位置，2026-09-19 决定改。位置由 `dockRect()` 量取；
   菜单缺位时退到 `table.mainouter` 右上；都没有再退到 `position:fixed` 兜底。
@@ -238,10 +268,17 @@
 | `tests/hdhomeui/sim-hdui-structure-guard.js` | 缺列 / 行列数不符 / 缺锚点 ⇒ 回退 + 横幅 + 记录 + 零危险访问；空表体与无表页不算错；运行中改坏自动回退 |
 | `tests/hdhomeui/sim-hdui-danger-guard.js` | 自持 UI 点击不冒泡到站内监听、切换零站内请求、站内监听与 RSS 仍存活、危险入口未被挂 onclick |
 | `tests/hdhomeui/sim-hdui-icons.js` | **图标真的画出来了**（不只是"没回归"）：类别/指标图标 `content` 是内联 SVG 且**宽度 > 0**（P42 固有尺寸）；导航 16 项挂上 SVG 且**保种 ≠ 断种**；站内 RSS 链接不被压成零宽 |
+| `tests/hdhomeui/sim-hdui-film-fidelity.js` | 与原型 `film.html` 的保真度（列头补充图标 / 非白粗字 / 数据行对齐 / 类别色块 34px / 三层灰 / 促销徽章 / 标签药丸 / 导航弱化 / 入口尺寸） |
+| `tests/hdhomeui/sim-hdui-meta-actions.js` | **标题格动作区与图标背景层**：类别图标 `background-image` 已清成 `none`（P50，站点那条带 `!important`）；豆瓣/IMDb/下载/收藏 `content` 与 `background-image` 双双换成 SVG；四个 chip 竖排两列、两两不重叠（P52）；无种子表页 `table` 底色已压深（P51） |
+| `tests/hdhomeui/sim-hdui-inline-dock.js` | 入口内嵌（不悬浮、不压站内内容） |
+| `tests/hdhomeui/sim-hdui-layout-width.js` | 不撑宽页面 / 窄屏导航可点 / 片头吸顶 |
+| `tests/hdhomeui/sim-hdui-legacy-theme.js` | 旧主题 id 静默迁到胶片墙，不冒充结构错误 |
+| `tests/hdhomeui/sim-hdui-optional-columns.js` | A / A·GB 缺席或晚到都不误判（10 列仍上妆 / 补进来自动重摆 / 撤走不回退 / 半状态不弹横幅且自愈） |
 
 仿真剧本：`tests/lib/sim/hdhome-ui-page.js`（**结构化复刻、零私有数据**，
-变体 `hdhome-ui` / `-broken` / `-shape` / `-empty` / `-notable` / `-nonav`）；
-共享工具 `tests/lib/hdui-help.js`；`harness.withSim(fn, { scriptPath })` 支持测任意脚本。
+变体 `hdhome-ui` / `-broken` / `-shape` / `-nocalc` / `-empty` / `-notable` / `-nonav`）；
+共享工具 `tests/lib/hdui-help.js`；`harness.withSim(fn, { scriptPath })` 支持测任意脚本
+（**缺省注入的是 PTAutoCheckIn**，测本脚本必须显式传 `{ scriptPath: H.HDUI_PATH }`）。
 
 ---
 
@@ -253,17 +290,27 @@
 | 组 | 数量 | 选择器 | 说明 |
 |---|---|---|---|
 | 类别 | 7（含别名共 11 条匹配） | `#torrenttable img[class*="c_xxx"]` | 换图 + 本色 16% 淡底圆角色块 |
-| 表头指标 | 8 | `#torrenttable img.{comments,time,size,seeders,leechers,snatched,user}` + `.torrentname img` | 评论/存活/大小/做种/下载/完成/发布者/RSS，各一色 |
+| 表头指标 | 8 | `#torrenttable img.{comments,time,size,seeders,leechers,snatched,user}` + `.torrentname td.rss img` | 评论/存活/大小/做种/下载/完成/发布者/RSS，各一色 |
 | 导航 | 16 | `ul#mainmenu li a[href*="..."]::before` | 每项一色 |
+| 标题格动作 | 4 | `img[src*="icon-douban"]` / `img[src*="icon-imdb"]` / `img.download` / `img.delbookmark` | **真站独有（原型 `film.html` 里没有）**：豆瓣 / IMDb / 下载 / 收藏 |
 
-**三条实现纪律**（改图标时别破坏）：
+> ⚠️ 豆瓣与 IMDb 的 `<img>` **没有 class**，只能按 `src` 里的文件名选；
+> 下载 / 收藏虽然有 class，但站点是拿 `background:url(png.png)` 画的 —— 详见纪律 4。
+
+**四条实现纪律**（改图标时别破坏）：
 1. **`iconCss()` 必须放在 `theme.css(colMap)` 之前，且只写 `content` 不写死尺寸。**
-   主题用更高特异性的选择器（含 `td:nth-child()`）自己定 `width/height`，
-   `reel` 16px / `tape` 12px 等照旧生效。在图标层写死尺寸会压掉主题的排版。
-2. **`tape` 主题 `navIcons: false`。** 电传纸带用 `::before`/`::after` 画 `[ ]` 方括号，
-   那就是它的设计语言；挂导航图标会顶掉方括号。类别/指标图标照常（它们走 `img` 的 `content`，不冲突）。
-3. **导航 `href` 用 `href*=` 子串匹配，且靠顺序覆盖**：先 `torrents.php`（种子）兜底，
+   主题用更高特异性的选择器（含 `td:nth-child()`）自己定 `width/height`。
+   在图标层写死尺寸会压掉主题的排版。
+2. **导航 `href` 用 `href*=` 子串匹配，且靠顺序覆盖**：先 `torrents.php`（种子）兜底，
    再用 `mystat=keep` / `mystat=dead` 覆盖成保种 / 断种 —— 后写的规则同特异性胜出。
+3. **换图前先确认该图标在真站是"前景"还是"背景"画的**（P50）。
+   真站 `catsprites.css` 给类别图标的是 `background-image:url(catsprites.png) !important` ——
+   **带 `!important`**，而 `background:rgba(...)` 简写隐含的 `background-image:none` 是普通声明，
+   根本清不掉 ⇒ 换上去的 SVG 底下仍透着 45×46 的雪碧图（裁到 22px 就是一块碎片）。
+   所以类别 / 指标图标一律显式写 `background-image:none !important` + `background-color:`（色块单独给）。
+4. **站点用 `background` 画的图标（下载 / 收藏）要 content 与 background-image 双写同一张。**
+   只换 `content` 换不干净；两个都换成同一个 SVG，`content` 万一失效背景层还能兜住。
+   颜色避开金色（金只属于做种数与交互态），全部复用已有色板，不新增色相。
 
 **图标选型的方法论**（踩坑总结在 `pitfalls.md` P34–P41，改图标前必读）：
 - 16px 下只有三类信号能幸存：**缺口 / 方向 / 配件**；叶脉、茎弯折、卷边这类细节一律消失。
@@ -283,7 +330,11 @@
 ## 8. 改动须知
 
 - 改任何代码/元数据 ⇒ **同步递增 `@version`**（`conventions.md` §0.3）。
-- 改图标 ⇒ 同步更新本节 + `pitfalls.md` 的 P34–P41，并重新出四档对照图确认 16px 仍可辨。
+- 改图标 ⇒ 同步更新本节 + `pitfalls.md` 的 P34–P41 **与 P50**（背景层必须显式清），
+  并重新出四档对照图确认 16px 仍可辨。
+- **动样式后的验收不止"仿真全绿"**（P49）：仿真全绿只证明没回归，不证明真站画得对。
+  还要**开真站的非种子页（我的 / 论坛 / 详情页）确认没有大面积浅色块**（P51），
+  以及**标题格四个动作按钮不粘连**（P52）。
 - 改主题：改 `filmCss` 后若动了骨架（齿孔 / 帧号 / 吸顶 / 占比条 / 置顶），
   `check-hdui-static.js` §4 与 `sim-hdui-theme-switch.js` 会立刻变红 —— 那是故意的，说明骨架被改掉了。
 - 真站可用性：导航 16 项 + 内嵌入口必须能放进 ~1262px 视口（原型给的间距偏宽，照抄会把第 16 项挤出屏）。

@@ -20,19 +20,74 @@
 const ROWS = 12;
 
 // ---------- 站点自带样式(模拟 NexusPHP 默认观感, 作为"默认 UI"的基线) ----------
+/**
+ * 站点自带样式 —— **必须是从真站 CSS 派生的子集, 不是"大概像"**。
+ *
+ * 逐条对应真站(脱敏整页 + 它的 theme.css / sprites.css / catsprites.css / 行内 style):
+ *   - `table.torrents td.colhead|td.rowfollow{text-align:center}`  —— 真站会把所有格子居中
+ *   - `td.colhead{white-space:nowrap;font-weight:bold;color:#ffffff;background-color:#2f4879}`
+ *   - `span.tags{...float:left;height:16px;color:#fff...}` + 分类底色(真站行内 style)
+ *   - `td.rss{width:32px}` + `a[data-toggle-rss] img{width:32px;filter:grayscale(100%)}`
+ *   - `img.c_*{45×46 + background-position + !important}`(catsprites.css) 与 `img.pro_*{36×11}`、
+ *     `img.sticky{14×14}`、`img.download|delbookmark{16×16}`、`img.star{11×11}`(sprites.css)
+ *   - `.sticky_top{background-color:#bad6f4}`
+ *
+ * ⚠️ 缺任何一条, 就等于给脚本留一个测不到的盲区 —— 之前正是这样漏掉了"标题被居中"、
+ *    "列头白粗字"、"标签没样式"、"RSS 被去色"、"未命中的类别图标显示雪碧图碎片"。
+ * ⚠️ 只保留**结构与样式**, 零私有数据(真站 passkey / uid / 网名一律不出现)。
+ */
 const SITE_CSS = `
-body{margin:0;background:#2f4f6f;color:#fff;font:12px "Microsoft YaHei",Tahoma,sans-serif}
-table.mainouter{background:#254061}
-table.main{border:1px solid #000080;background:#2f4f6f}
-td.embedded{background:#2f4f6f}
-a{color:#fff}
+body{margin:0;background:#587993;color:#000;font:12px tahoma,"Microsoft YaHei",sans-serif}
+table{background-color:#bccad6}
+table.mainouter{background-color:#7c98ae;width:90%;min-width:1120px}
+table.main{border:1px solid #000080;background-color:#7c98ae;width:90%;min-width:1120px}
+td.embedded{background-color:#7c98ae}
+a{color:#000}
 #mainmenu a{display:inline-block;padding:4px 8px}
 #mainmenu li{display:inline-block;list-style:none}
-#mainmenu li.selected a{background:#000080}
+#mainmenu li.selected a{background:#000080;color:#fff}
+/* 真站 ul.menu li a 自带 1px 白边 + #dedede 浅灰底(.15 从真站整页量出来的):
+   不显式压成 transparent, 导航项就是一排白标签 —— 用户实拍的"首页/论坛等标签仍是白色"。
+   仿真页必须复刻这条, 否则仿真测不出这个 bug(原型 film.html 里导航项是没底的)。
+   注意: 本文件 CSS 在模板字面量里, 注释里不能出现反引号。 */
+ul.menu li a{border:1px solid #fff;background:#dedede;color:#000}
 table.torrents{border-collapse:collapse;background:#fff;color:#000}
 table.torrents td{border:1px solid #b0c4de;padding:5px}
-td.colhead{background:#000080;color:#fff;font-weight:bold}
+td.colhead{white-space:nowrap;font-weight:bold;color:#ffffff;background-color:#2f4879}
 td.rowfollow{background:#f4f4f9}
+table.torrents td.colhead{text-align:center}
+table.torrents td.rowfollow{text-align:center}
+span.tags{color:#fff;text-align:center;float:left;margin:2px;padding:2px 3px;height:16px}
+span.tgf{background:#06c}
+span.tyc{background:#085}
+span.tgz{background:#530}
+span.tdb{background:#358}
+span.thdr10{background:#9a3}
+span.thdrm{background:#9b5}
+span.tgy{background:#f96}
+span.tyy{background:#f66}
+span.tzz{background:#9c0}
+span.ttx{background:#f38}
+span.tjz{background:#903}
+span.txz{background:#c03}
+span.tdiy{background:#993}
+span.tsf{background:#339}
+span.tyq{background:#f90}
+span.tm0{background:#096}
+span.tbz{background:#333}
+span.tcc{background:#4488bb}
+td.rss{width:32px}
+a[data-toggle-rss] img{width:32px;-webkit-filter:grayscale(100%);filter:grayscale(100%)}
+a[data-toggle-rss].on img,[data-toggle-rss]:hover img{-webkit-filter:unset;filter:unset}
+img[class*="c_"]{width:45px;height:46px;background-image:url(/static/catsprites.png) !important;background-position:-385px -8px}
+img.pro_free{width:36px;height:11px;background:url(/static/icons.gif) 0 0}
+img.pro_free2up{width:36px;height:11px;background:url(/static/icons.gif) -72px 0}
+img.pro_50pctdown{width:36px;height:11px;background:url(/static/icons.gif) -108px 0}
+img.sticky{width:14px;height:14px;background:url(/static/icons.gif) 0 -202px}
+img.download{width:16px;height:16px;background:url(/static/png.png) -80px 0}
+img.delbookmark{width:16px;height:16px;background:url(/static/png.png) -64px -16px}
+img.star{width:11px;height:11px;background:url(/static/icons.gif) -22px -57px}
+.sticky_top{background-color:#bad6f4}
 table.searchbox{background:#fff;color:#000}
 #footer{text-align:center;padding:10px}
 `;
@@ -97,12 +152,22 @@ jQuery(function ($) {
 `;
 
 // ---------- 片段生成 ----------
+/**
+ * 主导航 16 项。
+ * ⚠️ **文案里的 `&nbsp;` 是刻意的**: 真站就是这么写的(`&nbsp;首&nbsp;&nbsp;页&nbsp;`),
+ *    这些 NBSP 撑出来的宽度正是"16 项塞不进 1262px 视口"的真正原因 ——
+ *    当年以为是原型的 `7px 11px` 太宽, 其实是标签自带间距。仿真页不还原它, 就测不出这件事。
+ */
 const NAV_ITEMS = [
-  ['/index.php', '首页'], ['/forums.php', '论坛'], ['/torrents.php', '种子'], ['/live.php', 'LIVE'],
-  ['/torrents.php?mystat=keep', '保种'], ['/torrents.php?mystat=dead', '断种'], ['/offers.php', '候选'],
-  ['/viewrequests.php', '求种'], ['/upload.php', '发布'], ['/subtitles.php', '字幕'],
-  ['/usercp.php', '控制面板'], ['/topten.php', '排行榜'], ['/log.php', '日志'],
-  ['/rules.php', '规则'], ['/faq.php', '常见问题'], ['/staff.php', '管理组']
+    ['/index.php', '&nbsp;首&nbsp;&nbsp;页&nbsp;'], ['/forums.php', '&nbsp;论&nbsp;&nbsp;坛&nbsp;'],
+    ['/torrents.php', '&nbsp;种&nbsp;&nbsp;子&nbsp;'], ['/live.php', 'ＬＩＶＥ'],
+    ['/torrents.php?mystat=keep', ' &nbsp;保&nbsp;&nbsp;种&nbsp; '],
+    ['/torrents.php?mystat=dead', ' &nbsp;断&nbsp;&nbsp;种&nbsp; '],
+    ['/offers.php', '&nbsp;候&nbsp;&nbsp;选&nbsp;'], ['/viewrequests.php', '&nbsp;求&nbsp;&nbsp;种&nbsp;'],
+    ['/upload.php', '&nbsp;发&nbsp;&nbsp;布&nbsp;'], ['/subtitles.php', '&nbsp;字&nbsp;&nbsp;幕&nbsp;'],
+    ['/usercp.php', '&nbsp;控制面板&nbsp;'], ['/topten.php', '排&nbsp;行&nbsp;榜'],
+    ['/log.php', '&nbsp;日&nbsp;&nbsp;志&nbsp;'], ['/rules.php', '&nbsp;规&nbsp;&nbsp;则&nbsp;'],
+    ['/faq.php', '&nbsp;常见问题&nbsp;'], ['/staff.php', '管&nbsp;理&nbsp;组']
 ];
 
 function navBlock(opts) {
@@ -234,9 +299,34 @@ const TITLES = [
     'Silent Film Restored 1927 1080p Blu-ray AVC Silent-DemoGrp',
     'Analog Tape Sessions 1995 1080p WEB-DL AAC 2.0-FakeRip'
 ];
-const CATS = ['c_tvseries_2160p', 'c_movies_4kuhd', 'c_movies_bluray', 'c_music_lossless',
-    'c_document_1080p', 'c_tvseries_1080p', 'c_movies_remux', 'c_music_video',
-    'c_tvseries_1080p', 'c_tvseries_1080p', 'c_movies_bluray', 'c_music_lossless'];
+/**
+ * 类别图标 class —— **照抄真站实际出现过的家族**(统计自脱敏整页 200+ 行)。
+ * ⚠️ 原来这里只有原型那 7 个简化家族(全是 `c_movies_*` / `c_tvseries_*` 之类),
+ *    于是 `c_cartoon_*` / `c_misc` / `c_4kuhd_remux` 这些"脚本没覆盖"的类别永远测不到。
+ *    真站前缀共 12 族: movies / movie / tvseries / tvshows / anime / cartoon / doc /
+ *    musics / tvmusics / sports / misc / 4kuhd。
+ */
+const CATS = [
+    'c_tvseries_2160p',
+    // ⚠️ 刻意留一个**脚本清单里不可能有的**家族, 且**放在前 12 位**(仿真页只渲染 12 行,
+    //    放后面就不会被用到): 站点改版随时会新增类别, 这条是"兜底规则是否真的兜得住"的探针 ——
+    //    没有它, 兜底规则改坏了也测不出来。
+    'c_newfam_2160p',
+    'c_movies_4kuhd', 'c_movies_bluray', 'c_musics_flac',
+    'c_doc_1080p', 'c_tvshows_1080p', 'c_movies_remux', 'c_tvmusics_mv',
+    'c_anime_1080p', 'c_cartoon_8k4320p', 'c_sports_1080p', 'c_misc',
+    'c_4kuhd_remux', 'c_movie', 'c_doc_bluray', 'c_anime_uhdbluray'
+];
+
+/** 行内标签 —— 真站实际类名(不存在 `tfree`; 促销是 `img.pro_*`, 见下) */
+const ROW_TAGS = [['tgf', '官方'], ['tyc', '原创'], ['tzz', '中字'], ['tgz', '官字'],
+    ['tdiy', 'DIY'], ['tdb', 'Dolby Vision'], ['thdr10', 'HDR10']];
+
+/** 促销标记 —— 真站是 `<img class="pro_*">`(雪碧图), 不是标签 */
+const PROMO = ['pro_50pctdown', 'pro_free', 'pro_free2up'];
+
+/** 豆瓣 / IMDb 评分块(真站用行内样式定宽右对齐) */
+const SCORES = [['NA', ''], ['6.4', ''], ['8.1', ''], ['7.2', ''], ['5.9', '']];
 
 function torrentRow(i, opts) {
     const id = 300000 + i;
@@ -246,12 +336,31 @@ function torrentRow(i, opts) {
     const leechers = [6, 4, 2, 1, 9, 5, 3, 11, 7, 14, 1, 8][i % 12];
     const size = [140.99, 60.62, 31.40, 8.12, 22.75, 51.30, 44.10, 78.90, 12.05, 96.40, 18.60, 5.44][i % 12];
     const cls = i < 2 ? ' class="sticky_top"' : '';
+    const promo = PROMO[i % PROMO.length];
+    const promoTitle = { pro_50pctdown: '50%', pro_free: '免费', pro_free2up: '免费+2x上传' }[promo];
+    const tags = ROW_TAGS.slice(0, 3 + (i % 4)).map(function (t) {
+        return `<span class="tags ${t[0]}" title="${t[1]}">${t[1]}</span>`;
+    }).join('');
+    const score = SCORES[i % SCORES.length][0];
+
     return `<tr${cls}>`
-        + `<td class="rowfollow nowrap" valign="middle" style="padding: 0px"><a href="/torrents.php?cat=${400 + i}"><img class="${cat}" src="/static/cattrans.gif" alt="${cat}" title="${cat}"></a></td>`
+        + `<td class="rowfollow nowrap" valign="middle" style="padding: 0px"><a href="/torrents.php?cat=${400 + i}"><img class="${cat}" src="/static/cattrans.gif" alt="${cat}" title="${cat}" style="background-image: url(/static/catsprites.png);"></a></td>`
+        // ---- 标题格(真站是三格: 标题 / 豆瓣IMDb+下载收藏 / RSS) ----
         + `<td class="rowfollow" width="100%" align="left"><table class="torrentname" width="100%"><tbody><tr${cls}>`
-        + `<td class="embedded">${i < 2 ? '<img class="sticky" src="/static/trans.gif" alt="Sticky" title="置顶">' : ''}&nbsp;`
-        + `<a title="${title}" href="/details.php?id=${id}&amp;hit=1"><b>${title}</b></a> `
-        + `<span class="tags tfree" onmouseover="domTT_activate(this, event, 'content', '促销')">促销</span></td>`
+        + `<td class="embedded">`
+        + (i < 2 ? '<img class="sticky" src="/static/trans.gif" alt="Sticky" title="置顶"><img class="sticky" src="/static/trans.gif" alt="Sticky" title="置顶">' : '')
+        + `&nbsp;<a title="${title}" href="/details.php?id=${id}&amp;hit=1"><b>${title}</b></a> `
+        + `<img class="${promo}" src="/static/trans.gif" alt="${promoTitle}" title="${promoTitle}"><br>`
+        + tags
+        + `<span style="float:left;padding: 2px;line-height: 20px;">模拟副标题/别名 Fixture</span></td>`
+        + `<td width="20" class="embedded" valign="middle"><table><tbody><tr>`
+        + `<td class="embedded"><div style="text-align:right;margin-right:3px;width:50px">`
+        + `<a target="_blank" href="https://movie.douban.com/subject/0/"><img src="/static/icon-douban.png" height="16px" width="16px"> ${score}</a><br>`
+        + `<a target="_blank" href="https://www.imdb.com/title/tt0/"><img src="/static/icon-imdb.png" height="16px" width="16px"> ${score}</a>`
+        + `</div></td>`
+        + `<td class="embedded"><a href="/download.php?id=${id}"><img class="download" src="/static/trans.gif" style="padding-bottom: 2px;" alt="download" title="下载本种"></a><br>`
+        + `<a id="bookmark${i}" href="javascript: bookmark(${id},2);"><img class="delbookmark" src="/static/trans.gif" alt="Unbookmarked" title="收藏"></a></td>`
+        + `</tr></tbody></table></td>`
         + `<td class="embedded rss"><a href="javascript:" class="" data-toggle-rss="${id}"><img src="/static/rss.png" alt="RSS" title="添加到 RSS"></a></td>`
         + `</tr></tbody></table></td>`
         + `<td class="rowfollow"><a href="/comment.php?action=add&amp;pid=${id}&amp;type=torrent" title="添加评论">0</a></td>`
@@ -263,7 +372,9 @@ function torrentRow(i, opts) {
         + ((opts && opts.rowDrop) ? '' : `<td align="center">-</td>`)
         + ((opts && opts.noCalc) ? '' : `<td class="rowfollow" data-calc-a="${(seeders / 4).toFixed(2)}">${(seeders / 4).toFixed(2)}</td>`
             + `<td class="rowfollow" data-calc-ave="0.08"><span>0.08</span></td>`)
-        + `<td class="rowfollow"><span class="nowrap"><a href="/userdetails.php?id=${120000 + i}" class="Uploader_Name"><b>simuploader</b></a></span></td>`
+        + `<td class="rowfollow"><span class="nowrap"><a href="/userdetails.php?id=${120000 + i}" class="Uploader_Name"><b>simuploader</b></a>`
+        + (i % 5 === 0 ? '<img class="star" src="/static/trans.gif" alt="Donor" style="margin-left: 2pt">' : '')
+        + `</span></td>`
         + `</tr>`;
 }
 

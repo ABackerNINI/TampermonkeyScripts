@@ -88,8 +88,10 @@ runCase('HDHomeUI · 入口内嵌(不悬浮 / 不压站内内容)', async functi
         const blocked = hits.filter(function (x) { return !x; }).length;
         assertEq(blocked, 0, '导航栏条目全部可点, 被遮住 ' + blocked + ' 个');
 
-        // ---- 4. 切回「原站默认」后入口要重摆(导航排版变了, 位置必须跟着变) ----
-        const before = await H.dockRect(page);
+        // ---- 4. 切回「原站默认」后入口要重新量位 ----
+        // ⚠️ 这里**不能**断言"位置必须变化": 入口锚在导航右端的预留槽位(`ul#mainmenu` 的
+        //    padding-right), 而菜单右边缘在两个主题下是同一个值 —— 位置不动反而是对的。
+        //    要钉的是"锚定关系成立且没压住信息栏", 那才是重新量位的可验证结果。
         await H.clickDock(page);
         let changed = await H.clickFirstPanelItemThatChanges(page);
         if (changed === null) { // 面板里第一下可能点到已选项, 用快捷键兜底推进
@@ -103,8 +105,21 @@ runCase('HDHomeUI · 入口内嵌(不悬浮 / 不压站内内容)', async functi
         assertEq(after.position, 'absolute', '换主题后入口仍不悬浮');
         const nav2 = await dockInNavRow(page);
         assert(nav2.vOverlap > 0, '换主题后入口仍贴在导航行内');
-        const moved = Math.abs(after.y - before.y) > 0.5 || Math.abs(after.x - before.x) > 0.5;
-        assert(moved, '换主题后入口重新定位: (' + before.x + ',' + before.y + ') -> (' + after.x + ',' + after.y + ')');
+        const anchor = await page.eval([
+            'const h = document.getElementById("hdui-root").getBoundingClientRect();',
+            'const m = document.querySelector("ul#mainmenu").getBoundingClientRect();',
+            'const ib = document.getElementById("info_block").getBoundingClientRect();',
+            'const ox = Math.min(h.right, ib.right) - Math.max(h.left, ib.left);',
+            'const oy = Math.min(h.bottom, ib.bottom) - Math.max(h.top, ib.top);',
+            'return { gap: Math.round(m.right - h.right),',
+            '  vOverlap: Math.round(Math.min(h.bottom, m.bottom) - Math.max(h.top, m.top)),',
+            '  infoOverlap: (ox > 0 && oy > 0) ? { ox: Math.round(ox), oy: Math.round(oy) } : null };'
+        ].join('\n'));
+        assert(Math.abs(anchor.gap - 8) <= 3,
+            '入口锚在导航右端预留槽位上(距菜单右边 ' + anchor.gap + 'px, 期望 8)');
+        assert(anchor.vOverlap > 0, '入口与导航垂直相交 ' + anchor.vOverlap + 'px');
+        assertEq(anchor.infoOverlap, null,
+            '入口不压住用户信息栏(留槽位就是为了这个), 实际 ' + JSON.stringify(anchor.infoOverlap));
 
         // ---- 5. 右下角(其它脚本 FAB 的常用位)不留我们的东西 ----
         const v = await page.eval('return { w: window.innerWidth, h: window.innerHeight };');

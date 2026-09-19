@@ -166,12 +166,23 @@ async function clickFirstPanelItemThatChanges(page) {
     const top = await panelTop(page);
     if (top === null) return null;
     const box = await panelBox(page, top + 4);
-    const x = box ? box.cx : (await dockRect(page)).cx;
+    // ⚠️ 面板是 2 列网格(340px, 列间距 8px): 只试"面板水平中心"那一个 x, 会**正好落在列间空隙上**,
+    //    于是怎么点都点不到条目, 一路扫到面板外面去(还会把点击冒泡给站内监听)。
+    //    左/中/右三个 x 都试一遍, 单列布局也照样能用。
+    const xs = [];
+    if (box) {
+        const w = box.right - box.left;
+        xs.push(Math.round(box.left + w * 0.25), box.cx, Math.round(box.left + w * 0.75));
+    } else {
+        xs.push((await dockRect(page)).cx);
+    }
     for (let dy = 14; dy <= 340; dy += 10) {
-        await mouseClick(page, x, top + dy);
-        await new Promise(function (res) { setTimeout(res, 120); });
-        const now = await themeOf(page);
-        if (now !== before) return now;
+        for (let i = 0; i < xs.length; i++) {
+            await mouseClick(page, xs[i], top + dy);
+            await new Promise(function (res) { setTimeout(res, 120); });
+            const now = await themeOf(page);
+            if (now !== before) return now;
+        }
     }
     return null;
 }
