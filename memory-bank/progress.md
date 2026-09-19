@@ -13,9 +13,9 @@
   行列数一致）任一不满足 ⇒ 卸妆 + 控制台 error + 顶部红色横幅 + 写 `hdui.lastError`；运行时
   MutationObserver 复查。诊断统一走 `Diag` 账本，禁止空 catch，挂载 window error/unhandledrejection 只记不吞。
   详见 `scripts/HDHomeUI.md`。**已提交 `13266e0`**（分支 `dev`，**已推 gitee**）。
-  **`.2`（改完待审核，未提交）**：2026-09-19 安全性全面复验后的 4 项改进 —— `unload()` 补 `stopWatch()`
-  （回退后 Observer 不空转）、铺底色移到真正的 document-start、首次安装默认 `default`（不擅自改界面）、
-  修 `scripts/HDHomeUI.md` 的文档漂移；静态校验同步新增第 6 组断言。
+  **`.2`（**已提交 `1b38510`，分支 `dev`，已推 gitee**）**：2026-09-19 安全性全面复验后的 4 项改进 ——
+  `unload()` 补 `stopWatch()`（回退后 Observer 不空转）、铺底色移到真正的 document-start、
+  首次安装默认 `default`（不擅自改界面）、修 `scripts/HDHomeUI.md` 的文档漂移；静态校验同步新增第 6 组断言。
   另用**真实页面**（`resources-do-not-track/` 下已脱敏的整页）离线核验过契约判定：12 列全部识别、
   数据行 12 格、4 个 A 级锚点齐全 ⇒ 仿真复刻与现实一致（核验脚本在 `.workbuddy-ai/`，不入库）。
 - **BTSchoolHelper**（`2026.08.09.1`）：高亮 2xFree、置顶低亮、空格跳转、完整表格解析器 `parseTorrentTable`。
@@ -49,7 +49,7 @@
   并**额外挖出 P0 崩溃 Bug**（P29：首次安装时主流程 100% 不执行）。
   **已修 5 处**（`@version` 2026.09.18.2 → **2026.09.18.4**，见 P30），残留 2 项（S09b / S13）需真站回归后定。
   **已提交**（`e2d5f52`，分支 `dev`）。
-- **分支 `dev` 共 11 个功能提交，2026-09-19 已全部推送到 `gitee` 的新分支 `dev`**（`ebb06bb` / `2b31377` / `8036f44` / `e2d5f52` / `18e0824` / `0bac142` / `d63fe0c` / `ab9701a` / `80e0f37` / **`13266e0`（HDHomeUI）** / **`b091e16`（铁律 5）**；推送时 `dev` HEAD = `a0fa7cb`，`git rev-list --count dev --not gitee/dev` = 0）。
+- **分支 `dev` 共 12 个功能提交，2026-09-19 已全部推送到 `gitee` 的新分支 `dev`**（`ebb06bb` / `2b31377` / `8036f44` / `e2d5f52` / `18e0824` / `0bac142` / `d63fe0c` / `ab9701a` / `80e0f37` / **`13266e0`（HDHomeUI）** / **`b091e16`（铁律 5）** / **`1b38510`（HDHomeUI 安全复验 4 项改进）**；推送时 `dev` HEAD = `1b38510`，`git rev-list --count dev --not gitee/dev` = 0）。
   - **GitHub（`origin`）仍未推送** —— 机械数 `git rev-list --count dev --not origin/master` 仍为 13，按仓库惯例**不含状态登记提交本身**（`9283295` / `6cd436b` / `854ea48` / `a0fa7cb`）。GitHub 走本地代理 `http://127.0.0.1:10808`，代理未开时 `git ls-remote origin` 直接超时。
   - 推 Gitee 时曾遇 `RPC failed; curl 55 Send failure: Connection was reset`（挂起约 5.5 分钟后被重置）；仓库仅 4.4M、最大对象 210KB，**非体积问题**，属链路抖动。加 `http.version=HTTP/1.1` + `http.postBuffer=524288000` + `http.lowSpeedLimit=0` 后一次成功。Gitee 的 SSH 通道**未配公钥**（`Permission denied (publickey)`），只能用 HTTPS。
   - 本地跟踪引用 `refs/remotes/gitee/*` 由 `.workbuddy-ai/_sync-refs.js` 直接写 loose ref 落盘（本环境 `git fetch` 对 `refs/remotes/**` 的写入会静默丢失）。
