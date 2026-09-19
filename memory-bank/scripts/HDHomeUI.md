@@ -4,7 +4,20 @@
 > 原站功能全部保留；页面结构一旦与预期不符，**提示并回退站点默认界面**。
 > 设计依据与实施计划见 `tasks/TASK018-hdhome-ui-themes.md`。
 
-- 当前版本：`2026.09.19.3`（`.3` 改完待审核未提交；`.2` 已提交 `1b38510`，分支 `dev`，已推 gitee）
+- 当前版本：`2026.09.19.4`（`.3` 已提交 `bc2c0cd`，分支 `dev`，未 push）
+- **2026.09.19.4：A / A·GB 两列改为「可选列 + 等结构就绪」**（用户实测报错 `E_COLUMN_UNKNOWN: a,ave`）：
+  那两列是**别的脚本**注入的（表头 `#calcTHeadA` / `#calcTHeadAve`，数据格带 `data-calc-a`），
+  注入时机比本脚本晚 —— 旧版把 12 列当硬性契约，它还没跑完就判结构损坏 → 弹红横幅回退；
+  用户点「重新尝试」时列已经在了，于是成功。**纯粹是时序问题**，不是结构坏了。
+  现在的规则：
+  · `OPTIONAL_COLUMNS = ['a','ave']`，`REQUIRED_COLUMNS` 由全集剔除得出（不两处各写一遍，免得漂移）；
+  · 缺可选列 ⇒ 返回 **`OK_NO_CALC`（成功码）**，照常上妆，只是跳过这两列的排版；
+  · 列集合变了（那个脚本补进来 / 撤走了）⇒ 结构守卫比对 `colMapSig`，**重摆一次**让 `nth-child` 重新对齐；
+  · 补列补到一半（表头插了、数据行没插完 ⇒ `ROW_CELL_COUNT_MISMATCH`）⇒ **先进等待窗口**
+    （`armPending` 首装 8s / 运行中 4s，每 700ms 主动试一次），窗口内恢复就静默上妆，
+    超时才 `E_STRUCT_TIMEOUT` 回退；等待期间 `data-hdui-state="pending"`，**已上妆的不卸妆**（免闪一下）；
+  · `E_COLUMN_UNKNOWN` / `E_ANCHOR_MISSING` **不进等待窗口** —— 那两个码在 A/A·GB 变可选之后
+    只可能是「必需的东西真没了」，等也没用，直接回退。
 - 入口**内嵌**在导航栏末尾（`ul#mainmenu` 最后一个 li 的右侧空档），不再用右下角浮动圆钮 ———
   与 PTAutoCheckIn v2 等脚本的 FAB 抢同一个位置，2026-09-19 决定改。位置由 `dockRect()` 量取；
   菜单缺位时退到 `table.mainouter` 右上；都没有再退到 `position:fixed` 兜底。
@@ -23,15 +36,6 @@
   12 列全部识别、数据行 12 格、4 个 A 级锚点齐全（脚本 `.workbuddy-ai/_verify-hdui-real-page.js`，不入库）。
 - **视觉复核**（不入库）：`.workbuddy-ai/_shot-hdui.js` 在仿真服务器里对 5 套主题各截三张
   （顶部内嵌入口 / 中部版式 / 面板展开），`hdui-shots/{id,id-top,id-panel}.png`，仅结构化复刻页内容。
-- 匹配：`*://*.hdhome.org/*`，`@run-at document-start`（**确实在 document-start 干活**：立刻铺主题底色防闪白。
-  此时 `<head>` 通常还没建，`injectCss` 自动退到 `<html>`；若连 `<html>` 都尚未创建（注入点比 Tampermonkey
-  更早时会出现，例如测试用的 `addScriptToEvaluateOnNewDocument`），退化为「`<html>` 一出现就铺」
-  （`paintBootBgWhenPossible`），最迟由 `boot()` 在 DOM 就绪后再补一次。
-  实测注入发生时 `document.readyState` 仍为 `loading`，**早于 `DOMContentLoaded`**）
-- 权限：`GM_getValue` / `GM_setValue`（**不申请任何网络类权限**）
-- 存储键：`hdui.theme`（当前主题 id）、`hdui.lastError`（上次结构错误）
-- **真实标记已核验**：用 `resources-do-not-track/` 下已脱敏的整页离线跑过 `headerKey()` 与契约判定，
-  12 列全部识别、数据行 12 格、4 个 A 级锚点齐全（脚本 `.workbuddy-ai/_verify-hdui-real-page.js`，不入库）。
 - 匹配：`*://*.hdhome.org/*`，`@run-at document-start`（**确实在 document-start 干活**：立刻铺主题底色防闪白。
   此时 `<head>` 通常还没建，`injectCss` 自动退到 `<html>`；若连 `<html>` 都尚未创建（注入点比 Tampermonkey
   更早时会出现，例如测试用的 `addScriptToEvaluateOnNewDocument`），退化为「`<html>` 一出现就铺」

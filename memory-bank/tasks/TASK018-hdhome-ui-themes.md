@@ -328,3 +328,25 @@ div#footer                — 版权 + #lightbox + #curtain
   视觉复核 `.workbuddy-ai/_shot-hdui.js`(不入库)截 5 套顶部+中部+面板图, **所有版式肉眼可辨**,
   与原 NexusPHP 蓝色表格明显不同. 22 个测试**全绿**. 入口在导航栏末尾像一枚自带标签的栏目项 ——
   不抢眼、不悬浮、不与 FAB 撞位.
+  **已提交 `bc2c0cd`**(分支 `dev`, 未 push).
+
+- **2026-09-19（`.4`：A / A·GB 改可选列 + 等结构就绪窗口）**：真站首装报
+  `[HDHomeUI] 页面结构与预期不符(E_COLUMN_UNKNOWN), 已恢复站点默认界面。种子表缺少可识别的列: a,ave`,
+  但点「重新尝试」就成功。定位：那两列（`#calcTHeadA` / `#calcTHeadAve`，数据格带 `data-calc-a`）
+  **不是站点 HTML 自带的，是另一个脚本运行时注入的**，注入比本脚本晚 —— 旧版把 12 列当硬性契约，
+  于是在那个瞬间把「别人的加载时序」判成了「页面结构损坏」。**纯时序问题**（见 `pitfalls.md` P33）。
+  改完四件事：
+  ① **必需列 / 可选列分离**：`OPTIONAL_COLUMNS = ['a','ave']`，`REQUIRED_COLUMNS` 由全集剔除得出
+  （不两处各写一遍，免得漂移）；缺可选列返回 **成功码 `OK_NO_CALC`**，照常上妆、只跳过这两列排版；
+  `statStack` / `statInline` 在列缺席时 `return ''`，绝不生成 `:nth-child(undefined)`。
+  ② **列集合变化自动重摆**：`colMapSig` 比对，外部脚本补进来或撤走都 `applyTheme(currentId)` 重算
+  `nth-child`（断言补进来的 A 值格吃到了主题挂的 `::before` 标签与等宽字体，而不只是「看起来像」）。
+  ③ **「补到一半」等待窗口**：`ROW_CELL_COUNT_MISMATCH`（表头插了、数据行没插完）进
+  `armPending`（首装 8s / 运行中 4s，每 700ms 主动试一次），窗口内恢复即静默上妆，
+  超时才 `E_STRUCT_TIMEOUT` 回退；等待期间 `data-hdui-state="pending"`，**已上妆的不卸妆**（免闪一下）。
+  `E_COLUMN_UNKNOWN` / `E_ANCHOR_MISSING` **不进窗口** —— A/A·GB 变可选后这两个码只可能是真坏了，
+  让它们等只会把一次快速失败拖成 8 秒疑似卡死。
+  ④ **新测试 + 静态断言**：`tests/hdhomeui/sim-hdui-optional-columns.js` 四段
+  （10 列照常上妆 / 补进来自动重摆 / 撤走不回退 / 半状态不弹横幅且补齐后自愈）；
+  仿真剧本新增 `hdhome-ui-nocalc`；`check-hdui-static.js` 新增 §9「可选列与等待窗口」12 条。
+  仿真测试总数 22 → 23。

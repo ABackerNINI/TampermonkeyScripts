@@ -2,8 +2,8 @@
 // @name         HDHomeUI
 // @name:zh-CN   HDHome 界面主题套件
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.19.3
-// @description  HDHome 界面主题套件: 5 套可切换 UI(片库索引/电传纸带/大开本/瑞士网格/播控台)。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); 页面结构异常时提示并回退默认界面。
+// @version      2026.09.19.4
+// @description  HDHome 界面主题套件: 5 套可切换 UI(片库索引/电传纸带/大开本/瑞士网格/播控台)。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); A/A·GB 两列由其它脚本注入, 有或没有都能上妆、补进来会自动重摆; 页面结构异常时先等结构就绪, 超时才提示并回退默认界面。
 // @author       ABacker
 // @license      GNU GPL-3.0
 // @match        *://*.hdhome.org/*
@@ -35,6 +35,22 @@
         'type', 'title', 'comments', 'alive', 'size', 'seeders',
         'leechers', 'snatched', 'progress', 'a', 'ave', 'uploader'
     ]);
+    // 可选列: A / A/GB 这两列是**别的脚本**注入的(#calcTHeadA / #calcTHeadAve, 单元格带 data-calc-a),
+    // 本脚本不能把它们当硬性契约 —— 那个脚本没装、没开、或者注入得比我们晚, 页面就只有 10 列。
+    // 规则: 缺失只记日志并跳过这两列的排版, 照常上妆; 之后它们补进来了, 由结构守卫重摆一次。
+    const OPTIONAL_COLUMNS = Object.freeze(['a', 'ave']);
+    const REQUIRED_COLUMNS = Object.freeze(COLUMNS.filter(function (k) {
+        return OPTIONAL_COLUMNS.indexOf(k) < 0;
+    }));
+    // 结构类错误码: 这类失败**先等一个窗口**再决定要不要弹横幅 —— 外部脚本补列是有时间差的,
+    // 表头插了、数据行还没插完的瞬间就会命中 ROW_CELL_COUNT_MISMATCH, 直接弹横幅是误报。
+    // 只等这一个码: E_COLUMN_UNKNOWN / E_ANCHOR_MISSING 都是"必需的东西没了",
+    // 那是真坏了, 等也没用(拖 8 秒才报错只会让人以为脚本卡死), 直接回退。
+    const STRUCT_CODES = Object.freeze(['ROW_CELL_COUNT_MISMATCH']);
+    const PENDING_FIRST_MS = 8000;   // 首装/刷新: 那个脚本可能压根还没跑
+    const PENDING_LATE_MS = 4000;    // 已上妆后结构变化: 大概率是它正在补列
+    const PENDING_TICK_MS = 700;
+    const PENDING_MAX_TRIES = 30;
     // A 级锚点: 缺任一即判定「不是认识的 HDHome 页面」, 直接回退
     const ANCHORS = Object.freeze([
         { sel: 'table.mainouter', label: '页面主框架 table.mainouter' },
@@ -108,8 +124,12 @@
 
     function C(m, k) { return ':nth-child(' + m[k] + ')'; }
 
-    /** 指标块(标签在上, 值在下): 用于卡片/网格里需要对齐的数值 */
+    /**
+     * 指标块(标签在上, 值在下): 用于卡片/网格里需要对齐的数值。
+     * 列不在 colMap 里(外部脚本没注入 A / A/GB)时返回空串 —— 绝不能生成 :nth-child(undefined)。
+     */
     function statStack(m, key, label, extra) {
+        if (!m[key]) return '';
         const s = R + ' > td' + C(m, key);
         return [
             s + '{display:flex;flex-direction:column;justify-content:flex-end;gap:2px;min-width:0;' + (extra || '') + '}',
@@ -117,8 +137,9 @@
         ].join('\n');
     }
 
-    /** 指标块(标签在前, 值在后, 同一行): 用于成行排版(纸带/大开本) */
+    /** 指标块(标签在前, 值在后, 同一行): 用于成行排版(纸带/大开本)。同样对缺列免疫 */
     function statInline(m, key, label, extra) {
+        if (!m[key]) return '';
         const s = R + ' > td' + C(m, key);
         return [
             s + '{display:block;min-width:0;' + (extra || '') + '}',
@@ -181,8 +202,11 @@
     /** 电传纸带: 唯一保留真表格语义的一套 —— 全等宽、密排、反白表头、数字右对齐成列 */
     function tapeCss(m) {
         const c = function (k) { return C(m, k); };
-        const nums = [c('comments'), c('alive'), c('size'), c('seeders'), c('leechers'),
-            c('snatched'), c('a'), c('ave')];
+        // 只挑真正存在的列(A / A·GB 可能没被外部脚本注入)
+        const nums = ['comments', 'alive', 'size', 'seeders', 'leechers', 'snatched', 'a', 'ave']
+            .filter(function (k) { return !!m[k]; }).map(c);
+        const rules = ['comments', 'alive', 'size', 'seeders', 'leechers']
+            .filter(function (k) { return !!m[k]; }).map(c);
         return [
             '#torrenttable{display:table;}',
             '#torrenttable > tbody{display:table-row-group;}',
@@ -198,7 +222,7 @@
             + 'text-overflow:ellipsis;white-space:nowrap;}',
             // 数字成列靠右 + 细点竖线分栏(不是挤成一团)
             nums.map(function (s) { return '#torrenttable > tbody > tr > td' + s + '{text-align:right;}'; }).join('\n'),
-            [c('comments'), c('alive'), c('size'), c('seeders'), c('leechers')].map(function (s) {
+            rules.map(function (s) {
                 return '#torrenttable > tbody > tr:not(:first-child) > td' + s
                     + '{border-right:1px dotted var(--hdui-rule);}';
             }).join('\n'),
@@ -453,12 +477,15 @@
         return '';
     }
 
-    /** 读出表头 -> {key: 1-based 列号}; 缺列返回 missing 列表 */
+    /**
+     * 读出表头 -> {key: 1-based 列号}。
+     * missing = 缺**必需**列(判失败); absent = 缺**可选**列(A / A/GB, 只记日志, 排版时跳过)。
+     */
     function detectColumns(table) {
         const body = table.tBodies && table.tBodies[0];
-        if (!body) return { map: null, missing: COLUMNS.slice(), reason: 'TABLE_NO_TBODY' };
+        if (!body) return { map: null, missing: REQUIRED_COLUMNS.slice(), absent: [], reason: 'TABLE_NO_TBODY' };
         const head = body.rows[0];
-        if (!head) return { map: null, missing: COLUMNS.slice(), reason: 'TABLE_NO_HEAD' };
+        if (!head) return { map: null, missing: REQUIRED_COLUMNS.slice(), absent: [], reason: 'TABLE_NO_HEAD' };
         const map = {};
         const cells = head.cells;
         for (let i = 0; i < cells.length; i++) {
@@ -466,13 +493,23 @@
             if (key && map[key] === undefined) map[key] = i + 1;
         }
         const missing = [];
-        for (let i = 0; i < COLUMNS.length; i++) {
-            if (map[COLUMNS[i]] === undefined) missing.push(COLUMNS[i]);
+        for (let i = 0; i < REQUIRED_COLUMNS.length; i++) {
+            if (map[REQUIRED_COLUMNS[i]] === undefined) missing.push(REQUIRED_COLUMNS[i]);
         }
-        // 数据行必须与表头列数一致, 否则说明站点改版导致错位
+        const absent = [];
+        for (let i = 0; i < OPTIONAL_COLUMNS.length; i++) {
+            if (map[OPTIONAL_COLUMNS[i]] === undefined) absent.push(OPTIONAL_COLUMNS[i]);
+        }
+        // 数据行必须与表头列数一致, 否则说明站点改版导致错位(也可能是外部脚本补列补到一半)
         let shapeOk = true;
         if (body.rows.length > 1 && body.rows[1].cells.length !== cells.length) shapeOk = false;
-        return { map: missing.length ? null : map, missing: missing, reason: shapeOk ? '' : 'ROW_CELL_COUNT_MISMATCH', headCount: cells.length };
+        return {
+            map: missing.length ? null : map,
+            missing: missing,
+            absent: absent,
+            reason: shapeOk ? '' : 'ROW_CELL_COUNT_MISMATCH',
+            headCount: cells.length
+        };
     }
 
     /**
@@ -493,18 +530,22 @@
 
         const d = detectColumns(table);
         const shapeMsg = '种子表数据行列数与表头不一致(表头 ' + d.headCount + ' 列)';
-        // 列识别不全 -> 拒绝上妆(列一旦错位, 主题会把数据摆到错误的槽位)
+        // 必需列识别不全 -> 拒绝上妆(列一旦错位, 主题会把数据摆到错误的槽位)
         if (!d.map) {
             const detail = d.reason === 'ROW_CELL_COUNT_MISMATCH'
                 ? shapeMsg
                 : '种子表缺少可识别的列: ' + d.missing.join(',');
             return { ok: false, code: d.reason || 'E_COLUMN_UNKNOWN', detail: detail, colMap: null };
         }
-        // 列都在、但数据行单元格数与表头对不上 -> 同样是改版信号, 一样拒绝
+        // 列都在、但数据行单元格数与表头对不上 -> 改版信号(或外部脚本补列补到一半), 一样拒绝
         if (d.reason) {
             return { ok: false, code: d.reason, detail: shapeMsg, colMap: null };
         }
-        return { ok: true, code: 'OK', detail: '', colMap: d.map };
+        // 可选列缺席不报错, 只是这两列不排版 —— 补进来后由结构守卫重摆
+        if (d.absent.length) {
+            return { ok: true, code: 'OK_NO_CALC', detail: '外部脚本的 ' + d.absent.join('/') + ' 列未注入, 已跳过', colMap: d.map, absent: d.absent };
+        }
+        return { ok: true, code: 'OK', detail: '', colMap: d.map, absent: [] };
     }
 
     // ==================================================================
@@ -678,6 +719,74 @@
     let currentId = DEFAULT_ID;
     let observer = null;
     let watchTimer = 0;
+    let appliedSig = null;   // 上次成功上妆时的列签名(用来发现外部脚本加/删了列)
+    let appliedAbsent = [];  // 上次上妆时缺席的可选列(面板里显示, 便于排查时序)
+
+    function colMapSig(map) {
+        if (!map) return '-';
+        return Object.keys(map).sort().map(function (k) { return k + map[k]; }).join(',');
+    }
+
+    // ==================================================================
+    // 「等结构就绪」窗口
+    // ------------------------------------------------------------------
+    // A / A/GB 是别的脚本注入的, 它什么时候跑完我们说了不算。以前只要在那个瞬间
+    // 少一列就立刻弹红横幅回退 —— 用户看到的正是「点一下重试就好了」。现在改成:
+    // 结构类失败先进窗口等, 结构一变就重试; 窗口内恢复就静默上妆, 超时才真回退。
+    // ==================================================================
+    let pendingTimer = 0;
+    let pendingUntil = 0;
+    let pendingTries = 0;
+    let pendingNote = '';
+
+    function stopPending() {
+        if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = 0; }
+        pendingUntil = 0;
+        pendingTries = 0;
+        pendingNote = '';
+        appliedSig = null;
+    }
+
+    function armPending(note, windowMs) {
+        if (pendingUntil) return; // 已在窗口内: 不续期, 免得外部脚本每动一下都往后延
+        pendingUntil = Date.now() + windowMs;
+        pendingTries = 0;
+        pendingNote = note;
+        // 等窗口期间给出可观测状态: 此刻既没上妆也没回退, 只是在等那个脚本把列补完。
+        // 已经在妆上的(运行中补列补到一半)保留当前主题, 不卸 —— 否则 4s 窗口里会闪一下原站界面;
+        // 首装/刷新那次 unload() 已经把主题属性删了, 这里补回 default, 免得属性缺失。
+        if (!document.documentElement.dataset.hduiTheme) {
+            document.documentElement.dataset.hduiTheme = DEFAULT_ID;
+        }
+        document.documentElement.dataset.hduiState = 'pending';
+        Diag.info('STRUCT_PENDING', '结构尚未就绪(' + note + '), 等外部脚本补齐, 最多 '
+            + Math.round(windowMs / 1000) + 's');
+        watchStructure();
+        tickPending();
+    }
+
+    function tickPending() {
+        if (pendingTimer) clearTimeout(pendingTimer);
+        pendingTimer = setTimeout(function () {
+            pendingTimer = 0;
+            try {
+                if (!pendingUntil) return;
+                pendingTries++;
+                if (Date.now() >= pendingUntil || pendingTries > PENDING_MAX_TRIES) {
+                    const note = pendingNote;
+                    stopPending();
+                    stopWatch();
+                    Diag.error('E_STRUCT_TIMEOUT', '等待结构就绪超时: ' + note);
+                    fallbackToDefault('E_STRUCT_TIMEOUT', '等待外部脚本补齐种子表结构超时(' + note + ')');
+                    return;
+                }
+                // 到点主动试一次: 外部脚本可能已经补完但没有再触发 mutation
+                const id = storeGet(STORE_THEME, DEFAULT_ID);
+                if (id !== DEFAULT_ID) applyTheme(id);
+                if (pendingUntil) tickPending();
+            } catch (e) { Diag.fail('E_PENDING_FAILED', e); }
+        }, PENDING_TICK_MS);
+    }
 
     function storeGet(key, def) {
         if (typeof GM_getValue !== 'function') return def;
@@ -691,6 +800,7 @@
     }
 
     function fallbackToDefault(code, detail) {
+        stopPending();
         unload();
         document.documentElement.dataset.hduiTheme = DEFAULT_ID;
         document.documentElement.dataset.hduiState = 'fallback';
@@ -699,7 +809,7 @@
         renderPanel();
     }
 
-    /** 应用主题。silentRetry=true 时失败不重复弹横幅(用户手动点「重新尝试」的场景) */
+    /** 应用主题。结构类失败先进「等结构就绪」窗口, 不再立刻弹横幅 */
     function applyTheme(id, silentRetry) {
         const theme = themeById(id);
         if (!theme) {
@@ -707,6 +817,7 @@
             fallbackToDefault('E_UNKNOWN_THEME', '未知主题 ' + id);
             return false;
         }
+        if (theme.id === DEFAULT_ID) stopPending();
         unload();
         dismissAlert();
         if (theme.id === DEFAULT_ID) {
@@ -724,19 +835,29 @@
         if (!v.ok) {
             Diag.error(v.code, v.detail);
             currentId = DEFAULT_ID;
+            // 结构类失败: 先把「那个脚本还没把 A / A·GB 补进来」当第一嫌疑, 等一个窗口。
+            // 以前这里直接弹横幅 —— 用户点重试就好了, 纯粹是时序误报。
+            if (STRUCT_CODES.indexOf(v.code) >= 0) {
+                armPending(v.code + ' ' + v.detail, appliedSig ? PENDING_LATE_MS : PENDING_FIRST_MS);
+                return false;
+            }
             fallbackToDefault(v.code, v.detail);
             return false;
         }
 
         try {
+            stopPending();
             injectCss(STYLE_ID, buildCss(theme, v.colMap));
             paintRows(v.colMap);
             currentId = theme.id;
+            appliedSig = colMapSig(v.colMap);
+            appliedAbsent = v.absent || [];
             document.documentElement.dataset.hduiTheme = theme.id;
             document.documentElement.dataset.hduiState = 'applied';
             storeSet(STORE_ERR, null);
             Diag.info('THEME_ON', theme.name + '(' + theme.id + ') 已应用 [' + v.code + ']; '
-                + (v.code === 'OK_NO_TABLE' ? '本页无种子表, 只应用全局样式' : '列映射完整'));
+                + (v.code === 'OK_NO_TABLE' ? '本页无种子表, 只应用全局样式'
+                    : (v.code === 'OK_NO_CALC' ? v.detail : '列映射完整')));
             syncUiVars();
             dockUi();
             watchStructure();
@@ -775,6 +896,45 @@
         if (watchTimer) { clearTimeout(watchTimer); watchTimer = 0; }
     }
 
+    /**
+     * 结构变了之后怎么办:
+     *   - 还在等结构就绪 -> 立刻再试一次那个主题;
+     *   - 列集合变了(外部脚本把 A / A·GB 补进来了, 或者撤走了) -> 重摆一次, 让 nth-child 重新对齐;
+     *   - 结构真的坏了 -> 先等短窗口, 超时才回退(补列补一半的时刻不该弹横幅)。
+     */
+    function onStructureChange() {
+        try {
+            if (pendingUntil) {
+                const id = storeGet(STORE_THEME, DEFAULT_ID);
+                if (id !== DEFAULT_ID) applyTheme(id);
+                return;
+            }
+            if (currentId === DEFAULT_ID) return;
+            const v = validateContract();
+            if (!v.ok) {
+                Diag.error('E_STRUCTURE_CHANGED', '页面结构在运行中变化: ' + v.detail);
+                currentId = DEFAULT_ID;
+                if (STRUCT_CODES.indexOf(v.code) >= 0) {
+                    armPending(v.code + ' ' + v.detail, PENDING_LATE_MS);
+                    return;
+                }
+                fallbackToDefault('E_STRUCTURE_CHANGED', v.detail);
+                return;
+            }
+            const sig = colMapSig(v.colMap);
+            if (sig !== appliedSig) {
+                Diag.info('COLS_CHANGED', '种子表列集合变化: ' + appliedSig + ' -> ' + sig);
+                applyTheme(currentId);
+                return;
+            }
+            clearPaint();
+            paintRows(v.colMap);
+            appliedAbsent = v.absent || [];
+        } catch (e) {
+            Diag.fail('E_WATCH_FAILED', e);
+        }
+    }
+
     function watchStructure() {
         stopWatch();
         const scope = document.getElementById('outer') || document.body;
@@ -783,20 +943,7 @@
             if (watchTimer) clearTimeout(watchTimer);
             watchTimer = setTimeout(function () {
                 watchTimer = 0;
-                try {
-                    if (currentId === DEFAULT_ID) return;
-                    const v = validateContract();
-                    if (!v.ok) {
-                        Diag.error('E_STRUCTURE_CHANGED', '页面结构在运行中变化: ' + v.detail);
-                        currentId = DEFAULT_ID;
-                        fallbackToDefault('E_STRUCTURE_CHANGED', v.detail);
-                    } else {
-                        clearPaint();
-                        paintRows(v.colMap);
-                    }
-                } catch (e) {
-                    Diag.fail('E_WATCH_FAILED', e);
-                }
+                onStructureChange();
             }, 500);
         });
         observer.observe(scope, { childList: true, subtree: true });
@@ -1026,6 +1173,15 @@
         head.appendChild(document.createTextNode('当前: '));
         head.appendChild(el('code', String(currentId)));
         diag.appendChild(head);
+
+        // A / A·GB 是别的脚本注入的, 面板里说清楚它到底在不在 —— 排查时序问题全靠这一行
+        const calcLine = el('div', undefined, '');
+        calcLine.appendChild(document.createTextNode('A / A·GB: '));
+        calcLine.appendChild(el('code', appliedAbsent.length ? '外部脚本未注入, 已跳过' : '已接管'));
+        diag.appendChild(calcLine);
+        if (pendingUntil) {
+            diag.appendChild(el('div', '等待外部脚本补列中…'));
+        }
 
         const err = storeGet(STORE_ERR, null);
         if (err && err.code) {

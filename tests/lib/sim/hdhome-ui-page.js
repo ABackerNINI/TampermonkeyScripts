@@ -11,6 +11,7 @@
  *   hdhome-ui            正常种子页(12 列, 12 行)
  *   hdhome-ui-broken    表头与数据行同时缺「进度」列 —— 列不可识别 E_COLUMN_UNKNOWN
  *   hdhome-ui-shape     仅数据行少一格 —— 行列数不符 ROW_CELL_COUNT_MISMATCH
+ *   hdhome-ui-nocalc    外部脚本没注入 A / A·GB(表只有 10 列) —— 必须照常上妆, 不得回退
  *   hdhome-ui-empty     有表头无数据行 —— 空表体(不算错)
  *   hdhome-ui-notable   无 #torrenttable(模拟详情页/论坛页) —— 只上全局妆
  *   hdhome-ui-nonav     缺 #nav_block —— 结构契约 A 级失败 E_ANCHOR_MISSING
@@ -198,10 +199,25 @@ function headRow(opts) {
     ];
     // 变体: 表头缺「进度」列(rowDrop 只改数据行 -> 制造"行列数不符")
     if (!opts || !opts.headDrop) cells.push(`<td class="colhead">进度</td>`);
-    cells.push(`<td class="colhead" style="cursor: pointer;" id="calcTHeadA" title="A值">A</td>`);
-    cells.push(`<td class="colhead" style="cursor: pointer;" id="calcTHeadAve" title="每GB的A值">A/GB</td>`);
+    // A / A·GB 是**别的脚本**注入的列: noCalc 模拟它没装/还没跑完 —— 表只有 10 列
+    if (!opts || !opts.noCalc) {
+        cells.push(`<td class="colhead" style="cursor: pointer;" id="calcTHeadA" title="A值">A</td>`);
+        cells.push(`<td class="colhead" style="cursor: pointer;" id="calcTHeadAve" title="每GB的A值">A/GB</td>`);
+    }
     cells.push(`<td class="colhead"><a href="/torrents.php?sort=9&amp;type=desc">发布者</a></td>`);
     return `<tr>${cells.join('')}</tr>`;
+}
+
+/** 外部脚本补列的 DOM 片段(表头两格), 供用例在页面加载后再注入, 复现"补列比我们晚" */
+function calcHeadCells() {
+    return `<td class="colhead" style="cursor: pointer;" id="calcTHeadA" title="A值">A</td>`
+        + `<td class="colhead" style="cursor: pointer;" id="calcTHeadAve" title="每GB的A值">A/GB</td>`;
+}
+
+/** 外部脚本补列的 DOM 片段(数据行两格), seeders 用来算一个假的 A 值 */
+function calcRowCells(seeders) {
+    return `<td class="rowfollow" data-calc-a="${(seeders / 4).toFixed(2)}">${(seeders / 4).toFixed(2)}</td>`
+        + `<td class="rowfollow" data-calc-ave="0.08"><span>0.08</span></td>`;
 }
 
 const TITLES = [
@@ -245,8 +261,8 @@ function torrentRow(i, opts) {
         + `<td class="rowfollow"><b><a href="/details.php?id=${id}&amp;hit=1&amp;dllist=1#leechers">${leechers}</a></b></td>`
         + `<td class="rowfollow"><a href="/viewsnatches.php?id=${id}"><b>${100 + i}</b></a></td>`
         + ((opts && opts.rowDrop) ? '' : `<td align="center">-</td>`)
-        + `<td class="rowfollow" data-calc-a="${(seeders / 4).toFixed(2)}">${(seeders / 4).toFixed(2)}</td>`
-        + `<td class="rowfollow" data-calc-ave="0.08"><span>0.08</span></td>`
+        + ((opts && opts.noCalc) ? '' : `<td class="rowfollow" data-calc-a="${(seeders / 4).toFixed(2)}">${(seeders / 4).toFixed(2)}</td>`
+            + `<td class="rowfollow" data-calc-ave="0.08"><span>0.08</span></td>`)
         + `<td class="rowfollow"><span class="nowrap"><a href="/userdetails.php?id=${120000 + i}" class="Uploader_Name"><b>simuploader</b></a></span></td>`
         + `</tr>`;
 }
@@ -306,9 +322,11 @@ const SCENARIOS = {
     'hdhome-ui-broken': () => page({ headDrop: true, rowDrop: true }),
     // 只少数据行的单元格 -> 行列数不符(ROW_CELL_COUNT_MISMATCH)
     'hdhome-ui-shape': () => page({ rowDrop: true }),
+    // 外部脚本没注入 A / A·GB(表只有 10 列) -> 必须照常上妆, 不得回退
+    'hdhome-ui-nocalc': () => page({ noCalc: true }),
     'hdhome-ui-empty': () => page({ empty: true }),
     'hdhome-ui-notable': () => page({ noTable: true }),
     'hdhome-ui-nonav': () => page({ noNav: true })
 };
 
-module.exports = { SCENARIOS, page };
+module.exports = { SCENARIOS, page, calcHeadCells, calcRowCells };

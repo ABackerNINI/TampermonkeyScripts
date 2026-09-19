@@ -4,8 +4,15 @@
 
 ## 当前工作焦点
 
-**HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.19.3`，2026-09-19 新建，TASK018）——HDHome 界面主题套件。**
-**2026-09-19 全面重构（`.2` → `.3`，改完待审核未提交）**：用户报两件事 ——
+**HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.19.4`，2026-09-19 新建，TASK018）——HDHome 界面主题套件。**
+**2026-09-19 `.4`（改完待审核未提交）**：真站首装报 `E_COLUMN_UNKNOWN: a,ave`，点「重新尝试」就好了 ——
+那两列是**别的脚本运行时注入**的（`#calcTHeadA` / `#calcTHeadAve`），比本脚本晚。纯时序问题（P33）：
+① `a`/`ave` 改**可选列**，缺了返回成功码 `OK_NO_CALC` 照常上妆，排版函数缺席时 `return ''`；
+② 列集合变了用 `colMapSig` 比对并**重摆**（补进来的格子要吃到主题样式）；
+③ `ROW_CELL_COUNT_MISMATCH`（补列补到一半）进**等待窗口**（首装 8s / 运行中 4s，每 700ms 试一次），
+期间 `data-hdui-state="pending"`、已上妆的不卸妆；`E_COLUMN_UNKNOWN`/`E_ANCHOR_MISSING` **不等**
+（那两个码只可能是真坏了）；④ 新测试 `sim-hdui-optional-columns.js` + 静态 §9。
+**2026-09-19 全面重构（`.2` → `.3`，已提交 `bc2c0cd`）**：用户报两件事 ——
 ① 右下角浮动圆钮与 PTAutoCheckIn v2 等脚本的 FAB 抢同一个位置；② 5 套主题风格与原 UI 太接近，
 12 个格子挤同一行 + 新 UI 按钮都堆到一起，与设计初衷背道而驰。
 三件事：① **入口内嵌** —— 量 `ul#mainmenu` 最后一个 li 的右边空档，摆成导航栏末尾小文字钮
@@ -23,7 +30,7 @@
 + 右下角不被占用）+ 静态校验新增 §7「入口内嵌」+ §8「版式不再堆成一坨」；
 5 套版式签名仍然两两不同；仿真测试 21 → 22。
 视觉复核 `.workbuddy-ai/_shot-hdui.js`（不入库）截 5 套顶部+中部+面板图，**所有版式肉眼可辨**，
-与原 NexusPHP 蓝色表格明显不同。**`.3` 改完待审核未提交**。
+与原 NexusPHP 蓝色表格明显不同。**`.3` 已提交 `bc2c0cd`**（分支 `dev`，未 push）。
 **2026-09-19 安全复验后 4 项改进（`.1` → `.2`，已提交 `1b38510`）**：① `unload()` 补 `stopWatch()`，
 回退后 MutationObserver 不再空转；② 铺底色挪到**真正的 document-start**（不再等 `DOMContentLoaded`）：`<head>` 未建时退到 `<html>`；
 若连 `<html>` 都还没创建则 `paintBootBgWhenPossible()` 退化为「`<html>` 一出现就铺」；失败独立记 `E_BOOT_PAINT`。

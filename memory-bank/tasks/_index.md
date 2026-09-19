@@ -6,11 +6,12 @@
 ## In Progress（进行中）
 
 - [TASK018] HDHome 界面主题套件（5 套可切换 UI） — **已实施**（`.1` 提交 `13266e0`，
-  `.2` 提交 `1b38510`，`.3` 改完待审核未提交 —— 全面重构: 入口内嵌+版式重画），
-  `src/HDHomeUI.user.js` `2026.09.19.3`，分支 `dev`；设计 + 脚本 + 仿真剧本 + 6 个测试
-  （含 `sim-hdui-inline-dock`）全就位，`node tests/run-all.js` **22/22 全绿**；
-  真实页面离线核验契约通过 + 仿真视觉复核截图覆盖 5 套.
-  见 `TASK018-hdhome-ui-themes.md` 与 `scripts/HDHomeUI.md`。
+  `.2` 提交 `1b38510`，`.3` 提交 `bc2c0cd`，`.4` 改完待审核未提交 ——
+  `.3` 全面重构: 入口内嵌+版式重画；`.4` A/A·GB 改可选列 + 等结构就绪窗口），
+  `src/HDHomeUI.user.js` `2026.09.19.4`，分支 `dev`；设计 + 脚本 + 仿真剧本 + 7 个测试
+  （含 `sim-hdui-inline-dock`、`sim-hdui-optional-columns`）全就位，
+  `node tests/run-all.js` **23/23 全绿**；真实页面离线核验契约通过 + 仿真视觉复核截图覆盖 5 套.
+  见 `TASK018-hdhome-ui-themes.md`、`scripts/HDHomeUI.md` 与 `pitfalls.md` P33。
 
 - [TASK001] PTAutoCheckIn v2 实测校准并入正式版 — **已并入正式版**（1.10 完成），其余逐站实测校准继续（核心主线）
 - [TASK002] 修复 BTSchoolHelper 时魔数值恒为 0（P2）— 待实施

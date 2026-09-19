@@ -148,6 +148,30 @@ ok(/--hdui-navgap/.test(src) && /column-gap:var\(--hdui-navgap\)/.test(src), '�
 ok(/--hdui-navitem/.test(src), '导航条目内边距可配(--hdui-navitem)');
 ok(/order:3;flex:0 0 100%;height:0/.test(src), '大开本用零高伪元素做版面换行点');
 
+// ---------- 9. 可选列 + 等待窗口(2026.09.19.4: A / A·GB 是别的脚本注入的) ----------
+section('9. 可选列: A / A·GB 缺席或晚到都不能误判为结构损坏');
+ok(/const OPTIONAL_COLUMNS[\s\S]{0,120}?'a',\s*'ave'/.test(src),
+    'A / A·GB 声明为可选列(不是硬性契约)');
+ok(/const REQUIRED_COLUMNS[\s\S]{0,160}?OPTIONAL_COLUMNS\.indexOf/.test(src),
+    '必需列由全集剔除可选列得出(不两处各写一遍, 免得漂移)');
+ok(/absent: absent/.test(src) && /OPTIONAL_COLUMNS\[i\]\]\s*===\s*undefined/.test(src),
+    'detectColumns 单独统计"缺席的可选列"');
+ok(/code: 'OK_NO_CALC'/.test(src), '缺可选列时返回 OK_NO_CALC(成功码, 不是错误码)');
+ok(/function statStack\(m, key, label, extra\)\s*\{\s*if \(!m\[key\]\) return '';/.test(src)
+    && /function statInline\(m, key, label, extra\)\s*\{\s*if \(!m\[key\]\) return '';/.test(src),
+    '排版函数在列缺席时跳过该列(不生成指向空槽位的 nth-child)');
+ok(/绝不能生成 :nth-child\(undefined\)/.test(src), '注释里写明了这条约束的来由');
+ok(/const STRUCT_CODES[\s\S]{0,200}?ROW_CELL_COUNT_MISMATCH/.test(src),
+    '结构类错误码单列一份(用于判定要不要等窗口)');
+ok(/function armPending/.test(src) && /function tickPending/.test(src) && /function stopPending/.test(src),
+    '有「等结构就绪」窗口: armPending / tickPending / stopPending');
+ok(/dataset\.hduiState = 'pending'/.test(src), '等待窗口有可观测状态(pending, 便于排查时序)');
+ok(/STRUCT_CODES\.indexOf\(v\.code\)\s*>=\s*0/.test(src),
+    '首装与运行中变化两条路径都走等待窗口, 不直接弹横幅');
+ok(/E_STRUCT_TIMEOUT/.test(src), '窗口超时才真正回退并弹横幅(不再一上来就报错)');
+ok(/sig !== appliedSig/.test(src) && /function colMapSig/.test(src),
+    '列集合变化(外部脚本补列)会重摆一次, 让 nth-child 重新对齐');
+
 console.log('');
 if (failed) {
     console.error('FAIL check-hdui-static: ' + failed + ' 项不达标');

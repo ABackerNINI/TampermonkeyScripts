@@ -73,5 +73,10 @@ flowchart TD
     **入口必须内嵌**——量 `ul#mainmenu` 末尾空档摆成导航栏的小文字钮 `界面 · <主题名> ▾`，禁用 fixed 悬浮 FAB
     （`sim-hdui-inline-dock.js` 钉死「position:absolute + 与菜单垂直相交 + 右下角不被占用 + 换主题重摆」），
     重摆入口不整体重写 `cssText`（会清掉 `--ui-*` 配色变量）。
-    详见 `scripts/HDHomeUI.md` 与 `tasks/TASK018-hdhome-ui-themes.md`。
+    **种子表列分必需/可选**：A / A·GB（`a`/`ave`）是**别的脚本运行时注入**的，属可选列——
+    它没装、没开、或注入得比本脚本晚，页面就只有 10 列。缺可选列返回**成功码 `OK_NO_CALC`** 照常上妆，
+    排版函数在列缺席时必须 `return ''`（不生成 `:nth-child(undefined)`）；列集合变了要重摆一次；
+    补列补到一半（表头插了、行没插完 ⇒ `ROW_CELL_COUNT_MISMATCH`）**先等窗口**再决定要不要弹横幅。
+    判定口诀：**「点重试就好了」= 时序问题，不是结构问题**。由 `sim-hdui-optional-columns.js` 钉死。
+    详见 `scripts/HDHomeUI.md`、`tasks/TASK018-hdhome-ui-themes.md` 与 `pitfalls.md` P33。
 11. **测试**：`tests/` 是开发期测试区（零依赖，无测试框架）——按脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个测试，以退出码表达结果；`node tests/run-all.js` 一次跑完全部。改 PTAutoCheckIn 后必跑 `node tests/ptautocheckin/check-ptac-budget.js`（校验超时预算不变式 + 状态阶梯结构 + 不透明步骤的 `budgetMs` 声明），必须全绿；新增 `function` 步骤/自定义 `alreadyCheck` 时**必须**声明 `budgetMs` / `alreadyCheckBudgetMs`（同步判定写 `0`）。测试约定与「如何测 userscript」技法见 `tests/README.md`，原理见 `pitfalls.md` P28。
