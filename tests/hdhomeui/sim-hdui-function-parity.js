@@ -62,7 +62,8 @@ async function hitTest(page) {
 
 runCase('HDHomeUI · 功能保持(5 套主题)', async function () {
     await withSim(async function (sim) {
-        // ---- 基线(默认主题 reel) ----
+        // ---- 基线(显式播种 reel: 首次安装默认已是「原站默认」, 不再自动上妆) ----
+        sim.seed({ 'hdui.theme': 'reel' });
         const base = await H.open(sim, 'hdhome-ui');
         await H.waitState(base, 'applied');
         const baseSnap = await H.snapshot(base);

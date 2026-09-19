@@ -4,7 +4,13 @@
 
 ## 当前工作焦点
 
-**HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.19.1`，2026-09-19 新建，TASK018）——HDHome 界面主题套件。**
+**HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.19.2`，2026-09-19 新建，TASK018）——HDHome 界面主题套件。**
+**2026-09-19 安全复验后 4 项改进（`.1` → `.2`，改完待审核未提交）**：① `unload()` 补 `stopWatch()`，
+回退后 MutationObserver 不再空转；② 铺底色挪到**真正的 document-start**（不再等 `DOMContentLoaded`）：`<head>` 未建时退到 `<html>`；
+若连 `<html>` 都还没创建则 `paintBootBgWhenPossible()` 退化为「`<html>` 一出现就铺」；失败独立记 `E_BOOT_PAINT`。
+实测注入时 `readyState` 仍为 `loading`（早于 `DOMContentLoaded`），旧实现是在 `DOMContentLoaded` 才铺；③ **首次安装默认 `default`（原站默认）**，
+不再开机即上妆，老用户已存主题不受影响；④ 修文档漂移（「唯一允许的 DOM 写入」改为「对站内 DOM 的唯一改动」
+并列出脚本自建节点、删掉代码里不存在的「告警橙 #ff9f45」）。静态校验新增第 6 组断言钉住启动时机与默认行为。
 用户给的素材是 `resources-do-not-track/HDHome-Whole-Web/` 下**已脱敏**的 HDHome 整页（首页/种子页，
 已登录未签到）。需求是「5 套**不同类型**的 UI（不能只换颜色）+ 保住原站全部功能 + 严格仿真测试 +
 不许静默忽略错误 + 页面改版不许误触发危险操作 + 结构错误要提醒并回退默认 UI + 可切换可记忆」。

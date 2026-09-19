@@ -4,10 +4,14 @@
 > 原站功能全部保留；页面结构一旦与预期不符，**提示并回退站点默认界面**。
 > 设计依据与实施计划见 `tasks/TASK018-hdhome-ui-themes.md`。
 
-- 当前版本：`2026.09.19.1`（已提交 `13266e0`，分支 `dev`）
+- 当前版本：`2026.09.19.2`（分支 `dev`，**未提交，待审核**）
 - **真实标记已核验**：用 `resources-do-not-track/` 下已脱敏的整页离线跑过 `headerKey()` 与契约判定，
   12 列全部识别、数据行 12 格、4 个 A 级锚点齐全（脚本 `.workbuddy-ai/_verify-hdui-real-page.js`，不入库）。
-- 匹配：`*://*.hdhome.org/*`，`@run-at document-start`
+- 匹配：`*://*.hdhome.org/*`，`@run-at document-start`（**确实在 document-start 干活**：立刻铺主题底色防闪白。
+  此时 `<head>` 通常还没建，`injectCss` 自动退到 `<html>`；若连 `<html>` 都尚未创建（注入点比 Tampermonkey
+  更早时会出现，例如测试用的 `addScriptToEvaluateOnNewDocument`），退化为「`<html>` 一出现就铺」
+  （`paintBootBgWhenPossible`），最迟由 `boot()` 在 DOM 就绪后再补一次。
+  实测注入发生时 `document.readyState` 仍为 `loading`，**早于 `DOMContentLoaded`**）
 - 权限：`GM_getValue` / `GM_setValue`（**不申请任何网络类权限**）
 - 存储键：`hdui.theme`（当前主题 id）、`hdui.lastError`（上次结构错误）
 
@@ -27,9 +31,12 @@
 1. **列索引运行时探测**：读 `#torrenttable` 表头（文本 / `img` class / `#calcTHeadA*`），
    产出 `colMap`（类型→1、标题→2 …），再**据此动态生成 CSS**，而不是写死 1..12。
    站点加列 ⇒ 映射自动跟随；少列或改名 ⇒ 判为结构错误，走回退。
-2. **唯一允许的 DOM 写入**：`<html>` 上的 `data-hdui-theme` / `data-hdui-state` 状态属性、
+2. **对站内 DOM 的唯一改动**：`<html>` 上的 `data-hdui-theme` / `data-hdui-state` 状态属性、
    已校验行上的 `--hdui-cat`（类别色）与 `--hdui-ratio`（做种占比）自定义属性，卸载时全部清理。
-   **绝不**：增删/移动/克隆节点、挂事件、改 `href`、改文本。
+   **绝不**：增删/移动/克隆**站内**节点、给站内元素挂事件、改 `href`、改文本。
+   > 脚本**自建**的节点不算违反上条，它们是自持 UI 的一部分，同样在 `unload()` / `dismissAlert()` 中清理：
+   > `<style id="hdui-css">`（主题样式）、`<style id="hdui-boot">`（document-start 铺的底色）、
+   > `#hdui-alert`（结构错误横幅，挂在 `document.body` 上，故需可见）、`#hdui-root`（浮动开关宿主）。
 3. **自持 UI 隔离**：浮动开关 + 面板放进 **closed shadow root**，事件 `stopPropagation`，
    不冒泡到站内 document 级监听（用例 `sim-hdui-danger-guard` 钉死）。
 
@@ -77,7 +84,7 @@
 | `tape` | 电传纸带 | **保持 `display:table`**，行高 22px 密排 + 斑马纹 | 全站等宽 | 纸黄 `#f4efe3` / 单红 `#a12a20` | table-row |
 | `sheet` | 大开本 | 单列长条，标题 17px 独占一行 + 双细线 | 衬线 | 纸白 `#fbfaf7` / 暗朱红 `#8f2b21` | flex |
 | `swiss` | 瑞士网格 | 多列弹性排布，标题 60% 宽，**零线条靠留白** | 无衬线 | 纯白 / 黑 / 钴蓝 `#1a35d8`，做种数 28px | flex |
-| `signal` | 播控台 | 行 `grid` 4 轨道 + 电平条 + 类别色点 | 无衬线 + 等宽数字 | 深石板 `#0f1620` / 青 `#5fd4e4` / 告警橙 `#ff9f45` | grid |
+| `signal` | 播控台 | 行 `grid` 4 轨道 + 电平条 + 类别色点 | 无衬线 + 等宽数字 | 深石板 `#0f1620` / 青 `#5fd4e4` | grid |
 | `default` | 原站默认 | 不注入任何样式 | — | — | — |
 
 > 区别不只颜色：表格/表体/行的 `display`、网格轨道数、做种数字号（22/12/12/28/18px）、
@@ -92,6 +99,8 @@
   面板底部是**诊断区**（当前主题、上次错误码、最近 5 条诊断）。
 - 快捷键 `Alt+Shift+T` 循环切换（`input/textarea/select` 聚焦或 `contentEditable` 时直接返回）。
 - 选择即写入 `GM_setValue('hdui.theme')`，下次进站自动恢复。
+- **首次安装默认 `default`（原站默认）**：装完不擅自改用户看到的界面，主题由用户自己在面板里选；
+  已存过主题的老用户不受影响（`applyStored` 的兜底值从 `reel` 改成 `DEFAULT_ID`）。
 
 ---
 
@@ -103,8 +112,12 @@
 - **不静默**：统一 `Diag` 账本（info/warn/error + `Diag.fail(code, err)`），
   `window` 的 `error` 与 `unhandledrejection` 只记录不吞（不 `preventDefault`）；
   禁止空 catch（静态扫描）；fatal 必弹可见横幅。
-- **运行时守卫**：`MutationObserver` 观察 `#outer` 的 `childList`（debounce 500ms），
-  局部刷新后重新校验；坏了就回退，没坏就重画 `--hdui-cat` / `--hdui-ratio`。
+- **运行时守卫**：`MutationObserver` 观察 `#outer`（取不到则退到 `document.body`）的 `childList`
+  （debounce 500ms），局部刷新后重新校验；坏了就回退，没坏就重画 `--hdui-cat` / `--hdui-ratio`。
+  ⚠️ **`unload()` 必须先 `stopWatch()`**：否则回退到默认界面后 MutationObserver 仍在空转（白占资源）。
+- **启动时序**：`document-start` 调 `paintBootBgWhenPossible()` 铺底色 → `DOMContentLoaded` 才 `stopBootWatch()`
+  + `mountUi()` + `applyStored()`。铺底色失败独立记 `E_BOOT_PAINT`，不影响后续上妆；
+  上妆成功时 `unload()` 会先把底色样式撤掉，由主题 CSS 接管。
 - **防误触清单**（本页特有）：不碰签到 `attendance.php`、RSS 增删 `myrss.php`、
   登出 `logout.php`、魔力 `mybonus.php` —— 脚本从不主动访问，测试断言这些端点零请求。
 
@@ -114,7 +127,7 @@
 
 | 用例 | 覆盖 |
 |---|---|
-| `tests/hdhomeui/check-hdui-static.js` | 元数据 / 最小权限 / 危险 API 禁令 / 无空 catch / 无 window 钩子 / 5 主题齐备且结构声明互异 / 契约定义完整 |
+| `tests/hdhomeui/check-hdui-static.js` | 元数据 / 最小权限 / 危险 API 禁令 / 无空 catch / 无 window 钩子 / 5 主题齐备且结构声明互异 / 契约定义完整 / **启动时机与默认行为**（`unload()` 停守卫、首次安装默认 `default`、铺底色早于 readyState 分支） |
 | `tests/hdhomeui/sim-hdui-function-parity.js` | 5 套主题上妆后功能基线快照逐字段不变、关键元素 hit-test 可点、RSS 点击恰好 1 次请求、搜索箱折叠与表单提交仍工作、局部重排不误判 |
 | `tests/hdhomeui/sim-hdui-theme-switch.js` | 版式签名两两不同、各套骨架特征、切回默认卸干净、记忆、面板点击、快捷键 |
 | `tests/hdhomeui/sim-hdui-structure-guard.js` | 缺列 / 行列数不符 / 缺锚点 ⇒ 回退 + 横幅 + 记录 + 零危险访问；空表体与无表页不算错；运行中改坏自动回退 |

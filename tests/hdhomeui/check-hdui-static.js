@@ -112,6 +112,20 @@ ok(/E_ANCHOR_MISSING/.test(src) && /E_COLUMN_UNKNOWN/.test(src) && /ROW_CELL_COU
     '错误码齐备(锚点缺失 / 列不可识别 / 行列数不符)');
 ok(/MutationObserver/.test(src), '运行时结构守卫(局部刷新后重新校验)');
 
+// ---------- 6. 启动时机与默认行为 ----------
+section('6. 启动时机与默认行为(不得擅自改界面)');
+const uIdx = src.indexOf('function unload()');
+const uBody = uIdx >= 0 ? src.slice(uIdx, src.indexOf('\n    }', uIdx)) : '';
+ok(/stopWatch\(\)/.test(uBody), 'unload() 会停掉结构守卫(回退后 Observer 不空转)');
+ok(/storeGet\(\s*STORE_THEME\s*,\s*DEFAULT_ID\s*\)/.test(src), '首次安装默认「原站默认」, 不自动上妆');
+const pi = src.lastIndexOf('paintBootBgWhenPossible();');
+const ri = src.indexOf("if (document.readyState === 'loading')");
+ok(/@run-at\s+document-start/.test(src), '@run-at document-start 已声明');
+ok(pi > 0 && ri > pi, '铺底色在 readyState 分支之前(真正的 document-start)');
+ok(/E_BOOT_PAINT/.test(src), '铺底色异常有独立错误码');
+ok(/function paintBootBgWhenPossible/.test(src) && /bootObserver\.observe\(document/.test(src),
+    '连 <html> 都还没建时退化为「一出现就铺」, 不依赖 DOMContentLoaded');
+
 console.log('');
 if (failed) {
     console.error('FAIL check-hdui-static: ' + failed + ' 项不达标');

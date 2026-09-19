@@ -6,13 +6,16 @@
 
 - **PTAutoCheckIn**（`2026.09.19.4`）：被动签到 + 批量调度（发起页常驻 + 后台标签串行）+ 跨站 FAB 结果面板 + 贴吧多吧（unit 级独立冷却/状态）+ 28 站 + 贴吧 6 吧。含：FAB 四皮肤（变色/数字/信号灯/光环）、站点图标、跨天守卫、仅检测型（U2）、无按钮访问即签型（MTeam 系六站）、no-text 按钮站（NodeLoc）、签到按钮重现降级提醒（suspect）、行内单站强制重试。**v2 已并入正式版**, 生产脚本为单一 `PTAutoCheckIn.user.js`（`@name PTAutoCheckIn`）。
   **2026-09-18 慢站误判修复（P28）**：整流程超时定时器不再覆写已给出的结论（旧版 25s 后把 `skipped`/`detect_only`/`suspect` 一律改成 `failed`，是「经常失败」主因）；新增 `unconfirmed` 独立状态（未确认，不计入失败、可重试）；`writeStatus` 状态单向阶梯；点击后观察窗改事件驱动（`pagehide`/`beforeunload`/URL 变化/成功特征，上限 4s）+ 有界复检（+5s/+12s，只检测不重复点击）；`waitForElement` 可交互判定 + 慢页面超时自适应；**超时预算不变式**（`detectMs + stepsMs + 18000ms <= 40000ms`）与双校验（运行时 `auditUnitBudgets()` + `tests/ptautocheckin/check-ptac-budget.js`）；进度心跳 + 20s 零进度判死站；整流程 25s→40s、调度窗口 50s→60s。**已提交**（`ebb06bb`，分支 `dev`），待真实站点实测校准。
-- **HDHomeUI**（`2026.09.19.1`，2026-09-19 新建，TASK018）：HDHome 界面主题套件，5 套可切换可记忆的 UI
+- **HDHomeUI**（`2026.09.19.2`，2026-09-19 新建，TASK018）：HDHome 界面主题套件，5 套可切换可记忆的 UI
   （片库索引 / 电传纸带 / 大开本 / 瑞士网格 / 播控台）。**纯样式层**改造：不重建 DOM、不接管交互，
   列索引运行时探测后动态生成 CSS，原站功能（16 项导航、信息栏入口含签到、搜索箱与折叠、排序、
   RSS 增删、分页、页脚）由「功能基线快照 + hit-test」两道仿真断言守住。结构契约（A 级锚点 + 12 列 +
   行列数一致）任一不满足 ⇒ 卸妆 + 控制台 error + 顶部红色横幅 + 写 `hdui.lastError`；运行时
   MutationObserver 复查。诊断统一走 `Diag` 账本，禁止空 catch，挂载 window error/unhandledrejection 只记不吞。
   详见 `scripts/HDHomeUI.md`。**已提交 `13266e0`**（分支 `dev`，**已推 gitee**）。
+  **`.2`（改完待审核，未提交）**：2026-09-19 安全性全面复验后的 4 项改进 —— `unload()` 补 `stopWatch()`
+  （回退后 Observer 不空转）、铺底色移到真正的 document-start、首次安装默认 `default`（不擅自改界面）、
+  修 `scripts/HDHomeUI.md` 的文档漂移；静态校验同步新增第 6 组断言。
   另用**真实页面**（`resources-do-not-track/` 下已脱敏的整页）离线核验过契约判定：12 列全部识别、
   数据行 12 格、4 个 A 级锚点齐全 ⇒ 仿真复刻与现实一致（核验脚本在 `.workbuddy-ai/`，不入库）。
 - **BTSchoolHelper**（`2026.08.09.1`）：高亮 2xFree、置顶低亮、空格跳转、完整表格解析器 `parseTorrentTable`。

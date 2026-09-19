@@ -2,7 +2,7 @@
 // @name         HDHomeUI
 // @name:zh-CN   HDHome 界面主题套件
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.19.1
+// @version      2026.09.19.2
 // @description  HDHome 界面主题套件: 5 套可切换 UI(片库索引/电传纸带/大开本/瑞士网格/播控台)。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 页面结构异常时提示并回退默认界面。
 // @author       ABacker
 // @license      GNU GPL-3.0
@@ -484,6 +484,8 @@
     }
 
     function unload() {
+        // 回退/换妆时先停掉结构守卫, 否则 MutationObserver 会在默认界面上空转
+        stopWatch();
         clearPaint();
         const css = document.getElementById(STYLE_ID);
         if (css && css.parentNode) css.parentNode.removeChild(css);
@@ -622,7 +624,8 @@
     }
 
     function applyStored(isRetry) {
-        const id = storeGet(STORE_THEME, 'reel');
+        // 首次安装默认「原站默认」: 不擅自改用户看到的界面, 由用户自己选主题
+        const id = storeGet(STORE_THEME, DEFAULT_ID);
         applyTheme(id, !!isRetry);
     }
 
@@ -814,6 +817,35 @@
         cycleTheme();
     }
 
+    let bootObserver = null;
+
+    function stopBootWatch() {
+        if (bootObserver) { bootObserver.disconnect(); bootObserver = null; }
+    }
+
+    /**
+     * 铺一层主题底色, 避免加载瞬间闪一下原站配色(回退时由 unload() 撤掉)。
+     * 真正的 document-start 上 <head> 通常还没建, injectCss 会自动退到 <html>;
+     * 若连 <html> 都尚未创建(注入点比真实 Tampermonkey 更早时会出现), 返回 false。
+     */
+    function paintBootBg() {
+        const theme = themeById(storeGet(STORE_THEME, DEFAULT_ID));
+        if (!theme || !theme.vars['--hdui-bg']) return false;
+        if (!document.documentElement) return false;
+        injectCss(BOOT_ID, 'html{background:' + theme.vars['--hdui-bg'] + ';}');
+        return true;
+    }
+
+    /** <html> 还没出现时退一步: 它一被创建就立刻铺上(仍早于首屏渲染与 DOMContentLoaded) */
+    function paintBootBgWhenPossible() {
+        if (paintBootBg()) return;
+        if (typeof MutationObserver !== 'function') return;
+        bootObserver = new MutationObserver(function () {
+            if (paintBootBg()) stopBootWatch();
+        });
+        bootObserver.observe(document, { childList: true });
+    }
+
     function boot() {
         // 全局兜底: 只记录, 不吞掉(不 preventDefault、不改返回值)
         window.addEventListener('error', function (ev) {
@@ -823,17 +855,18 @@
             Diag.warn('UNHANDLED_REJECTION', ev && ev.reason ? String(ev.reason) : 'unknown');
         });
 
-        const stored = storeGet(STORE_THEME, 'reel');
-        const theme = themeById(stored);
-        // 提前铺一层底色, 避免加载瞬间闪一下原站配色(回退时由 unload() 撤掉)
-        if (theme && theme.vars['--hdui-bg']) {
-            injectCss(BOOT_ID, 'html{background:' + theme.vars['--hdui-bg'] + ';}');
-        }
+        // 底色已在 document-start 铺过; 若那时连 <html> 都还没建则在这里补最后一次
+        stopBootWatch();
+        if (!document.getElementById(BOOT_ID)) paintBootBg();
 
         mountUi();
         applyStored(false);
         document.addEventListener('keydown', onKeydown);
     }
+
+    // @run-at document-start: 此处即真正的 document-start(DOM 尚未解析), 先把底色铺上
+    // (<html> 若尚未创建, 由 paintBootBgWhenPossible 退化为"一出现就铺")
+    try { paintBootBgWhenPossible(); } catch (e) { Diag.fail('E_BOOT_PAINT', e); }
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
