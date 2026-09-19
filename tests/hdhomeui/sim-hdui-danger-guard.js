@@ -4,7 +4,7 @@
  * 仿真: 危险操作防护
  * ------------------------------------------------------------------
  * 用户在"改版后的页面"上误触是本脚本最大的风险面, 这里钉死三件事:
- *   1. 点我们自己的 UI(浮动开关 / 面板主题项)与按快捷键 —— 事件不得冒泡到站内
+ *   1. 点我们自己的 UI(内嵌开关 / 面板主题项)与按快捷键 —— 事件不得冒泡到站内
  *      document 级监听(站内计数器必须纹丝不动)
  *   2. 切换主题全程零站内请求(签到 / 登出 / 魔力 / 邀请 / 捐赠 / 个人页 / RSS / 广告)
  *   3. 反过来证明站内监听与 RSS 交互仍然活着(计数器真的会涨、请求真的会发)
@@ -32,8 +32,8 @@ runCase('HDHomeUI · 危险操作防护', async function () {
         assert(typeof c0 === 'number', '站内 document 级点击计数器就位');
 
         // ---- 1. 自持 UI 的事件不冒泡到站内 ----
-        await H.clickFab(page);
-        assertEq(await clicks(page), c0, '点浮动开关不冒泡到站内监听');
+        await H.clickDock(page);
+        assertEq(await clicks(page), c0, '点内嵌开关不冒泡到站内监听');
         const top = await H.panelTop(page);
         assert(top !== null, '面板已展开');
 

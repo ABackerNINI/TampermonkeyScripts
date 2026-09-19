@@ -4,7 +4,31 @@
 
 ## 当前工作焦点
 
-**HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.19.2`，2026-09-19 新建，TASK018）——HDHome 界面主题套件。**
+**HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.19.3`，2026-09-19 新建，TASK018）——HDHome 界面主题套件。**
+**2026-09-19 全面重构（`.2` → `.3`，改完待审核未提交）**：用户报两件事 ——
+① 右下角浮动圆钮与 PTAutoCheckIn v2 等脚本的 FAB 抢同一个位置；② 5 套主题风格与原 UI 太接近，
+12 个格子挤同一行 + 新 UI 按钮都堆到一起，与设计初衷背道而驰。
+三件事：① **入口内嵌** —— 量 `ul#mainmenu` 最后一个 li 的右边空档，摆成导航栏末尾小文字钮
+`界面 · <主题名> ▾`；面板改为锚在它下方的下拉浮层；`position:absolute` 文档坐标内嵌
+（随页面滚动），量不到菜单才退到 `table.mainouter` 右上，再退 `position:fixed` 兜底；
+**重摆只在改 left/top/position，不整体重写 cssText**（整体重写会清掉宿主上的 `--ui-*` 配色变量）。
+② **版式全面重画**，每套独立骨架：片库索引 grid 卡片网格+6 轨 grid 行分三区+每指标「标签+值」独立块；
+电传纸带是唯一保留 `display:table` 语义的一套（密排/等宽/反白表头/数字右对齐/细点竖线分栏）；
+大开本 flex 三行（标题/署名/规格），零高伪元素 `::before/::after` 做版面换行点；
+瑞士网格 grid 6×3 全留白，做种数 28px 钴蓝锚点；
+播控台 grid 4 轨道 + 类别色点 + 做种电平条；
+导航 `ul#mainmenu` 全部改成 `display:flex;flex-wrap:wrap` + `--hdui-navgap` 显式列间距。
+③ **新测试 + 静态断言**：`sim-hdui-inline-dock.js`（内嵌入口 + 不压站内内容 + 换主题重摆
++ 右下角不被占用）+ 静态校验新增 §7「入口内嵌」+ §8「版式不再堆成一坨」；
+5 套版式签名仍然两两不同；仿真测试 21 → 22。
+视觉复核 `.workbuddy-ai/_shot-hdui.js`（不入库）截 5 套顶部+中部+面板图，**所有版式肉眼可辨**，
+与原 NexusPHP 蓝色表格明显不同。**`.3` 改完待审核未提交**。
+**2026-09-19 安全复验后 4 项改进（`.1` → `.2`，已提交 `1b38510`）**：① `unload()` 补 `stopWatch()`，
+回退后 MutationObserver 不再空转；② 铺底色挪到**真正的 document-start**（不再等 `DOMContentLoaded`）：`<head>` 未建时退到 `<html>`；
+若连 `<html>` 都还没创建则 `paintBootBgWhenPossible()` 退化为「`<html>` 一出现就铺」；失败独立记 `E_BOOT_PAINT`。
+实测注入时 `readyState` 仍为 `loading`（早于 `DOMContentLoaded`），旧实现是在 `DOMContentLoaded` 才铺；③ **首次安装默认 `default`（原站默认）**，
+不再开机即上妆，老用户已存主题不受影响；④ 修文档漂移（「唯一允许的 DOM 写入」改为「对站内 DOM 的唯一改动」
+并列出脚本自建节点、删掉代码里不存在的「告警橙 #ff9f45」）。静态校验新增第 6 组断言钉住启动时机与默认行为。
 **2026-09-19 安全复验后 4 项改进（`.1` → `.2`，改完待审核未提交）**：① `unload()` 补 `stopWatch()`，
 回退后 MutationObserver 不再空转；② 铺底色挪到**真正的 document-start**（不再等 `DOMContentLoaded`）：`<head>` 未建时退到 `<html>`；
 若连 `<html>` 都还没创建则 `paintBootBgWhenPossible()` 退化为「`<html>` 一出现就铺」；失败独立记 `E_BOOT_PAINT`。

@@ -40,10 +40,12 @@ runCase('HDHomeUI · 主题切换 / 版式差异 / 记忆', async function () {
         assertEq(sigs.tape.table, 'table', '电传纸带: 保持表格语义');
         assertEq(sigs.tape.row, 'table-row', '电传纸带: 行仍是表格行');
         assertEq(sigs.reel.tbody, 'grid', '片库索引: 表体是卡片网格');
-        assertEq(sigs.sheet.row, 'flex', '大开本: 行是纵向长条');
+        assertEq(sigs.reel.row, 'grid', '片库索引: 行是 6 轨网格(主行/指标带/尾注)');
+        assertEq(sigs.sheet.row, 'flex', '大开本: 行是三段式长条');
         assertEq(sigs.signal.row, 'grid', '播控台: 行是网格');
-        assertEq(sigs.swiss.row, 'flex', '瑞士网格: 行是弹性排布');
+        assertEq(sigs.swiss.row, 'grid', '瑞士网格: 行是 6 列网格');
         assert(sigs.signal.cols.split(' ').length === 4, '播控台: 行分 4 轨道, 实际 ' + sigs.signal.cols);
+        assert(sigs.reel.cols.split(' ').length === 6, '片库索引: 行分 6 轨道, 实际 ' + sigs.reel.cols);
 
         const fonts = new Set(THEMES.map(function (id) { return sigs[id].bodyFont; }));
         assert(fonts.size >= 3, '字体族 >= 3 种, 实际 ' + fonts.size);
@@ -88,9 +90,9 @@ runCase('HDHomeUI · 主题切换 / 版式差异 / 记忆', async function () {
         assertEq(await H.themeOf(p), 'sheet', '重新打开记住上次选择: sheet');
 
         // ---- 面板: 真实鼠标点击可切换 ----
-        await H.clickFab(p);
+        await H.clickDock(p);
         const top = await H.panelTop(p);
-        assert(top !== null, '点浮动开关后面板展开(hit-test 命中 shadow 宿主)');
+        assert(top !== null, '点内嵌开关后面板展开(hit-test 命中 shadow 宿主)');
         const changed = await H.clickFirstPanelItemThatChanges(p);
         assert(changed !== null && changed !== 'sheet', '点面板条目可切换主题: sheet -> ' + changed);
         assert(ALL_IDS.indexOf(changed) >= 0, '切换结果是合法主题 id: ' + changed);

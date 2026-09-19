@@ -97,19 +97,49 @@ async function viewport(page) {
     return page.eval('return { w: window.innerWidth, h: window.innerHeight };');
 }
 
-/** 点右下角浮动开关(FAB)。真实鼠标事件, 可穿透 closed shadow */
-async function clickFab(page) {
-    const v = await viewport(page);
-    await mouseClick(page, v.w - 18 - 22, v.h - 18 - 22);
-    await new Promise(function (r) { setTimeout(r, 250); });
+/**
+ * 内嵌开关的位置(宿主 #hdui-root 在 light DOM 里, 可直接量)。
+ * 2026.09.19.3 起入口不再是右下角浮动圆钮, 改由导航栏末尾空档决定位置 ——
+ * 所有点击都必须先量它, 不能再用写死的视口坐标。
+ */
+async function dockRect(page) {
+    return page.eval([
+        'const h = document.getElementById("hdui-root");',
+        'if (!h) return null;',
+        'const r = h.getBoundingClientRect();',
+        'const cs = getComputedStyle(h);',
+        'return { x: r.left, y: r.top, w: r.width, h: r.height,',
+        '  cx: Math.round(r.left + r.width / 2), cy: Math.round(r.top + r.height / 2),',
+        '  position: cs.position, zIndex: cs.zIndex };'
+    ].join('\n'));
 }
 
-/** 找出面板最顶端(hit-test 会被重定向到 shadow 宿主, 这正是判据) */
+/** 点内嵌开关(真实鼠标事件, 可穿透 closed shadow) */
+async function clickDock(page) {
+    const r = await dockRect(page);
+    if (!r) throw new Error('找不到内嵌入口 #hdui-root');
+    await mouseClick(page, r.cx, r.cy);
+    await new Promise(function (res) { setTimeout(res, 250); });
+    return r;
+}
+
+/** 面板顶边: 从开关下方往下扫(hit-test 会被重定向到 shadow 宿主, 这正是判据); 不够则往上翻 */
 async function panelTop(page) {
-    const v = await viewport(page);
+    const r = await dockRect(page);
+    if (!r) return null;
+    const x = Math.max(2, Math.min(r.cx, (await viewport(page)).w - 2));
+    const down = await page.eval([
+        'const x = ' + x + ';',
+        'for (let y = ' + Math.round(r.y + r.h + 3) + '; y < window.innerHeight; y += 4) {',
+        '  const e = document.elementFromPoint(x, y);',
+        '  if (e && e.id === "hdui-root") return y;',
+        '}',
+        'return null;'
+    ].join('\n'));
+    if (down !== null) return down;
     return page.eval([
-        'const x = ' + (v.w - 150) + ';',
-        'for (let y = 20; y < window.innerHeight - 70; y += 6) {',
+        'const x = ' + x + ';',
+        'for (let y = ' + Math.round(r.y - 3) + '; y > 0; y -= 4) {',
         '  const e = document.elementFromPoint(x, y);',
         '  if (e && e.id === "hdui-root") return y;',
         '}',
@@ -117,15 +147,29 @@ async function panelTop(page) {
     ].join('\n'));
 }
 
+/** 面板在某一行上的水平跨度(用来取一个稳稳落在面板内的 x) */
+async function panelBox(page, y) {
+    return page.eval([
+        'const y = ' + y + ';',
+        'let l = null, rt = null;',
+        'for (let x = 2; x < window.innerWidth; x += 4) {',
+        '  const e = document.elementFromPoint(x, y);',
+        '  if (e && e.id === "hdui-root") { if (l === null) l = x; rt = x; }',
+        '}',
+        'return l === null ? null : { left: l, right: rt, cx: Math.round((l + rt) / 2) };'
+    ].join('\n'));
+}
+
 /** 在面板里从上往下试, 点到第一个能改变主题的条目为止(避开"精确坐标"的脆弱断言) */
 async function clickFirstPanelItemThatChanges(page) {
-    const v = await viewport(page);
     const before = await themeOf(page);
     const top = await panelTop(page);
     if (top === null) return null;
-    for (let dy = 16; dy <= 320; dy += 10) {
-        await mouseClick(page, v.w - 150, top + dy);
-        await new Promise(function (r) { setTimeout(r, 120); });
+    const box = await panelBox(page, top + 4);
+    const x = box ? box.cx : (await dockRect(page)).cx;
+    for (let dy = 14; dy <= 340; dy += 10) {
+        await mouseClick(page, x, top + dy);
+        await new Promise(function (res) { setTimeout(res, 120); });
         const now = await themeOf(page);
         if (now !== before) return now;
     }
@@ -167,8 +211,10 @@ module.exports = {
     signature: signature,
     dangerousHits: dangerousHits,
     mouseClick: mouseClick,
-    clickFab: clickFab,
+    dockRect: dockRect,
+    clickDock: clickDock,
     panelTop: panelTop,
+    panelBox: panelBox,
     clickFirstPanelItemThatChanges: clickFirstPanelItemThatChanges,
     pressAltShiftT: pressAltShiftT,
     clickSiteElement: clickSiteElement

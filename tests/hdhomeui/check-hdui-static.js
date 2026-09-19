@@ -126,6 +126,28 @@ ok(/E_BOOT_PAINT/.test(src), '铺底色异常有独立错误码');
 ok(/function paintBootBgWhenPossible/.test(src) && /bootObserver\.observe\(document/.test(src),
     '连 <html> 都还没建时退化为「一出现就铺」, 不依赖 DOMContentLoaded');
 
+// ---------- 7. 入口内嵌(2026.09.19.3: 不再用右下角浮动按钮) ----------
+section('7. 入口内嵌: 不占悬浮位、不压站内内容');
+ok(/DOCK_MODE\s*=\s*'inline'/.test(src), '入口模式声明为 inline(内嵌)');
+ok(/const HOST_BASE[\s\S]{0,240}?position:absolute/.test(src), '宿主用 absolute 定位(随页面滚动, 不悬浮)');
+ok(!/\.fab\b/.test(src), '不再有浮动圆钮(.fab)样式');
+ok(!/position:fixed;right:18px;bottom:18px/.test(src), '不再占用右下角 18px 悬浮位');
+ok(/function dockRect/.test(src) && /ul#mainmenu/.test(src), '入口位置由导航栏末尾空档量出');
+ok(/position\s*=\s*'fixed'/.test(src) && /function dockUi/.test(src),
+    '导航栏取不到时才退化为 fixed(有兜底且写在 dockUi 里)');
+ok(!/uiRoot\.style\.cssText\s*=\s*HOST_BASE/.test(src.replace(/cssText = HOST_BASE;\s*$/m, ''))
+    || /不用 cssText 整体重写/.test(src),
+    '重摆入口不整体重写 cssText(否则会清掉宿主上的 --ui-* 配色变量)');
+
+// ---------- 8. 版式不再"堆成一坨" ----------
+section('8. 版式: 指标成块 / 导航有间距');
+ok(/function statStack/.test(src) && /function statInline/.test(src),
+    '数值以「标签 + 值」成块呈现(不再 12 个格子挤一行)');
+ok(/ul#mainmenu\{display:flex;flex-wrap:wrap/.test(src), '导航用 flex + wrap(不再 inline-block 紧挨)');
+ok(/--hdui-navgap/.test(src) && /column-gap:var\(--hdui-navgap\)/.test(src), '导航有显式列间距变量');
+ok(/--hdui-navitem/.test(src), '导航条目内边距可配(--hdui-navitem)');
+ok(/order:3;flex:0 0 100%;height:0/.test(src), '大开本用零高伪元素做版面换行点');
+
 console.log('');
 if (failed) {
     console.error('FAIL check-hdui-static: ' + failed + ' 项不达标');

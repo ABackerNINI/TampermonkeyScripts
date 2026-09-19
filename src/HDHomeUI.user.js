@@ -2,8 +2,8 @@
 // @name         HDHomeUI
 // @name:zh-CN   HDHome 界面主题套件
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.19.2
-// @description  HDHome 界面主题套件: 5 套可切换 UI(片库索引/电传纸带/大开本/瑞士网格/播控台)。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 页面结构异常时提示并回退默认界面。
+// @version      2026.09.19.3
+// @description  HDHome 界面主题套件: 5 套可切换 UI(片库索引/电传纸带/大开本/瑞士网格/播控台)。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); 页面结构异常时提示并回退默认界面。
 // @author       ABacker
 // @license      GNU GPL-3.0
 // @match        *://*.hdhome.org/*
@@ -24,6 +24,11 @@
     const BOOT_ID = 'hdui-boot';
     const ALERT_ID = 'hdui-alert';
     const ROOT_ID = 'hdui-root';
+
+    // 入口内嵌尺寸(导航栏末尾的一个小文字钮, 不悬浮、不遮挡)
+    const DOCK_W = 132;
+    const DOCK_H = 22;
+    const DOCK_MODE = 'inline'; // 静态校验钉死: 不得退回 fixed 悬浮按钮
 
     // 种子表 12 列的字典(键 -> 表头识别方式)。站点加列/改名都能被 detectColumns 感知
     const COLUMNS = Object.freeze([
@@ -92,30 +97,77 @@
     })();
 
     // ==================================================================
+    // 版式工具
+    // ------------------------------------------------------------------
+    // 一条种子 = 一条「记录」, 拆成三个信息区, 由每套主题各自摆位:
+    //   主行(类别 + 标题) / 指标带(做种·下载·完成·大小·存活·评论) / 尾注(进度·A·A/GB·发布者)
+    // 关键: 每个数值都是「标签 + 值」的独立块, 不再让 12 个格子挤在同一行里飘。
+    // ==================================================================
+    const R = '#torrenttable > tbody > tr:not(:first-child)'; // 数据行
+    const H = '#torrenttable > tbody > tr:first-child';       // 表头行
+
+    function C(m, k) { return ':nth-child(' + m[k] + ')'; }
+
+    /** 指标块(标签在上, 值在下): 用于卡片/网格里需要对齐的数值 */
+    function statStack(m, key, label, extra) {
+        const s = R + ' > td' + C(m, key);
+        return [
+            s + '{display:flex;flex-direction:column;justify-content:flex-end;gap:2px;min-width:0;' + (extra || '') + '}',
+            s + '::before{content:"' + label + '";font-size:9px;line-height:1.2;letter-spacing:.04em;color:var(--hdui-muted);white-space:nowrap;}'
+        ].join('\n');
+    }
+
+    /** 指标块(标签在前, 值在后, 同一行): 用于成行排版(纸带/大开本) */
+    function statInline(m, key, label, extra) {
+        const s = R + ' > td' + C(m, key);
+        return [
+            s + '{display:block;min-width:0;' + (extra || '') + '}',
+            s + '::before{content:"' + label + ' ";font-size:10px;color:var(--hdui-muted);}'
+        ].join('\n');
+    }
+
+    /** 表头行统一压成一行小标签(列名字典), 不再是一整条色块。grid-column 供卡片网格主题跨满整行 */
+    function headStrip(cols, extra) {
+        return [
+            H + '{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;'
+            + 'background:transparent;border:0;border-bottom:1px solid var(--hdui-line);'
+            + 'padding:0 2px 6px;margin-bottom:8px;' + (extra || '') + '}',
+            H + ' > td{border:0;padding:0;background:transparent;font-size:10px;line-height:1.4;'
+            + 'letter-spacing:.06em;color:var(--hdui-muted);' + (cols || '') + '}'
+        ].join('\n');
+    }
+
+    // ==================================================================
     // 主题定义: 5 套, 布局骨架 / 字体体系 / 信息层级各不相同
     // ==================================================================
+
+    /** 片库索引: 暗色卡片网格 —— 一条记录 = 一张索引卡(类别色条 + 衬线标题 + 指标带) */
     function reelCss(m) {
-        const c = function (k) { return ':nth-child(' + m[k] + ')'; };
+        const td = function (k) { return R + ' > td' + C(m, k); };
         return [
             '#torrenttable{display:block;}',
             '#torrenttable > tbody{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;}',
-            '#torrenttable > tbody > tr:first-child{grid-column:1/-1;display:flex;gap:10px;background:transparent;border:0;padding:0 2px 6px;}',
-            '#torrenttable > tbody > tr:not(:first-child){display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:12px 14px;background:var(--hdui-card);border:1px solid var(--hdui-line);border-top:3px solid var(--hdui-cat,' + CAT_FALLBACK + ');border-radius:var(--hdui-radius);}',
-            '#torrenttable > tbody > tr:not(:first-child):hover{border-color:var(--hdui-accent);}',
-            '#torrenttable > tbody > tr > td{border:0;padding:0;background:transparent;font-size:var(--hdui-fs-sm);color:var(--hdui-muted);}',
-            '#torrenttable > tbody > tr > td' + c('type') + '{order:1;}',
-            '#torrenttable > tbody > tr > td' + c('title') + '{order:2;flex:1 1 100%;font-family:var(--hdui-font-title);font-size:15px;line-height:1.45;color:var(--hdui-fg);}',
-            '#torrenttable > tbody > tr > td' + c('uploader') + '{order:3;flex:1 1 100%;color:var(--hdui-muted);}',
-            '#torrenttable > tbody > tr > td' + c('size') + '{order:4;}',
-            '#torrenttable > tbody > tr > td' + c('alive') + '{order:5;}',
-            '#torrenttable > tbody > tr > td' + c('seeders') + '{order:6;margin-left:auto;font-size:22px;color:var(--hdui-fg);}',
-            '#torrenttable > tbody > tr > td' + c('seeders') + ' a{font-size:22px;color:var(--hdui-accent);}',
-            '#torrenttable > tbody > tr > td' + c('leechers') + '{order:7;}',
-            '#torrenttable > tbody > tr > td' + c('snatched') + '{order:8;}',
-            '#torrenttable > tbody > tr > td' + c('comments') + '{order:9;}',
-            '#torrenttable > tbody > tr > td' + c('progress') + '{order:10;}',
-            '#torrenttable > tbody > tr > td' + c('a') + '{order:11;}',
-            '#torrenttable > tbody > tr > td' + c('ave') + '{order:12;}',
+            headStrip(''),
+            R + '{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px 8px;padding:12px 14px;'
+            + 'background:var(--hdui-card);border:1px solid var(--hdui-line);'
+            + 'border-top:3px solid var(--hdui-cat,' + CAT_FALLBACK + ');border-radius:var(--hdui-radius);align-items:end;}',
+            R + ':hover{border-color:var(--hdui-accent);}',
+            R + ' > td{border:0;padding:0;background:transparent;font-size:var(--hdui-fs-sm);color:var(--hdui-muted);}',
+            td('type') + '{grid-column:1;grid-row:1;align-self:center;}',
+            td('type') + ' img{width:16px;height:16px;}',
+            td('title') + '{grid-column:2/-1;grid-row:1;align-self:end;font-family:var(--hdui-font-title);'
+            + 'font-size:15px;line-height:1.45;color:var(--hdui-fg);min-width:0;}',
+            statStack(m, 'seeders', '做种', 'grid-column:1;grid-row:2;font-size:20px;'),
+            R + ' > td' + C(m, 'seeders') + ' a{font-family:var(--hdui-font-num);font-size:20px;line-height:1;color:var(--hdui-accent);}',
+            statStack(m, 'leechers', '下载', 'grid-column:2;grid-row:2;'),
+            statStack(m, 'snatched', '完成', 'grid-column:3;grid-row:2;'),
+            statInline(m, 'size', '大小', 'grid-column:4;grid-row:2;align-self:end;white-space:nowrap;'),
+            statStack(m, 'alive', '存活', 'grid-column:5;grid-row:2;'),
+            statStack(m, 'comments', '评论', 'grid-column:6;grid-row:2;'),
+            statInline(m, 'progress', '进度', 'grid-column:1;grid-row:3;align-self:end;'),
+            statInline(m, 'a', 'A', 'grid-column:2;grid-row:3;align-self:end;font-family:var(--hdui-font-num);'),
+            statInline(m, 'ave', 'A/GB', 'grid-column:3;grid-row:3;align-self:end;font-family:var(--hdui-font-num);'),
+            statInline(m, 'uploader', '发布者', 'grid-column:4/-1;grid-row:3;align-self:end;text-align:right;'),
             '#torrenttable table.torrentname{display:flex;width:100%;}',
             '#torrenttable table.torrentname > tbody{display:flex;width:100%;}',
             '#torrenttable table.torrentname > tbody > tr{display:flex;width:100%;align-items:baseline;}',
@@ -126,20 +178,33 @@
         ].join('\n');
     }
 
+    /** 电传纸带: 唯一保留真表格语义的一套 —— 全等宽、密排、反白表头、数字右对齐成列 */
     function tapeCss(m) {
-        const c = function (k) { return ':nth-child(' + m[k] + ')'; };
+        const c = function (k) { return C(m, k); };
+        const nums = [c('comments'), c('alive'), c('size'), c('seeders'), c('leechers'),
+            c('snatched'), c('a'), c('ave')];
         return [
             '#torrenttable{display:table;}',
             '#torrenttable > tbody{display:table-row-group;}',
             '#torrenttable > tbody > tr{display:table-row;}',
-            '#torrenttable > tbody > tr > td{display:table-cell;border:0;padding:2px 6px;font-size:12px;line-height:1.35;vertical-align:middle;color:var(--hdui-fg);}',
+            '#torrenttable > tbody > tr > td{display:table-cell;border:0;padding:2px 6px;font-size:12px;'
+            + 'line-height:1.35;vertical-align:middle;color:var(--hdui-fg);font-variant-numeric:tabular-nums;}',
             '#torrenttable > tbody > tr:not(:first-child):nth-child(odd){background:var(--hdui-zebra1);}',
             '#torrenttable > tbody > tr:not(:first-child):nth-child(even){background:var(--hdui-zebra2);}',
-            '#torrenttable > tbody > tr:first-child > td{background:var(--hdui-headbg);color:var(--hdui-headfg);letter-spacing:0.04em;}',
-            '#torrenttable > tbody > tr > td' + c('title') + '{max-width:560px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
-            '#torrenttable > tbody > tr > td' + c('comments') + ',#torrenttable > tbody > tr > td' + c('alive') + ',#torrenttable > tbody > tr > td' + c('size') + ',#torrenttable > tbody > tr > td' + c('seeders') + ',#torrenttable > tbody > tr > td' + c('leechers') + ',#torrenttable > tbody > tr > td' + c('snatched') + ',#torrenttable > tbody > tr > td' + c('a') + ',#torrenttable > tbody > tr > td' + c('ave') + '{text-align:right;}',
+            // 表头是唯一一条反白横条: 纸带机的栏位标尺
+            '#torrenttable > tbody > tr:first-child > td{background:var(--hdui-headbg);color:var(--hdui-headfg);'
+            + 'letter-spacing:.04em;border-bottom:2px solid var(--hdui-fg);}',
+            '#torrenttable > tbody > tr > td' + c('title') + '{max-width:560px;overflow:hidden;'
+            + 'text-overflow:ellipsis;white-space:nowrap;}',
+            // 数字成列靠右 + 细点竖线分栏(不是挤成一团)
+            nums.map(function (s) { return '#torrenttable > tbody > tr > td' + s + '{text-align:right;}'; }).join('\n'),
+            [c('comments'), c('alive'), c('size'), c('seeders'), c('leechers')].map(function (s) {
+                return '#torrenttable > tbody > tr:not(:first-child) > td' + s
+                    + '{border-right:1px dotted var(--hdui-rule);}';
+            }).join('\n'),
             '#torrenttable > tbody > tr > td' + c('seeders') + ' a{color:var(--hdui-accent);font-weight:700;}',
-            '#torrenttable > tbody > tr > td' + c('uploader') + ',#torrenttable > tbody > tr > td' + c('progress') + '{color:var(--hdui-muted);}',
+            '#torrenttable > tbody > tr > td' + c('uploader') + ',#torrenttable > tbody > tr > td' + c('progress')
+            + '{color:var(--hdui-muted);}',
             '#torrenttable img{width:12px;height:12px;vertical-align:middle;}',
             'ul#mainmenu li a::before{content:"[";}',
             'ul#mainmenu li a::after{content:"]";}',
@@ -147,69 +212,112 @@
         ].join('\n');
     }
 
-    function broadsheetCss(m) {
-        const c = function (k) { return ':nth-child(' + m[k] + ')'; };
+    /** 大开本: 报纸 —— 一行 = 一条新闻(衬线标题 / 署名行 / 规格行), 双细线分隔 */
+    function sheetCss(m) {
+        const td = function (k) { return R + ' > td' + C(m, k); };
         return [
             '#torrenttable{display:block;}',
             '#torrenttable > tbody{display:block;}',
-            '#torrenttable > tbody > tr{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;padding:10px 0;}',
+            '#torrenttable > tbody > tr{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;padding:12px 0;}',
             '#torrenttable > tbody > tr:not(:first-child){border-top:2px solid var(--hdui-line);}',
             '#torrenttable > tbody > tr:last-child{border-bottom:1px solid var(--hdui-line);}',
+            // 两个零高满宽伪元素 = 版面换行点: order 3 之后是署名行, order 8 之后是规格行
+            R + '::before{content:"";order:3;flex:0 0 100%;height:0;}',
+            R + '::after{content:"";order:8;flex:0 0 100%;height:0;}',
             '#torrenttable > tbody > tr > td{border:0;padding:0;font-size:var(--hdui-fs-sm);color:var(--hdui-muted);}',
-            '#torrenttable > tbody > tr > td' + c('title') + '{flex:1 1 100%;font-family:var(--hdui-font-title);font-size:17px;line-height:1.5;color:var(--hdui-fg);}',
-            '#torrenttable > tbody > tr > td' + c('type') + '{order:-1;}',
-            '#torrenttable > tbody > tr > td' + c('type') + ' img{width:9px;height:9px;}',
-            '#torrenttable > tbody > tr > td' + c('seeders') + '{font-size:12px;color:var(--hdui-fg);}',
-            '#torrenttable > tbody > tr > td' + c('uploader') + '{margin-left:auto;}',
-            '#torrenttable > tbody > tr:first-child{background:transparent;border-top:0;padding-bottom:6px;}',
+            headStrip(''),
+            td('type') + '{order:1;}',
+            td('type') + ' img{width:9px;height:9px;}',
+            td('title') + '{order:2;flex:1 1 auto;min-width:0;font-family:var(--hdui-font-title);'
+            + 'font-size:17px;line-height:1.5;color:var(--hdui-fg);}',
+            td('uploader') + '{order:4;font-style:italic;}',
+            statInline(m, 'size', '大小', 'order:9;white-space:nowrap;'),
+            statInline(m, 'alive', '存活', 'order:10;white-space:nowrap;'),
+            statInline(m, 'comments', '评论', 'order:11;'),
+            statInline(m, 'seeders', '做种', 'order:12;font-size:15px;'),
+            R + ' > td' + C(m, 'seeders') + ' a{font-size:15px;font-weight:700;color:var(--hdui-fg);}',
+            statInline(m, 'leechers', '下载', 'order:13;'),
+            statInline(m, 'snatched', '完成', 'order:14;'),
+            statInline(m, 'progress', '进度', 'order:15;'),
+            statInline(m, 'a', 'A', 'order:16;font-family:var(--hdui-font-num);'),
+            statInline(m, 'ave', 'A/GB', 'order:17;font-family:var(--hdui-font-num);'),
             '#torrenttable table.torrentname{display:block;}',
             '#torrenttable table.torrentname > tbody{display:block;}',
             '#torrenttable table.torrentname > tbody > tr{display:block;}',
             '#torrenttable table.torrentname td{border:0;padding:0;display:inline;}',
-            'ul#mainmenu{text-align:center;}',
+            'ul#mainmenu{text-align:center;justify-content:center;}',
             'ul#mainmenu li.selected a{font-weight:700;border-top:2px solid var(--hdui-accent);}'
         ].join('\n');
     }
 
+    /** 瑞士网格: 零线条, 全靠留白 —— 左侧文字块, 右侧数字锚点(做种数 28px) */
     function swissCss(m) {
-        const c = function (k) { return ':nth-child(' + m[k] + ')'; };
+        const td = function (k) { return R + ' > td' + C(m, k); };
         return [
             '#torrenttable{display:block;}',
             '#torrenttable > tbody{display:block;}',
-            '#torrenttable > tbody > tr{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 16px;padding:20px 0;border:0;}',
-            '#torrenttable > tbody > tr > td{border:0;padding:0;font-size:11px;color:var(--hdui-muted);}',
-            '#torrenttable > tbody > tr > td' + c('title') + '{flex:1 1 60%;font-size:14px;line-height:1.4;color:var(--hdui-fg);}',
-            '#torrenttable > tbody > tr > td' + c('type') + '{order:-1;}',
-            '#torrenttable > tbody > tr > td' + c('seeders') + '{margin-left:auto;font-size:28px;line-height:1;}',
-            '#torrenttable > tbody > tr > td' + c('seeders') + ' a{font-size:28px;font-weight:700;color:var(--hdui-accent);line-height:1;}',
-            '#torrenttable > tbody > tr > td' + c('uploader') + '{flex-basis:100%;}',
-            '#torrenttable > tbody > tr:first-child{padding:0 0 6px;}',
-            '#torrenttable > tbody > tr:first-child > td{background:transparent;color:var(--hdui-fg);font-size:11px;letter-spacing:0.12em;text-transform:uppercase;border-bottom:1px solid var(--hdui-fg);}',
+            '#torrenttable > tbody > tr{display:grid;'
+            + 'grid-template-columns:auto minmax(0,1fr) repeat(3,96px) 118px;'
+            + 'column-gap:28px;row-gap:4px;align-items:end;padding:22px 0;border:0;}',
+            '#torrenttable > tbody > tr > td{border:0;padding:0;font-size:11px;color:var(--hdui-muted);min-width:0;}',
+            headStrip('text-transform:none;'),
+            td('type') + '{grid-column:1;grid-row:1;align-self:start;}',
+            td('type') + ' img{width:14px;height:14px;}',
+            td('title') + '{grid-column:2;grid-row:1;font-size:14px;line-height:1.4;color:var(--hdui-fg);}',
+            td('uploader') + '{grid-column:2;grid-row:2;}',
+            statStack(m, 'size', '大小', 'grid-column:3;grid-row:1;'),
+            statStack(m, 'alive', '存活', 'grid-column:3;grid-row:2;'),
+            statStack(m, 'comments', '评论', 'grid-column:4;grid-row:1;'),
+            statStack(m, 'progress', '进度', 'grid-column:4;grid-row:2;'),
+            statStack(m, 'leechers', '下载', 'grid-column:5;grid-row:1;'),
+            statStack(m, 'snatched', '完成', 'grid-column:5;grid-row:2;'),
+            statStack(m, 'a', 'A 值', 'grid-column:3;grid-row:3;'),
+            statStack(m, 'ave', 'A/GB', 'grid-column:4;grid-row:3;'),
+            // 唯一的视觉锚点: 做种数 28px, 跨两行, 右对齐
+            td('seeders') + '{grid-column:6;grid-row:1/span 2;text-align:right;align-self:center;font-size:28px;}',
+            R + ' > td' + C(m, 'seeders') + ' a{font-size:28px;font-weight:700;line-height:1;color:var(--hdui-accent);}',
             '#torrenttable table.torrentname{display:block;}',
             '#torrenttable table.torrentname > tbody{display:block;}',
             '#torrenttable table.torrentname > tbody > tr{display:block;}',
             '#torrenttable table.torrentname td{border:0;padding:0;display:inline;}',
-            'ul#mainmenu{padding:14px 0;}',
-            'ul#mainmenu li a{padding:2px 0;font-size:13px;color:var(--hdui-fg);}',
+            'ul#mainmenu li a{padding:2px 0;font-size:13px;}',
             'ul#mainmenu li.selected a{color:var(--hdui-accent);}'
         ].join('\n');
     }
 
+    /** 播控台: 深石板 + 青 —— 行分 4 轨道, 类别色点 + 做种电平条 */
     function signalCss(m) {
-        const c = function (k) { return ':nth-child(' + m[k] + ')'; };
+        const td = function (k) { return R + ' > td' + C(m, k); };
         return [
             '#torrenttable{display:block;}',
             '#torrenttable > tbody{display:block;}',
-            '#torrenttable > tbody > tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:center;gap:2px 10px;padding:7px 10px;margin-bottom:5px;background:var(--hdui-card);border-radius:4px;border-bottom:1px solid var(--hdui-line);}',
-            '#torrenttable > tbody > tr > td{border:0;padding:0;font-size:12px;color:var(--hdui-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
-            '#torrenttable > tbody > tr > td' + c('type') + ' img{display:none;}',
-            '#torrenttable > tbody > tr > td' + c('type') + ' a{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--hdui-cat,' + '#5fd4e4' + ');vertical-align:middle;}',
-            '#torrenttable > tbody > tr > td' + c('title') + '{grid-column:span 3;font-size:13px;color:var(--hdui-fg);}',
-            '#torrenttable > tbody > tr > td' + c('seeders') + '{font-size:18px;overflow:visible;}',
-            '#torrenttable > tbody > tr > td' + c('seeders') + ' a{font-size:18px;color:var(--hdui-accent);}',
-            '#torrenttable > tbody > tr > td' + c('seeders') + '::after{content:"";display:block;width:calc(var(--hdui-ratio,0) * 56px);max-width:56px;height:4px;margin-top:3px;border-radius:2px;background:var(--hdui-accent);}',
-            '#torrenttable > tbody > tr:first-child{background:transparent;margin-bottom:8px;}',
-            '#torrenttable > tbody > tr:first-child > td{background:transparent;color:var(--hdui-muted);font-size:11px;letter-spacing:0.06em;}',
+            '#torrenttable > tbody > tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));'
+            + 'align-items:center;gap:6px 12px;padding:8px 12px;margin-bottom:5px;'
+            + 'background:var(--hdui-card);border-radius:4px;border-top:1px solid var(--hdui-line);}',
+            '#torrenttable > tbody > tr > td{border:0;padding:0;font-size:12px;color:var(--hdui-muted);'
+            + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+            headStrip(''),
+            td('type') + '{grid-column:1;grid-row:1;}',
+            td('type') + ' img{display:none;}',
+            // 类别改成色点: 一眼扫过整个列表的类别分布
+            td('type') + ' a{display:inline-block;width:9px;height:9px;border-radius:50%;'
+            + 'background:var(--hdui-cat,' + '#5fd4e4' + ');vertical-align:middle;}',
+            td('title') + '{grid-column:2/-1;grid-row:1;font-size:13px;color:var(--hdui-fg);white-space:normal;}',
+            statStack(m, 'seeders', '做种', 'grid-column:1;grid-row:2;overflow:visible;font-size:18px;'),
+            R + ' > td' + C(m, 'seeders') + ' a{font-family:var(--hdui-font-num);font-size:18px;line-height:1;color:var(--hdui-accent);}',
+            // 电平条: 做种占比, 长度由行上的 --hdui-ratio 驱动
+            R + ' > td' + C(m, 'seeders') + '::after{content:"";display:block;'
+            + 'width:calc(var(--hdui-ratio,0) * 56px);max-width:56px;height:4px;margin-top:4px;'
+            + 'border-radius:2px;background:var(--hdui-accent);}',
+            statStack(m, 'leechers', '下载', 'grid-column:2;grid-row:2;'),
+            statStack(m, 'snatched', '完成', 'grid-column:3;grid-row:2;'),
+            statStack(m, 'comments', '评论', 'grid-column:4;grid-row:2;'),
+            statStack(m, 'size', '大小', 'grid-column:1;grid-row:3;'),
+            statStack(m, 'alive', '存活', 'grid-column:2;grid-row:3;'),
+            statStack(m, 'progress', '进度', 'grid-column:3;grid-row:3;'),
+            statStack(m, 'a', 'A 值', 'grid-column:4;grid-row:3;'),
+            statStack(m, 'ave', 'A/GB', 'grid-column:1;grid-row:4;'),
+            td('uploader') + '{grid-column:2/-1;grid-row:4;text-align:right;}',
             '#torrenttable table.torrentname{display:block;}',
             '#torrenttable table.torrentname > tbody{display:block;}',
             '#torrenttable table.torrentname > tbody > tr{display:block;}',
@@ -223,77 +331,87 @@
 
     const THEMES = Object.freeze([
         {
-            id: 'reel', name: '片库索引', note: '卡片网格 · 衬线 · 暗金 · 低密度',
+            id: 'reel', name: '片库索引', note: '索引卡网格 · 衬线标题 · 暗金',
             vars: {
                 '--hdui-bg': '#16181c', '--hdui-panel': '#1b1e23', '--hdui-card': '#1e2126',
                 '--hdui-fg': '#ece7de', '--hdui-muted': '#8b8f96', '--hdui-accent': '#c8a35a',
-                '--hdui-link': '#d8d2c6', '--hdui-line': '#2c3037', '--hdui-headbg': '#101216',
-                '--hdui-headfg': '#8b8f96', '--hdui-zebra1': '#1e2126', '--hdui-zebra2': '#22262c',
+                '--hdui-link': '#d8d2c6', '--hdui-line': '#2c3037', '--hdui-rule': '#3a3f47',
+                '--hdui-headbg': 'transparent', '--hdui-headfg': '#8b8f96',
+                '--hdui-zebra1': '#1e2126', '--hdui-zebra2': '#22262c',
                 '--hdui-font': '"Songti SC","Noto Serif SC",Georgia,"Microsoft YaHei",serif',
                 '--hdui-font-title': '"Songti SC","Noto Serif SC",Georgia,serif',
                 '--hdui-font-num': 'ui-monospace,Consolas,monospace',
                 '--hdui-fs': '13px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '8px 6px', '--hdui-radius': '3px'
+                '--hdui-navpad': '8px 6px', '--hdui-navitem': '6px 10px', '--hdui-navgap': '2px',
+                '--hdui-radius': '3px'
             },
             css: reelCss
         },
         {
-            id: 'tape', name: '电传纸带', note: '表格密排 · 全等宽 · 纸黄 · 极高密度',
+            id: 'tape', name: '电传纸带', note: '真表格密排 · 全等宽 · 纸黄 · 反白标尺',
             vars: {
                 '--hdui-bg': '#f4efe3', '--hdui-panel': '#f4efe3', '--hdui-card': '#efeae0',
                 '--hdui-fg': '#1b1a17', '--hdui-muted': '#6b665d', '--hdui-accent': '#a12a20',
-                '--hdui-link': '#1b1a17', '--hdui-line': '#1b1a17', '--hdui-headbg': '#1b1a17',
-                '--hdui-headfg': '#f4efe3', '--hdui-zebra1': '#f6f3ec', '--hdui-zebra2': '#efeae0',
+                '--hdui-link': '#1b1a17', '--hdui-line': '#1b1a17', '--hdui-rule': '#b3aa97',
+                '--hdui-headbg': '#1b1a17', '--hdui-headfg': '#f4efe3',
+                '--hdui-zebra1': '#f6f3ec', '--hdui-zebra2': '#efeae0',
                 '--hdui-font': 'ui-monospace,Consolas,"Courier New","Microsoft YaHei",monospace',
                 '--hdui-font-title': 'ui-monospace,Consolas,"Courier New",monospace',
                 '--hdui-font-num': 'ui-monospace,Consolas,monospace',
                 '--hdui-fs': '12px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '6px 4px', '--hdui-radius': '0px'
+                '--hdui-navpad': '6px 4px', '--hdui-navitem': '6px 6px', '--hdui-navgap': '0px',
+                '--hdui-radius': '0px'
             },
             css: tapeCss
         },
         {
-            id: 'sheet', name: '大开本', note: '单列长条 · 衬线标题 · 双细线 · 纵向',
+            id: 'sheet', name: '大开本', note: '报纸三行 · 衬线标题 · 双细线',
             vars: {
                 '--hdui-bg': '#fbfaf7', '--hdui-panel': '#fbfaf7', '--hdui-card': '#fbfaf7',
                 '--hdui-fg': '#14120f', '--hdui-muted': '#5c5751', '--hdui-accent': '#8f2b21',
-                '--hdui-link': '#14120f', '--hdui-line': '#14120f', '--hdui-headbg': '#fbfaf7',
-                '--hdui-headfg': '#14120f', '--hdui-zebra1': '#fbfaf7', '--hdui-zebra2': '#f6f4ef',
+                '--hdui-link': '#14120f', '--hdui-line': '#14120f', '--hdui-rule': '#c9c3b6',
+                '--hdui-headbg': 'transparent', '--hdui-headfg': '#5c5751',
+                '--hdui-zebra1': '#fbfaf7', '--hdui-zebra2': '#f6f4ef',
                 '--hdui-font': '"Songti SC","Noto Serif SC","Microsoft YaHei",serif',
                 '--hdui-font-title': '"Songti SC","Noto Serif SC",serif',
                 '--hdui-font-num': 'ui-monospace,Consolas,monospace',
                 '--hdui-fs': '13px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '10px 0', '--hdui-radius': '0px'
+                '--hdui-navpad': '10px 0', '--hdui-navitem': '8px 0', '--hdui-navgap': '18px',
+                '--hdui-radius': '0px'
             },
-            css: broadsheetCss
+            css: sheetCss
         },
         {
-            id: 'swiss', name: '瑞士网格', note: '留白分隔 · 28px 数字锚点 · 钴蓝',
+            id: 'swiss', name: '瑞士网格', note: '零线条 · 28px 做种锚点 · 钴蓝',
             vars: {
                 '--hdui-bg': '#ffffff', '--hdui-panel': '#ffffff', '--hdui-card': '#ffffff',
                 '--hdui-fg': '#111111', '--hdui-muted': '#9a9a9a', '--hdui-accent': '#1a35d8',
-                '--hdui-link': '#111111', '--hdui-line': '#e6e6e6', '--hdui-headbg': '#ffffff',
-                '--hdui-headfg': '#111111', '--hdui-zebra1': '#ffffff', '--hdui-zebra2': '#ffffff',
+                '--hdui-link': '#111111', '--hdui-line': '#e6e6e6', '--hdui-rule': '#e6e6e6',
+                '--hdui-headbg': 'transparent', '--hdui-headfg': '#9a9a9a',
+                '--hdui-zebra1': '#ffffff', '--hdui-zebra2': '#ffffff',
                 '--hdui-font': 'Inter,"Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif',
                 '--hdui-font-title': 'Inter,"Helvetica Neue","PingFang SC",sans-serif',
                 '--hdui-font-num': 'Inter,"Helvetica Neue",sans-serif',
                 '--hdui-fs': '13px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '14px 0', '--hdui-radius': '0px'
+                '--hdui-navpad': '16px 0', '--hdui-navitem': '2px 0', '--hdui-navgap': '26px',
+                '--hdui-radius': '0px'
             },
             css: swissCss
         },
         {
-            id: 'signal', name: '播控台', note: '暗色 · 电平条 · 类别色点 · 告警橙',
+            id: 'signal', name: '播控台', note: '4 轨道 · 电平条 · 类别色点 · 青',
             vars: {
                 '--hdui-bg': '#0f1620', '--hdui-panel': '#131c27', '--hdui-card': '#16202c',
                 '--hdui-fg': '#dce6ef', '--hdui-muted': '#7d8fa1', '--hdui-accent': '#5fd4e4',
-                '--hdui-link': '#bcd2e0', '--hdui-line': '#24313f', '--hdui-headbg': '#131c27',
-                '--hdui-headfg': '#7d8fa1', '--hdui-zebra1': '#16202c', '--hdui-zebra2': '#18232f',
+                '--hdui-link': '#bcd2e0', '--hdui-line': '#24313f', '--hdui-rule': '#24313f',
+                '--hdui-headbg': 'transparent', '--hdui-headfg': '#7d8fa1',
+                '--hdui-zebra1': '#16202c', '--hdui-zebra2': '#18232f',
                 '--hdui-font': '"PingFang SC","Microsoft YaHei",system-ui,sans-serif',
                 '--hdui-font-title': '"PingFang SC","Microsoft YaHei",sans-serif',
                 '--hdui-font-num': 'ui-monospace,Consolas,monospace',
                 '--hdui-fs': '13px', '--hdui-fs-sm': '11px',
-                '--hdui-navpad': '8px 6px', '--hdui-radius': '4px'
+                '--hdui-navpad': '4px', '--hdui-navitem': '5px 9px', '--hdui-navgap': '2px',
+                '--hdui-radius': '4px'
             },
             css: signalCss
         }
@@ -452,20 +570,24 @@
             'html[data-hdui-theme] #info_block{color:var(--hdui-muted);font-size:var(--hdui-fs-sm);}',
             'html[data-hdui-theme] #info_block a{color:var(--hdui-link);}',
             'html[data-hdui-theme] #footer{color:var(--hdui-muted);font-size:var(--hdui-fs-sm);}',
-            'html[data-hdui-theme] ul#mainmenu{margin:0;padding:var(--hdui-navpad);background:var(--hdui-panel);list-style:none;}',
-            'html[data-hdui-theme] ul#mainmenu li{display:inline-block;}',
-            'html[data-hdui-theme] ul#mainmenu li a{display:inline-block;padding:6px 10px;color:var(--hdui-muted);}',
+            // 导航: flex + 显式列间距 —— 旧的 inline-block 紧挨排列会把 16 个入口挤成一坨
+            'html[data-hdui-theme] ul#mainmenu{display:flex;flex-wrap:wrap;align-items:center;'
+            + 'row-gap:4px;column-gap:var(--hdui-navgap);margin:0;padding:var(--hdui-navpad);'
+            + 'background:var(--hdui-panel);list-style:none;}',
+            'html[data-hdui-theme] ul#mainmenu li{display:block;}',
+            'html[data-hdui-theme] ul#mainmenu li a{display:block;padding:var(--hdui-navitem);'
+            + 'color:var(--hdui-muted);white-space:nowrap;}',
             'html[data-hdui-theme] ul#mainmenu li.selected a{color:var(--hdui-accent);}',
             'html[data-hdui-theme] table.searchbox{background:var(--hdui-panel);color:var(--hdui-fg);border:1px solid var(--hdui-line);}',
-            'html[data-hdui-theme] table.searchbox td.colhead{background:var(--hdui-headbg);color:var(--hdui-headfg);}',
+            'html[data-hdui-theme] table.searchbox td.colhead{background:var(--hdui-panel);color:var(--hdui-fg);}',
             'html[data-hdui-theme] table.searchbox td.rowfollow{background:transparent;border-color:var(--hdui-line);}',
             'html[data-hdui-theme] input.btn,html[data-hdui-theme] select,html[data-hdui-theme] input[type=text]{font-family:var(--hdui-font);font-size:var(--hdui-fs-sm);}',
             'html[data-hdui-theme] p[align="center"]{color:var(--hdui-muted);font-size:var(--hdui-fs-sm);}',
             'html[data-hdui-theme] p[align="center"] a{color:var(--hdui-link);}',
             'html[data-hdui-theme] #torrenttable{width:100%;border-collapse:collapse;background:transparent;}',
-            'html[data-hdui-theme] #torrenttable > tbody > tr:first-child > td{background:var(--hdui-headbg);color:var(--hdui-headfg);}',
-            'html[data-hdui-theme] #torrenttable > tbody > tr:first-child > td a{color:var(--hdui-headfg);}',
-            'html[data-hdui-theme] #torrenttable > tbody > tr:hover > td{background:var(--hdui-zebra2);}'
+            // 把站点的 td 默认边框/底色/内边距全抹掉, 防止 card/grid 里漏出浅色格线
+            'html[data-hdui-theme] table.torrents td,html[data-hdui-theme] #torrenttable td{border:0;padding:0;background:transparent;}',
+            'html[data-hdui-theme] #torrenttable img{max-width:100%;}'
         ].join('\n');
         if (colMap) out += '\n' + theme.css(colMap);
         return out;
@@ -592,6 +714,8 @@
             document.documentElement.dataset.hduiTheme = DEFAULT_ID;
             document.documentElement.dataset.hduiState = 'off';
             Diag.info('THEME_OFF', '已恢复原站默认界面');
+            syncUiVars();
+            dockUi();
             renderPanel();
             return true;
         }
@@ -613,6 +737,8 @@
             storeSet(STORE_ERR, null);
             Diag.info('THEME_ON', theme.name + '(' + theme.id + ') 已应用 [' + v.code + ']; '
                 + (v.code === 'OK_NO_TABLE' ? '本页无种子表, 只应用全局样式' : '列映射完整'));
+            syncUiVars();
+            dockUi();
             watchStructure();
             renderPanel();
             return true;
@@ -677,11 +803,14 @@
     }
 
     // ==================================================================
-    // 自持 UI: 浮动开关 + 面板(closed shadow, 事件不冒泡到站内)
+    // 自持 UI: 内嵌开关 + 下拉面板(closed shadow, 事件不冒泡到站内)
+    // ------------------------------------------------------------------
+    // 入口不再是右下角浮动圆钮: 它跟其它脚本的 FAB 抢同一个位置。改为量取
+    // ul#mainmenu 最后一个导航项的右边空档, 把开关摆成导航栏末尾的一个小文字钮。
     // ==================================================================
     let uiRoot = null;
     let uiShadow = null;
-    let panelOpen = false;
+    let uiPanel = null;
 
     function el(tag, text, style) {
         const n = document.createElement(tag);
@@ -690,35 +819,187 @@
         return n;
     }
 
+    // all:initial 之后宿主是 0 内容盒, 必须显式给尺寸, 否则内容会溢出到视口外
+    const HOST_BASE = 'all:initial;display:block;position:absolute;width:' + DOCK_W + 'px;'
+        + 'height:' + DOCK_H + 'px;z-index:2147483000;';
+
+    /** 量出开关该摆的位置(视口坐标): 导航栏末尾空档 -> 主框架右上 -> null(交给 fixed 兜底) */
+    function dockRect() {
+        const menu = document.querySelector('ul#mainmenu');
+        if (menu) {
+            const mr = menu.getBoundingClientRect();
+            if (mr.width > 0) {
+                const items = menu.querySelectorAll('li');
+                const last = items.length ? items[items.length - 1] : null;
+                const lr = last ? last.getBoundingClientRect() : null;
+                if (lr && lr.height > 0) {
+                    if (lr.right + 10 + DOCK_W <= mr.right + 1) {
+                        return { left: lr.right + 10, top: lr.top + (lr.height - DOCK_H) / 2 };
+                    }
+                    // 该行没空档: 挪到菜单块下一行的行首
+                    return { left: mr.left, top: lr.bottom + 6 };
+                }
+                return { left: mr.left, top: mr.top };
+            }
+        }
+        const frame = document.querySelector('table.mainouter');
+        if (frame) {
+            const fr = frame.getBoundingClientRect();
+            if (fr.width > 0) return { left: Math.max(8, fr.right - DOCK_W - 12), top: fr.top + 8 };
+        }
+        return null;
+    }
+
+    /**
+     * 把开关摆到页面里(absolute + 文档坐标), 主题换了/窗口变了都要重摆。
+     * 注意: 这里只改 left/top/position, 绝不用 cssText 整体重写 ——
+     * cssText 会把宿主上的 --ui-* 配色变量一并清掉(它们在 HOST_BASE 里)。
+     */
+    function dockUi() {
+        if (!uiRoot) return;
+        const d = dockRect();
+        if (!d) {
+            uiRoot.style.position = 'fixed';
+            uiRoot.style.right = '10px';
+            uiRoot.style.top = '8px';
+            uiRoot.style.left = 'auto';
+            return;
+        }
+        uiRoot.style.position = 'absolute';
+        uiRoot.style.right = 'auto';
+        uiRoot.style.left = Math.round(d.left + window.scrollX) + 'px';
+        uiRoot.style.top = Math.round(Math.max(0, d.top) + window.scrollY) + 'px';
+    }
+
+    /** 面板跟着开关走: 固定在开关下方, 空间不够就往上翻 */
+    function placePanel() {
+        if (!uiPanel || !uiRoot) return;
+        const r = uiRoot.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const h = uiPanel.offsetHeight || 320;
+        let left = Math.min(Math.max(8, r.left), Math.max(8, vw - uiPanel.offsetWidth - 8));
+        let top = r.bottom + 6;
+        if (top + h > vh - 8 && r.top - 6 - h > 8) top = r.top - 6 - h;
+        uiPanel.style.left = Math.round(left) + 'px';
+        uiPanel.style.top = Math.round(Math.max(8, top)) + 'px';
+    }
+
+    /** 自持 UI 的配色跟随当前主题(默认界面时用中性深色, 保证任何底色下都读得清) */
+    function syncUiVars() {
+        if (!uiRoot) return;
+        const v = (themeById(currentId) || DEFAULT_THEME).vars || {};
+        const pick = function (k, def) { return v[k] || def; };
+        uiRoot.style.setProperty('--ui-bg', pick('--hdui-card', '#1b1e23'));
+        uiRoot.style.setProperty('--ui-fg', pick('--hdui-fg', '#ece7de'));
+        uiRoot.style.setProperty('--ui-muted', pick('--hdui-muted', '#8b8f96'));
+        uiRoot.style.setProperty('--ui-accent', pick('--hdui-accent', '#c8a35a'));
+        uiRoot.style.setProperty('--ui-line', pick('--hdui-line', '#2c3037'));
+        uiRoot.style.setProperty('--ui-font', pick('--hdui-font', '"Microsoft YaHei",sans-serif'));
+        setDockLabel();
+    }
+
     function panelCss() {
         return [
-            '.fab{width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.25);',
-            'background:#1b1e23;color:#ece7de;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}',
-            '.fab:hover{border-color:#c8a35a;}',
-            '.panel{position:fixed;right:18px;bottom:74px;width:300px;max-height:70vh;overflow:auto;',
-            'background:#1b1e23;color:#ece7de;border:1px solid rgba(255,255,255,.18);border-radius:8px;',
-            'padding:14px;font:13px/1.6 "Microsoft YaHei",sans-serif;}',
-            '.panel h3{margin:0 0 10px;font-size:14px;font-weight:600;color:#ece7de;}',
-            '.item{display:block;width:100%;text-align:left;margin-bottom:6px;padding:8px 10px;cursor:pointer;',
-            'background:#232830;color:#d8d2c6;border:1px solid transparent;border-radius:6px;font:13px/1.4 inherit;}',
-            '.item:hover{border-color:#c8a35a;}',
-            '.item[aria-pressed="true"]{background:#2f2a1f;border-color:#c8a35a;color:#f0e6d2;}',
-            '.item small{display:block;color:#8b8f96;font-size:11px;margin-top:2px;}',
-            '.diag{margin-top:12px;border-top:1px solid rgba(255,255,255,.14);padding-top:10px;color:#8b8f96;font-size:11px;}',
-            '.diag code{color:#e0a0a0;font-family:ui-monospace,Consolas,monospace;}',
-            '.hint{margin-top:8px;color:#8b8f96;font-size:11px;}'
+            // 开关: 导航栏末尾的一个小文字钮, 不抢眼、不遮挡、不与浮动按钮抢位
+            '.dock{display:flex;align-items:center;gap:4px;width:100%;height:100%;padding:0 6px;',
+            'box-sizing:border-box;background:transparent;border:0;cursor:pointer;',
+            'font:11px/1 var(--ui-font,"Microsoft YaHei",sans-serif);color:var(--ui-muted);',
+            'white-space:nowrap;overflow:hidden;}',
+            '.dock:hover,.dock:focus-visible{color:var(--ui-accent);}',
+            '.dock .caret{margin-left:auto;font-size:9px;}',
+            '.dock .name{overflow:hidden;text-overflow:ellipsis;}',
+            // 面板: 锚在开关下方的浮层
+            '.panel{position:fixed;display:none;flex-direction:column;width:268px;',
+            'max-height:min(430px,calc(100vh - 24px));overflow:auto;padding:10px;',
+            'background:var(--ui-bg);color:var(--ui-fg);border:1px solid var(--ui-line);',
+            'border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.35);',
+            'font:12px/1.5 var(--ui-font,"Microsoft YaHei",sans-serif);z-index:2147483000;}',
+            '.panel.open{display:flex;}',
+            '.panel h3{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--ui-muted);}',
+            '.item{display:block;width:100%;text-align:left;margin-bottom:4px;padding:7px 9px;cursor:pointer;',
+            'background:transparent;color:var(--ui-fg);border:1px solid var(--ui-line);border-radius:6px;',
+            'font:12px/1.4 inherit;}',
+            '.item:hover{border-color:var(--ui-accent);}',
+            '.item[aria-pressed="true"]{border-color:var(--ui-accent);color:var(--ui-accent);}',
+            '.item small{display:block;color:var(--ui-muted);font-size:10px;margin-top:2px;}',
+            '.diag{margin-top:10px;border-top:1px solid var(--ui-line);padding-top:8px;color:var(--ui-muted);font-size:10px;}',
+            '.diag code{color:var(--ui-accent);font-family:ui-monospace,Consolas,monospace;}',
+            '.hint{margin-top:8px;color:var(--ui-muted);font-size:10px;}'
         ].join('');
     }
 
-    function renderPanel() {
-        if (!uiShadow || !panelOpen) return;
-        const old = uiShadow.querySelector('.panel');
-        if (old) old.remove();
+    function closePanel() {
+        if (uiPanel) {
+            uiPanel.className = 'panel';
+            uiPanel.style.left = '-9999px';
+            uiPanel.style.top = '-9999px';
+        }
+        disarmAutoClose();
+    }
 
-        const panel = el('div', undefined, '');
-        panel.className = 'panel';
-        panel.setAttribute('data-hdui', 'panel');
-        panel.appendChild(el('h3', ScriptName + ' · 界面主题'));
+    function openPanel() {
+        if (!uiPanel) return;
+        renderPanel();
+        uiPanel.className = 'panel open';
+        placePanel();
+        armAutoClose();
+    }
+
+    // 失焦/点页面别处就收起(只在展开期间挂监听, 收起即摘)
+    let autoCloseOn = false;
+    function onOutsideDown(e) {
+        if (!uiPanel || uiPanel.className.indexOf('open') < 0) return;
+        if (uiRoot && uiRoot.contains(e.target)) return;
+        closePanel();
+    }
+    function armAutoClose() {
+        if (autoCloseOn) return;
+        autoCloseOn = true;
+        document.addEventListener('mousedown', onOutsideDown, true);
+        window.addEventListener('scroll', onPanelViewport, true);
+    }
+    function disarmAutoClose() {
+        if (!autoCloseOn) return;
+        autoCloseOn = false;
+        document.removeEventListener('mousedown', onOutsideDown, true);
+        window.removeEventListener('scroll', onPanelViewport, true);
+    }
+
+    // 两个重排入口分开注册: disarm 只摘「面板展开期间」的那些, 常驻的 resize 重摆不受影响
+    let rafPanel = false;
+    function onPanelViewport() {
+        if (rafPanel) return;
+        rafPanel = true;
+        requestAnimationFrame(function () {
+            rafPanel = false;
+            try {
+                if (!uiPanel || uiPanel.className.indexOf('open') < 0) return;
+                const r = uiRoot ? uiRoot.getBoundingClientRect() : null;
+                if (!r || r.bottom < 0 || r.top > window.innerHeight) closePanel();
+                else placePanel();
+            } catch (e) { Diag.fail('E_UI_RELAYOUT', e); }
+        });
+    }
+
+    let rafDock = false;
+    function onDockResize() {
+        if (rafDock) return;
+        rafDock = true;
+        requestAnimationFrame(function () {
+            rafDock = false;
+            try {
+                dockUi();
+                if (uiPanel && uiPanel.className.indexOf('open') >= 0) placePanel();
+            } catch (e) { Diag.fail('E_UI_RELAYOUT', e); }
+        });
+    }
+
+    function renderPanel() {
+        if (!uiShadow || !uiPanel) return;
+        while (uiPanel.firstChild) uiPanel.removeChild(uiPanel.firstChild);
+
+        uiPanel.appendChild(el('h3', ScriptName + ' · 界面主题'));
 
         const all = [DEFAULT_THEME];
         for (let i = 0; i < THEMES.length; i++) all.push(THEMES[i]);
@@ -730,25 +1011,23 @@
             btn.setAttribute('data-hdui-theme-id', t.id);
             btn.setAttribute('aria-pressed', t.id === currentId ? 'true' : 'false');
             btn.appendChild(document.createTextNode(t.name));
-            const note = el('small', t.note);
-            btn.appendChild(note);
+            btn.appendChild(el('small', t.note));
             btn.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 selectTheme(t.id);
             });
-            panel.appendChild(btn);
+            uiPanel.appendChild(btn);
         }
 
         const diag = el('div', undefined, '');
         diag.className = 'diag';
-        const err = storeGet(STORE_ERR, null);
         const head = el('div', undefined, '');
         head.appendChild(document.createTextNode('当前: '));
-        const code = el('code', String(currentId));
-        head.appendChild(code);
+        head.appendChild(el('code', String(currentId)));
         diag.appendChild(head);
 
+        const err = storeGet(STORE_ERR, null);
         if (err && err.code) {
             const line = el('div', undefined, '');
             line.appendChild(document.createTextNode('上次错误: '));
@@ -757,16 +1036,17 @@
         }
         const recent = Diag.list().slice(-5);
         for (let i = 0; i < recent.length; i++) {
-            const r = recent[i];
-            diag.appendChild(el('div', r.level.toUpperCase() + ' ' + r.code));
+            diag.appendChild(el('div', recent[i].level.toUpperCase() + ' ' + recent[i].code));
         }
-        panel.appendChild(diag);
-        panel.appendChild(el('div', '快捷键 Alt+Shift+T 循环切换', ''));
+        uiPanel.appendChild(diag);
+        uiPanel.appendChild(el('div', '快捷键 Alt+Shift+T 循环切换', ''));
+        if (uiPanel.className.indexOf('open') >= 0) placePanel();
+    }
 
-        // 面板整体阻断冒泡: 点到我们 UI 的事件不传给站内 document 级监听
-        panel.addEventListener('click', function (e) { e.stopPropagation(); });
-        panel.addEventListener('mousedown', function (e) { e.stopPropagation(); });
-        uiShadow.appendChild(panel);
+    function setDockLabel() {
+        if (!uiShadow) return;
+        const dock = uiShadow.querySelector('.dock .name');
+        if (dock) dock.textContent = (themeById(currentId) || DEFAULT_THEME).name;
     }
 
     function mountUi() {
@@ -774,31 +1054,47 @@
         uiRoot = document.createElement('div');
         uiRoot.setAttribute('id', ROOT_ID);
         uiRoot.setAttribute('data-hdui', 'root');
-        // 注意: 宿主必须显式给尺寸 —— 它是 0 内容盒, 撑不开时浮动按钮会溢出到视口外
-        uiRoot.style.cssText = 'all:initial;position:fixed;right:18px;bottom:18px;width:44px;height:44px;z-index:2147483000;';
+        // 宿主必须显式给尺寸: all:initial 之后它是 0 内容盒, 撑不开就会溢出视口外
+        uiRoot.style.cssText = HOST_BASE;
         uiShadow = uiRoot.attachShadow({ mode: 'closed' });
 
         const style = document.createElement('style');
         style.textContent = panelCss();
         uiShadow.appendChild(style);
 
-        const fab = el('button', 'UI', '');
-        fab.className = 'fab';
-        fab.setAttribute('type', 'button');
-        fab.setAttribute('data-hdui', 'fab');
-        fab.setAttribute('title', ScriptName + ' 界面主题');
-        fab.addEventListener('click', function (e) {
+        const dock = el('button', undefined, '');
+        dock.className = 'dock';
+        dock.setAttribute('type', 'button');
+        dock.setAttribute('data-hdui', 'dock');
+        dock.setAttribute('title', ScriptName + ' 界面主题');
+        const name = el('span', (themeById(currentId) || DEFAULT_THEME).name, '');
+        name.className = 'name';
+        const caret = el('span', '▾', '');
+        caret.className = 'caret';
+        dock.appendChild(document.createTextNode('界面 · '));
+        dock.appendChild(name);
+        dock.appendChild(caret);
+        dock.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            panelOpen = !panelOpen;
-            if (panelOpen) renderPanel();
-            else {
-                const p = uiShadow.querySelector('.panel');
-                if (p) p.remove();
-            }
+            if (uiPanel && uiPanel.className.indexOf('open') >= 0) closePanel();
+            else openPanel();
         });
-        uiShadow.appendChild(fab);
+        uiShadow.appendChild(dock);
+
+        uiPanel = el('div', undefined, '');
+        uiPanel.className = 'panel';
+        uiPanel.setAttribute('data-hdui', 'panel');
+        uiPanel.style.left = '-9999px';
+        uiPanel.style.top = '-9999px';
+        // 面板整体阻断冒泡: 点到我们 UI 的事件不传给站内 document 级监听
+        uiPanel.addEventListener('click', function (e) { e.stopPropagation(); });
+        uiPanel.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+        uiShadow.appendChild(uiPanel);
+
         document.body.appendChild(uiRoot);
+        syncUiVars();
+        dockUi();
     }
 
     // ==================================================================
@@ -862,6 +1158,7 @@
         mountUi();
         applyStored(false);
         document.addEventListener('keydown', onKeydown);
+        window.addEventListener('resize', onDockResize); // 常驻: 窗口变了要重摆内嵌开关
     }
 
     // @run-at document-start: 此处即真正的 document-start(DOM 尚未解析), 先把底色铺上

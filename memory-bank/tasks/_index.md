@@ -5,9 +5,11 @@
 
 ## In Progress（进行中）
 
-- [TASK018] HDHome 界面主题套件（5 套可切换 UI） — **已实施并提交 `13266e0`**（`src/HDHomeUI.user.js`
-  `2026.09.19.1`，分支 `dev`，**未 push**）；设计 + 脚本 + 仿真剧本 + 5 个测试全部就位，
-  `node tests/run-all.js` **21/21 全绿**；真实页面离线核验契约通过。
+- [TASK018] HDHome 界面主题套件（5 套可切换 UI） — **已实施**（`.1` 提交 `13266e0`，
+  `.2` 提交 `1b38510`，`.3` 改完待审核未提交 —— 全面重构: 入口内嵌+版式重画），
+  `src/HDHomeUI.user.js` `2026.09.19.3`，分支 `dev`；设计 + 脚本 + 仿真剧本 + 6 个测试
+  （含 `sim-hdui-inline-dock`）全就位，`node tests/run-all.js` **22/22 全绿**；
+  真实页面离线核验契约通过 + 仿真视觉复核截图覆盖 5 套.
   见 `TASK018-hdhome-ui-themes.md` 与 `scripts/HDHomeUI.md`。
 
 - [TASK001] PTAutoCheckIn v2 实测校准并入正式版 — **已并入正式版**（1.10 完成），其余逐站实测校准继续（核心主线）

@@ -70,5 +70,8 @@ flowchart TD
 10. **HDHomeUI 换肤铁律（2026-09-19 起）**——它是**纯样式层**：不增删/移动/克隆站内节点、不挂事件、不改 `href`，
     站内功能靠「功能基线快照 + hit-test」两道仿真断言守住；页面结构不符时**必须提示并回退默认 UI**，
     禁止带错上妆。新增主题必须有**不同的布局骨架**（不能只换配色），由 `sim-hdui-theme-switch.js` 钉死。
+    **入口必须内嵌**——量 `ul#mainmenu` 末尾空档摆成导航栏的小文字钮 `界面 · <主题名> ▾`，禁用 fixed 悬浮 FAB
+    （`sim-hdui-inline-dock.js` 钉死「position:absolute + 与菜单垂直相交 + 右下角不被占用 + 换主题重摆」），
+    重摆入口不整体重写 `cssText`（会清掉 `--ui-*` 配色变量）。
     详见 `scripts/HDHomeUI.md` 与 `tasks/TASK018-hdhome-ui-themes.md`。
 11. **测试**：`tests/` 是开发期测试区（零依赖，无测试框架）——按脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个测试，以退出码表达结果；`node tests/run-all.js` 一次跑完全部。改 PTAutoCheckIn 后必跑 `node tests/ptautocheckin/check-ptac-budget.js`（校验超时预算不变式 + 状态阶梯结构 + 不透明步骤的 `budgetMs` 声明），必须全绿；新增 `function` 步骤/自定义 `alreadyCheck` 时**必须**声明 `budgetMs` / `alreadyCheckBudgetMs`（同步判定写 `0`）。测试约定与「如何测 userscript」技法见 `tests/README.md`，原理见 `pitfalls.md` P28。

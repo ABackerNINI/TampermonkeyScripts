@@ -4,7 +4,32 @@
 > 原站功能全部保留；页面结构一旦与预期不符，**提示并回退站点默认界面**。
 > 设计依据与实施计划见 `tasks/TASK018-hdhome-ui-themes.md`。
 
-- 当前版本：`2026.09.19.2`（**已提交 `1b38510`，分支 `dev`，已推 gitee**）
+- 当前版本：`2026.09.19.3`（`.3` 改完待审核未提交；`.2` 已提交 `1b38510`，分支 `dev`，已推 gitee）
+- 入口**内嵌**在导航栏末尾（`ul#mainmenu` 最后一个 li 的右侧空档），不再用右下角浮动圆钮 ———
+  与 PTAutoCheckIn v2 等脚本的 FAB 抢同一个位置，2026-09-19 决定改。位置由 `dockRect()` 量取；
+  菜单缺位时退到 `table.mainouter` 右上；都没有再退到 `position:fixed` 兜底。
+  重摆只在改 left/top/position，**不整体重写 cssText** —— 整体重写会把宿主上的 `--ui-*` 配色变量一起清掉。
+- **2026.09.19.3 重构要点**：
+  ① FAB 改成内嵌文字钮 `界面 · <主题名> ▾`，面板改为锚在它下方的下拉浮层（不再贴视口右下）；
+  ② 5 套版式全面重画，每套有**独立的版式骨架**（不再是「12 个格子挤一行 + 换个底色」）：
+  · 片库索引：表体 grid 卡片网格，行内 6 轨 grid 分三区（主行/指标带/尾注），每指标 = 「标签 + 值」独立块；
+  · 电传纸带：唯一保留 `display:table` 语义的一套，纸黄+全等宽+反白表头+数字右对齐+细点竖线分栏；
+  · 大开本：flex 三行（标题 / 署名 / 规格），零高伪元素 `::before/::after` 做版面换行点；
+  · 瑞士网格：grid 6 列×3 行，零线条全靠留白，做种数 28px 钴蓝锚点；
+  · 播控台：grid 4 轨道，类别色点 + 做种电平条。
+  导航 `ul#mainmenu` 全部改成 `display:flex;flex-wrap:wrap` + `--hdui-navgap` 显式列间距，
+  不再让 16 个 `inline-block` 紧挨挤一坨。
+- **真实标记已核验**：用 `resources-do-not-track/` 下已脱敏的整页离线跑过 `headerKey()` 与契约判定，
+  12 列全部识别、数据行 12 格、4 个 A 级锚点齐全（脚本 `.workbuddy-ai/_verify-hdui-real-page.js`，不入库）。
+- **视觉复核**（不入库）：`.workbuddy-ai/_shot-hdui.js` 在仿真服务器里对 5 套主题各截三张
+  （顶部内嵌入口 / 中部版式 / 面板展开），`hdui-shots/{id,id-top,id-panel}.png`，仅结构化复刻页内容。
+- 匹配：`*://*.hdhome.org/*`，`@run-at document-start`（**确实在 document-start 干活**：立刻铺主题底色防闪白。
+  此时 `<head>` 通常还没建，`injectCss` 自动退到 `<html>`；若连 `<html>` 都尚未创建（注入点比 Tampermonkey
+  更早时会出现，例如测试用的 `addScriptToEvaluateOnNewDocument`），退化为「`<html>` 一出现就铺」
+  （`paintBootBgWhenPossible`），最迟由 `boot()` 在 DOM 就绪后再补一次。
+  实测注入发生时 `document.readyState` 仍为 `loading`，**早于 `DOMContentLoaded`**）
+- 权限：`GM_getValue` / `GM_setValue`（**不申请任何网络类权限**）
+- 存储键：`hdui.theme`（当前主题 id）、`hdui.lastError`（上次结构错误）
 - **真实标记已核验**：用 `resources-do-not-track/` 下已脱敏的整页离线跑过 `headerKey()` 与契约判定，
   12 列全部识别、数据行 12 格、4 个 A 级锚点齐全（脚本 `.workbuddy-ai/_verify-hdui-real-page.js`，不入库）。
 - 匹配：`*://*.hdhome.org/*`，`@run-at document-start`（**确实在 document-start 干活**：立刻铺主题底色防闪白。
