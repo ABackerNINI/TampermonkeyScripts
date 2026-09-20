@@ -1,7 +1,7 @@
-"""提交后核对分支 ref —— 本 worktree 的 ref 更新可能被拦截层静默丢弃, **不要只看 commit 输出**。
+"""提交后核对分支 ref —— 某些环境下 ref 更新会静默丢失(提交命令照样打印成功), **不要只看 commit 输出**。
 
-用法:
-    python .agents/skills/my-commit-flow/scripts/verify_ref.py [期望的 sha]
+用法(**不要写死 skill 的安装路径**, `<skill-dir>` = 加载本 skill 时它实际所在的目录):
+    python <skill-dir>/scripts/verify_ref.py [期望的 sha]
 
 判据(三者必须一致):
     HEAD == refs/heads/<branch> == loose ref / packed-refs
@@ -16,9 +16,15 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _ship_config import BRANCH, STAGED_PANIC  # noqa: E402
+from _ship_config import KEY_DEFAULTS, find_root, load_config, resolve_branch  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[4]  # .agents/skills/<name>/scripts/x.py → 仓库根
+REPO = find_root()  # 向上找 .git, 不按 skill 安装深度反推
+try:
+    _CFG, _ = load_config(REPO)
+except Exception:  # 校验工具不因缺配置停摆: 用内置兜底值
+    _CFG = dict(KEY_DEFAULTS)
+BRANCH = resolve_branch(_CFG)
+STAGED_PANIC = _CFG["staged_panic"]
 FIX_HINT = """处置(按 pitfalls「分支 ref 被回退」条目):
   1. 先确认没有别的会话正在操作同一个 .git
   2. 留底:  git format-patch -1 <sha> --stdout > 备份.patch

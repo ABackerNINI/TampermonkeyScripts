@@ -1,16 +1,18 @@
-"""推送 —— **顺序固定**: 先推 Gitee 主线(必须成功), 再尝试一次 GitHub 直连(失败只报一次)。
+"""推送 —— **顺序固定**: 先推主线远端(必须成功), 再尝试一次镜像直连(失败只报一次)。
 
 用法:
-    python .agents/skills/my-commit-flow/scripts/push.py [--skip-mirror]
+    python <skill-dir>/scripts/push.py [--skip-mirror]
 
 流程:
   1. 先 `git fetch` 再看是否落后 —— 落后就 STOP(不自动 rebase, 那是红线区)
-  2. `git push <main> <branch>`; 失败原样输出并退出
+  2. `git push <main> <branch>`; 失败原样输出并退出(主线瞬时 reset 可重试一次)
   3. 核对远端 ref == 本地 HEAD(`git ls-remote`);`git status -sb` 不应再有 ahead
-  4. 镜像: `git -c http.https://github.com.proxy= push <mirror> <branch>` —— **只尝试一次**,
-     失败如实报告一次, 不重试 / 不换代理 / 不改走 SSH / 不回滚 Gitee 上已完成的推送
+  4. 镜像: `git <禁用 per-URL 代理的 -c> push <mirror> <branch>` —— **只尝试一次**,
+     失败如实报告一次, 不重试 / 不换代理 / 不改走 SSH / 不回滚主线上已完成的推送
 
-退出码: 0 主线推送成功(镜像失败不影响) · 1 落后主线 · 5 主线推送失败
+主线 / 镜像 / 分支 / 代理 **全部运行期探测**(见 `_ship_config.py`), 不写死任何 URL。
+
+退出码: 0 主线推送成功(镜像失败不影响) · 1 落后主线 · 5 主线推送失败 · 6 核对取不到远端 ref
 """
 
 from __future__ import annotations
@@ -23,11 +25,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _ship_config import (  # noqa: E402
-    BRANCH,
-    MIRROR_PROXY_DISABLE_ARGS,
-    MIRROR_URL,
+    KEY_DEFAULTS,
+    load_config,
+    proxy_disable_args,
+    resolve_branch,
     resolve_main_remote,
-    REMOTE_MIRROR,
+    resolve_mirror_remote,
 )
 
 
@@ -35,11 +38,26 @@ def git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
-MAIN = resolve_main_remote()  # 运行期定主线远端名(gitee / origin)
+def resolve(cfg: dict):
+    """(分支, 主线名, 主线 URL, 镜像名, 镜像 URL)"""
+    branch = resolve_branch(cfg)
+    main, main_url = resolve_main_remote(cfg)
+    mirror, mirror_url = resolve_mirror_remote(cfg)
+    return branch, main, main_url, mirror, mirror_url
+
+
+# 缺配置时先记下错误, 到 main 里打印引导再退出 —— 别在 import 阶段抛栈
+try:
+    _CFG, _SRC = load_config()
+    _ERR = None
+except Exception as exc:  # ConfigMissing / tomllib 缺失
+    _CFG, _SRC, _ERR = dict(KEY_DEFAULTS), None, str(exc)
+
+BRANCH, MAIN, MAIN_URL, MIRROR, MIRROR_URL_NOW = resolve(_CFG)
 
 
 def remote_sha_with_retry(name: str, branch: str) -> str:
-    """取远端 ref —— **主线瞬时失败可重试一次**(见 pitfalls: Gitee 也会偶发 Recv failure)。
+    """取远端 ref —— **主线瞬时失败可重试一次**(网络抖动常见, 见项目 pitfalls 的对应条目)。
 
     取不到(空)与"取到了但不一致"必须区分: 前者是网络, 后者才是推送没落。
     """
@@ -64,8 +82,18 @@ def remotes() -> dict[str, str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--skip-mirror", action="store_true", help="不尝试 GitHub 镜像")
+    parser.add_argument("--skip-mirror", action="store_true", help="不尝试镜像远端")
+    parser.add_argument("--config", default=None, help="指定配置文件(默认 <仓库根>/.commit-flow.toml)")
     args = parser.parse_args(argv)
+
+    global BRANCH, MAIN, MAIN_URL, MIRROR, MIRROR_URL_NOW, _ERR
+    if args.config:  # 允许临时换一份配置
+        _CFG2, _ = load_config(explicit=args.config)
+        BRANCH, MAIN, MAIN_URL, MIRROR, MIRROR_URL_NOW = resolve(_CFG2)
+        _ERR = None
+    if _ERR:
+        print(_ERR)
+        return 1
 
     print("=== 推送前再 fetch 一次(status -sb 的 ahead/behind 是上次 fetch 的快照) ===")
     git("fetch", MAIN, BRANCH)
@@ -77,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
 
     head = git("rev-parse", "HEAD").stdout.strip()
     print(f"\n=== 推主线 {MAIN}/{BRANCH} ===")
-    # 主线瞬时 Recv failure 可重试一次(见 pitfalls「Gitee 主线也会偶发 Recv failure」);
+    # 主线瞬时连接失败(Recv failure / reset)可重试一次;
     # 镜像不重试(旧规: 尝试一次, 失败只报一次)
     for attempt in range(2):
         proc = git("push", MAIN, BRANCH)
@@ -106,18 +134,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.skip_mirror:
         return 0 if ok else 5
 
-    print(f"\n=== 尝试一次 GitHub 直连({REMOTE_MIRROR}) ===")
-    rem = remotes()
-    if REMOTE_MIRROR not in rem:
-        print(f"  没有 {REMOTE_MIRROR} 远端; 需要时: git remote add {REMOTE_MIRROR} {MIRROR_URL}")
+    print(f"\n=== 尝试一次镜像直连({MIRROR or '未找到镜像远端'}) ===")
+    if not MIRROR:
+        hint = f"git remote add <名字> {MIRROR_URL}" if MIRROR_URL else "补一个镜像远端即可(镜像允许滞后)"
+        print(f"  没找到镜像远端; 需要时: {hint}")
         return 0 if ok else 5
-    proc = git(*MIRROR_PROXY_DISABLE_ARGS, "push", REMOTE_MIRROR, BRANCH)  # -c 覆盖为空 = 禁用全局代理
+    # 代理禁用参数从 git config 读, 不写死 key/端口; 没配代理则为空
+    proc = git(*proxy_disable_args(MIRROR_URL_NOW), "push", MIRROR, BRANCH)
     out = (proc.stdout + proc.stderr).strip()
     if proc.returncode == 0:
         print(f"  镜像已推: {out.splitlines()[-1] if out else 'ok'}")
     else:
-        # 只如实报告一次: 不重试 / 不换代理 / 不改 SSH / 不回滚 Gitee
-        print(f"  镜像直连失败(不重试, GitHub 允许滞后): {out.splitlines()[-1] if out else '无输出'}")
+        # 只如实报告一次: 不重试 / 不换代理 / 不改 SSH / 不回滚主线
+        print(f"  镜像直连失败(不重试, 镜像允许滞后): {out.splitlines()[-1] if out else '无输出'}")
 
     return 0 if ok else 5
 
