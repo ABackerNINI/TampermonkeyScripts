@@ -1200,3 +1200,46 @@ hover 才显示。而漏白 / 小件近白 / 对比度 / 文本截断**全都是
 **为什么不进等结构窗口**: `STRUCT_CODES`(会等 8 秒的那个)只留给 `ROW_CELL_COUNT_MISMATCH` ——
 那是"A / A·GB 还没补完"的**时序问题**。未知列/未知行不是时序问题, 等也没有用,
 拖 8 秒才报错只会让人以为脚本卡死(与 `E_COLUMN_UNKNOWN` / `E_ANCHOR_MISSING` 同一档)。
+
+## P70. 本地绿 ≠ 判据稳 —— Windows 与 CI(Linux)的字体度量/可滚动高度不同
+
+**症状**: 同一个仿真用例, Windows 本地 34/34 全绿, GitHub Actions(ubuntu, 自带 Chrome)的
+Node 22 job 却红:
+```
+[iframe-unknown] hit-test 命中自身; 实测命中: div @ 520,380
+```
+
+**根因链**(每一步都"看起来没问题"):
+1. 金丝雀 `iframe-unknown` 插在 `#outer` **末尾** ⇒ 在页面很下方, 视口外;
+2. `hdui-scan.js` 的 `__hit` 为了量视口外元素, 会 `scrollIntoView({block:'center'})`
+   把它滚到**视口正中**;
+3. 而我**自己注入的** `popup-fixed` 恰恰是 `position:fixed` 的**居中弹窗**, 正好压在视口正中
+   ⇒ `elementFromPoint` 命中的是弹窗, 不是 iframe。
+4. **Windows 上一直绿纯属运气**: 本地页面滚动高度不足, `scrollIntoView` 到不了正中,
+   iframe 落在弹窗下方躲开了; CI 上字体度量不同、能滚到位, 于是撞上。
+
+**这是第二次踩同一类坑**(第一次是 `ann-marquee` 被自己注入的居中弹窗压住) ——
+症状不同, 根因相同: **自己注入的浮层把要测的东西盖住了**。
+
+**修法**: 让金丝雀**不依赖滚动** —— iframe 改插 `#outer` 开头(首屏内),
+实测 `y=190, inView=true, hitOk=true, hit=iframe`, 不再受任何浮层影响。
+
+**教训**:
+1. **注入多个浮层时, 位置必须互相岔开**; 更要紧的是 —— **被 scrollIntoView 量到的元素
+   会落到视口正中, 那里不能有任何 fixed 浮层**。
+2. **"本地全绿"不能作为判据稳的证据**。Windows 与 ubuntu 的字体度量、可滚动高度都不同,
+   几何/命中类断言必须靠 CI 交叉验证; 反过来, CI 红而本地绿时先怀疑"依赖滚动/依赖字体"的断言。
+3. **host-test 类断言要先证明前置状态成立**(例如先断言 `scrollY === 600` 再断言命中),
+   否则会出现"看起来验了、其实一直在另一个状态下验"的假绿(同批修掉的
+   `sim-hdui-overlay-safety` ④ 就是这个毛病)。
+
+## P71. CI 矩阵与 Node 内置能力: Node 20 没有全局 WebSocket
+
+`tests/lib/sim/cdp.js` 靠 **Node 22 内置的全局 `WebSocket`** 做到零依赖。CI 矩阵含 Node 20,
+而 Node 20 没有全局 WebSocket ⇒ `new WebSocket` 直接 ReferenceError。
+原本 `tcase.runCase` 只有"找不到浏览器就 SKIP"一道门禁, ubuntu 镜像自带 Chrome,
+于是用例继续跑并崩溃 —— 表现为 **FAIL 而不是 SKIP**, CI 的 Node 20 job 长期红
+(且只红 Node 20、Node 22 绿, 容易被误判成"某个用例不稳定")。
+
+修法: 加第二道门禁, 没有全局 WebSocket 时同样 `SKIP` 退 0(与浏览器门禁同一口径)。
+⚠️ 静态用例(`check-*`)不用 `runCase`, 在 Node 20 上照跑 —— CI 覆盖不减。
