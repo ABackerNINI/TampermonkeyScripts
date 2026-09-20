@@ -9,6 +9,9 @@
 #       与 .agents/ 中的真身脱钩，后续 apm 更新不会同步。
 .workbuddy-ai/
 
+# WorkBuddy / WorkBuddy-AI 兼容目录
+.codebuddy/
+
 # 不方便展示的资源文件（项目铁律 5，见 AGENTS.md / memory-bank/conventions.md 0.5）
 #
 # 该目录存放私有站点（如 HDHome）另存为的整页网页及附属资源，
