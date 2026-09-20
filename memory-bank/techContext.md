@@ -23,6 +23,9 @@ HDHomeUI 另有 **5 个「未知元素安全」用例**（`check/sim-hdui-hide-a
   `node --check src/*.user.js` 语法检查 + `node tests/run-all.js -v` 跑全部测试。
   （旧版 ci.yml 是从一个 Python/uv/pytest 仓库复制过来忘了清理的，2026-09-18 已整体替换。）
   仿真站用例在无浏览器的环境会打印 `SKIP` 并退 0，不会让 CI 变红；GitHub 的 ubuntu 镜像自带 Chrome。
+  ⚠️ 仿真站还依赖 **Node 22 内置的全局 `WebSocket`**（`cdp.js` 靠它做到零依赖）——
+  Node 20 上 `new WebSocket` 会 ReferenceError，所以 `runCase` 加了第二道门禁让它也走 `SKIP`
+  （否则 CI 的 Node 20 job 会**失败**而不是跳过；静态用例不用 `runCase`，在 Node 20 上照跑）。
 - **版本管理**：git（远程 GitHub + Gitee 镜像）
 
 ## 开发环境与设置

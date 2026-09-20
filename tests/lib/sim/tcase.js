@@ -18,8 +18,17 @@ function assertEq(actual, expected, msg) {
 }
 
 async function runCase(name, fn) {
+    // 门禁 1: 没有浏览器 -> 环境分级(SKIP), 不是弱化断言
     if (!findChrome()) {
         console.log(`SKIP ${name}: 未找到 Chrome/Edge(可用 SIM_CHROME 环境变量指定二进制路径)`);
+        process.exit(0);
+    }
+    // 门禁 2: 全局 WebSocket 是 Node 22 才内置(cdp.js 零依赖就靠它)。
+    //    Node 20 上 `new WebSocket` 会直接 ReferenceError —— 仿真用例会**失败**而不是跳过,
+    //    于是 CI 的 Node 20 job 一直红(静态用例不受影响, 仍在跑)。
+    //    与浏览器门禁同一套口径: 环境不具备就 SKIP, 具备就必须真过。
+    if (typeof WebSocket === 'undefined') {
+        console.log(`SKIP ${name}: 当前 Node(${process.version}) 没有全局 WebSocket(仿真用例需要 Node 22+)`);
         process.exit(0);
     }
     const t0 = Date.now();
