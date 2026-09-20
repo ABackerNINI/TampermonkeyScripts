@@ -41,7 +41,11 @@ const CORE_JS = [
     '    inView: r.right > 0 && r.bottom > 0 && r.left < window.innerWidth && r.top < window.innerHeight };',
     '}',
     // hit-test: 元素存在 ≠ 看得见。被裁 / 被压 / 跑到视口外都会在 elementFromPoint 上暴露。
-    // ⚠️ 中心点可能落在子元素上, 所以允许双向 contains(命中自身或后代/祖先都算"没被别人盖住")。
+    // ⚠️ 只有"命中自身或**后代**"才算数。祖先命中一律算**被盖住** ——
+    //    早期版本把 `el.contains(e)`(祖先)也算通过, 结果 BODY 包含一切,
+    //    任何"整页遮罩"都会被判成命中 => 这类断言永远不可能变红(P72 式的假绿, 反例才抓出来)。
+    // ⚠️ 多行 inline 元素的 bounding box 中心可能落在**行盒之间的空隙**里, 那时会命中父级块;
+    //    所以补测一次"第一段 client rect"的中心, 避免把行内元素误判成被盖住。
     'function __hit(e) {',
     '  const r = e.getBoundingClientRect();',
     '  if (r.width <= 0 || r.height <= 0) return { ok: false, why: "zero-rect" };',
@@ -49,13 +53,20 @@ const CORE_JS = [
     '    e.scrollIntoView({ block: "center" });',
     '  }',
     '  const r2 = e.getBoundingClientRect();',
-    '  const x = Math.round(r2.left + r2.width / 2), y = Math.round(r2.top + r2.height / 2);',
-    '  const el = document.elementFromPoint(x, y);',
-    '  if (!el) return { ok: false, why: "offscreen", x: x, y: y };',
-    '  const ok = (el === e) || (e.contains && e.contains(el)) || (el.contains && el.contains(e));',
-    '  return { ok: ok, x: x, y: y,',
-    '    hit: el.tagName.toLowerCase() + (el.id ? "#" + el.id : "")',
-    '      + (el.getAttribute && el.getAttribute("class") ? "." + String(el.getAttribute("class")).split(/\\s+/)[0] : "") };',
+    '  const pts = [{ x: r2.left + r2.width / 2, y: r2.top + r2.height / 2 }];',
+    '  const crs = e.getClientRects ? e.getClientRects() : null;',
+    '  if (crs && crs.length) pts.push({ x: crs[0].left + crs[0].width / 2, y: crs[0].top + crs[0].height / 2 });',
+    '  let last = null, lastTag = null;',
+    '  for (let i = 0; i < pts.length; i++) {',
+    '    const x = Math.round(pts[i].x), y = Math.round(pts[i].y);',
+    '    const el = document.elementFromPoint(x, y);',
+    '    if (!el) { lastTag = null; continue; }',
+    '    if (el === e || (e.contains && e.contains(el))) {',
+    '      return { ok: true, x: x, y: y, hit: __tagOf(el) };',
+    '    }',
+    '    last = el; lastTag = __tagOf(el);',
+    '  }',
+    '  return { ok: false, why: lastTag ? "covered" : "offscreen", hit: lastTag };',
     '}',
     // 图标层: 站点是用 background 画的雪碧图, 主题用 content 换 SVG。
     // 两者**都**是 none 才是真的"没内容 = 空白"(新徽章被屏蔽的典型形态)。

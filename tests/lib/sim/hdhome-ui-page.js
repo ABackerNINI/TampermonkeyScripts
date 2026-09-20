@@ -357,7 +357,10 @@ function torrentRow(i, opts) {
         // 变体: 站点改版后**新出现**的标签/徽章/图标(都不在脚本的清单里)。
         // 判据是"它们仍然看得见", 不是"它们被画成什么样" —— 未知的东西不该被屏蔽。
         + ((opts && opts.unknown && i === 0)
-            ? '<span class="tags tgznew" data-canary="tag-unknown" title="新分类">新分类</span>'
+            // ⚠️ 必须给**站点分类底色**: 真站的 span.tags 自带 23 种分类色(信息量所在)。
+            //    夹具不给底色的话, "上妆后保留站点底色" 就成了 transparent === transparent 的空断言。
+            ? '<span class="tags tgznew" data-canary="tag-unknown" title="新分类"'
+            + ' style="background:#5b9fd4">新分类</span>'
             + '<span class="badge_new" data-canary="badge-unknown">全新徽章</span>'
             + '<img class="c_znewcat" data-canary="icon-unknown-cat" src="/static/trans.gif"'
             + ' style="background-image:url(/static/catsprites.png)" alt="newcat">'
