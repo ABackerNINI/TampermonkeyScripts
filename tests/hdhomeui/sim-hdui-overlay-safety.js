@@ -123,13 +123,25 @@ runCase('HDHomeUI · 浮层 / 弹窗 / 公告专项(位置不被改动、不被�
         assert(btn && btn.w > 0 && btn.h > 0, '关闭按钮有面积: ' + JSON.stringify(btn));
         assert(btn && btn.ok, '弹窗的关闭按钮点得到(hit-test 命中按钮本身); 实测命中 ' + (btn && btn.hit));
 
-        // ④ 滚到片头吸顶区, 顶部消息条(z-index 100)仍压在最上面
+        // ④ 滚到片头吸顶区, 顶部消息条(z-index 100)仍压在最上面。
+        //    ⚠️ 不能走 scan.canaries(): 它每条测量前会 window.scrollTo(0,0) 复位
+        //    (hit-test 为了量视口外元素会 scrollIntoView), 用它会把刚滚的 600px 抹掉 ——
+        //    于是这条断言其实一直在 scrollY=0 下测, 根本没验到"滚动后"。这里自己量。
         await page.eval('window.scrollTo(0, 600); return true;');
         await new Promise(function (r) { setTimeout(r, 200); });
-        const bar = await scan.canaries(page, ['ov-bar']);
-        assert(bar['ov-bar'] && bar['ov-bar'].hitOk,
-            '滚动 600px 后站内消息条没被片头压住(hit-test 命中自身); 实测命中 '
-            + (bar['ov-bar'] && (bar['ov-bar'].hit || bar['ov-bar'].hitWhy)));
+        const bar = await page.eval([
+            'const e = document.querySelector("[data-canary=\\"ov-bar\\"]");',
+            'if (!e) return null;',
+            'const r = e.getBoundingClientRect();',
+            'const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);',
+            'const el = document.elementFromPoint(x, y);',
+            'return { scrollY: Math.round(window.scrollY), y: Math.round(r.top),',
+            '  ok: !!el && (el === e || (e.contains && e.contains(el))),',
+            '  hit: el ? el.tagName + (el.getAttribute("data-canary") ? "[" + el.getAttribute("data-canary") + "]" : "") : null };'
+        ].join('\n'));
+        assert(bar && bar.scrollY === 600, '确实滚到了 600px(否则这条断言没验到滚动态); 实测 ' + JSON.stringify(bar));
+        assert(bar && bar.ok,
+            '滚动 600px 后站内消息条没被片头压住(hit-test 命中自身); 实测命中 ' + (bar && bar.hit));
 
         // ⑤ 提示框切成可见后: 面积 + 对比度
         const tip = (await scan.canaries(page, ['ov-nicetitle']))['ov-nicetitle'];
