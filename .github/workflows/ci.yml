@@ -9,9 +9,11 @@ name: CI
 
 on:
   push:
-    branches: [master, dev]
+    # ⚠️ 2026-09-20 分支由 `dev` 改名为 `develop`; 这里不跟着改的话, 推 develop **不会触发 CI**
+    #    (症状: 本地全绿但线上长期没运行记录, 而 CI 正是唯一能跑 Linux+真 Chrome 的交叉验证)。
+    branches: [master, develop]
   pull_request:
-    branches: [master]
+    branches: [master, develop]
   workflow_dispatch:
 
 jobs:

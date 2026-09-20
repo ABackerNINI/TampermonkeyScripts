@@ -1,0 +1,44 @@
+# 提交流水线配置 —— TampermonkeyScripts
+# 初稿由 `preflight.py --init` 生成, 2026-09-20 按本仓库事实逐项核对后填实。
+# 看生效值与来源: python <skill-dir>/scripts/preflight.py --show-config
+#
+# 本仓库特征: 单文件 .user.js(Tampermonkey 用户脚本集合) **纯 Node / 零依赖 / 无 package.json**;
+# 测试用 tests/run-all.js(Node 内置模块, 无测试框架)。协作主线 Gitee, GitHub 只作镜像。
+
+confirmed = true
+
+branch = ""                    # 留空 = 跟当前分支(当前 develop)
+
+main_candidates = ["gitee", "github", "origin"]
+# 已核对: `git remote -v` 第一个是 gitee, 指向 gitee.com, 确为主线(origin 也已改指 Gitee)
+main_host_mark  = "gitee.com"
+mirror          = "github"
+mirror_host_mark = "github.com"
+
+# 出现即 STOP —— 铁律 5: resources-do-not-track/ 里的私有整页与凭据**永不入 Git**
+red_lines = ["resources-do-not-track/"]
+
+# 出现需人工确认: 项目数据目录(已 gitignore, 出现在暂存清单即为异常)
+warn_lines = [".workbuddy-ai/", ".codebuddy/"]
+
+# 跨平台风险(P70): 本仓库 Windows 本地全绿 ≠ CI(ubuntu)绿 —— 字体度量、可滚动高度、
+# 进程 spawn/回收行为都不同。故提示这些关键词, 命中时**单平台跑绿不算数**。
+platform_hints = ["child_process", "spawn", "spawnSync", "fs.rmSync", "process.platform", "path.sep"]
+
+staged_panic = 200
+
+# 提交前闸门 —— 本仓库技术栈未被自动识别(无 package.json / pyproject.toml), 故手写
+[[gates]]
+match = ["src/", "tests/"]
+run   = ["node tests/run-all.js"]
+note  = "JS 改动: 零依赖全量测试(当前 35 个, 约 5 分钟; 无浏览器时会 SKIP 仿真用例)"
+
+[[gates]]
+match = [".agents/skills/"]
+run   = ["python <改动的脚本> --help"]
+note  = "skill 改动: 冒烟跑一遍被改的脚本"
+
+[[gates]]
+match = ["memory-bank/"]
+run   = ["git status --short memory-bank/"]
+note  = "知识库改动: 铁律 4 —— 代码改动须与 memory-bank/ 同步且同次提交, 别漏暂存"
