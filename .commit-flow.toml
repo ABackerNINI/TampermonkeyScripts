@@ -42,3 +42,8 @@ note  = "skill 改动: 冒烟跑一遍被改的脚本"
 match = ["memory-bank/"]
 run   = ["git status --short memory-bank/"]
 note  = "知识库改动: 铁律 4 —— 代码改动须与 memory-bank/ 同步且同次提交, 别漏暂存"
+
+[[gates]]
+match = ["AGENTS.md", "scripts/"]
+run   = ["python scripts/check_context_caps.py"]
+note  = "AGENTS.md 改动: IDE 注入上限 8000 字符 —— 超限尾部被静默截断(写了等于没写); 只改 scripts/ 时等同冒烟"
