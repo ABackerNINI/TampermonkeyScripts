@@ -196,9 +196,26 @@
 |---|---|
 | `E_ANCHOR_MISSING` | A 级锚点缺失（横幅点名缺了哪个） |
 | `E_COLUMN_UNKNOWN` | 12 列里有识别不出来的（横幅点名缺哪列） |
-| `ROW_CELL_COUNT_MISMATCH` | 列都在，但数据行单元格数与表头不符 |
+| `E_COLUMN_UNEXPECTED` | **出现了认不出的列**（站点加列）—— 主题没有它的槽位，一律不上妆（P69） |
+| `E_ROW_UNKNOWN` | **出现了认不出的行**（带 `colspan` 的分组/公告行）—— 同上（P69） |
+| `ROW_CELL_COUNT_MISMATCH` | 列都在，但数据行单元格数与表头不符（**逐行**比对，不是只看 `rows[1]`，见 P68） |
 | `E_STRUCTURE_CHANGED` | 运行中（MutationObserver）发现结构被改坏 |
 | `E_APPLY_FAILED` / `E_UNKNOWN_THEME` / `E_BOOT_FAILED` | 自身异常，一律落到 `Diag` |
+
+### 2.1 未知结构一律卸妆（2026-09-20 用户裁决）
+
+主题是「每列一个 `nth-child` 槽位」的排版 —— 站点**多一列**或**多一种行**，主题就无从知道该把它摆哪。
+裁决：**不猜**。认不出来就整体回退原站界面（`E_COLUMN_UNEXPECTED` / `E_ROW_UNKNOWN`）。
+
+- 为什么不照常上妆：硬上妆只有两种结果 —— 被摆到错误的槽位，或被 `overflow:hidden` 压成一坨，
+  **两者都等于屏蔽未知元素**，与「对未知元素不默认屏蔽」直接冲突。
+- 为什么不进等结构窗口：`STRUCT_CODES`（等 8 秒那个）只留给 `ROW_CELL_COUNT_MISMATCH`
+  （那是「A / A·GB 还没补完」的**时序问题**）；未知列/未知行等也没有用，拖 8 秒只会让人以为脚本卡死。
+- 检测实现：`detectColumns` 额外返回 `unknownCols`（表头里 `headerKey()` 返回空的列号）与
+  `spanRow`（数据行里任一单元格 `colSpan > 1` 的行号）；两者都排在 `!d.map` / `d.reason` 判定**之前**。
+- 剧本：`hdhome-ui-extracol` / `-grouprow` / `-grouprow-first` / `-laterow`。
+
+详见 `pitfalls.md` **P68 / P69**。
 
 回退动作：卸掉全部 `hdui-*` 样式与自定义属性 → 写 `hdui.lastError` → `console.error` →
 页面顶部**红色横幅**（含错误码 + 「重新尝试」「知道了」）→ 主题显示回落 `default`。
@@ -262,7 +279,7 @@
 
 | 用例 | 覆盖 |
 |---|---|
-| `tests/hdhomeui/check-hdui-static.js` | 元数据 / 最小权限 / 危险 API 禁令 / 无空 catch / 无 window 钩子 / 5 主题齐备且结构声明互异 / 契约定义完整 / **启动时机与默认行为**（`unload()` 停守卫、首次安装默认 `default`、铺底色早于 readyState 分支） |
+| `tests/hdhomeui/check-hdui-static.js` | 元数据 / 最小权限 / 危险 API 禁令 / 无空 catch / 无 window 钩子 / 5 主题齐备且结构声明互异 / 契约定义完整 / **启动时机与默认行为**（`unload()` 停守卫、首次安装默认 `default`、铺底色早于 readyState 分支）/ **§14 未知元素不屏蔽**：`#torrenttable` 重置 `color`、促销徽章兜底且排在枚举之前、`FONT_BLACK` 覆盖两种写法并同时管 `<font color>` 与 inline style、inline 白底兜底含 6 位 `#ffffff` |
 | `tests/hdhomeui/sim-hdui-function-parity.js` | 胶片墙上妆后功能基线快照逐字段不变、关键元素 hit-test 可点、RSS 点击恰好 1 次请求、搜索箱折叠与表单提交仍工作、局部重排不误判 |
 | `tests/hdhomeui/sim-hdui-theme-switch.js` | 版式签名两两不同、各套骨架特征、切回默认卸干净、记忆、面板点击、快捷键 |
 | `tests/hdhomeui/sim-hdui-structure-guard.js` | 缺列 / 行列数不符 / 缺锚点 ⇒ 回退 + 横幅 + 记录 + 零危险访问；空表体与无表页不算错；运行中改坏自动回退 |
@@ -274,11 +291,23 @@
 | `tests/hdhomeui/sim-hdui-layout-width.js` | 不撑宽页面 / 窄屏导航可点 / 片头吸顶 |
 | `tests/hdhomeui/sim-hdui-legacy-theme.js` | 旧主题 id 静默迁到胶片墙，不冒充结构错误 |
 | `tests/hdhomeui/sim-hdui-optional-columns.js` | A / A·GB 缺席或晚到都不误判（10 列仍上妆 / 补进来自动重摆 / 撤走不回退 / 半状态不弹横幅且自愈） |
+| `tests/hdhomeui/check-hdui-hide-allowlist.js` | **隐藏类声明白名单（静态，deny-by-default）**：白名单外的隐藏声明即红；禁 `!important` 隐藏、禁裸元素/通配、每条必须有理由；`contain` / `overflow` / `z-index` / `position:fixed` 一并白名单化 |
+| `tests/hdhomeui/sim-hdui-hide-allowlist.js` | **运行时 CSSOM 版白名单** + 每条规则的选择器必须锚定已知根（防 `table{display:none}` 级别事故） |
+| `tests/hdhomeui/sim-hdui-unknown-canary.js` | **未知元素金丝雀**（核心）：公告 / 新标签 / 新徽章 / 未登记图标 / 弹窗 / 提示框，一个都不许消失（8 道断言，见 P66）。三组：**加载期自带** / **运行期注入** / **非种子页**（我的·论坛·详情页 —— 主题那三条兜底是**全局规则**，在那里一样生效，不能只测种子页） |
+| `tests/hdhomeui/sim-hdui-overlay-safety.js` | 浮层/弹窗专项：fixed 弹窗位置不被 `contain` 改动、关闭按钮点得到、片头不压站内浮层、提示框可见态可读、错误横幅不吞站内消息条 |
+| `tests/hdhomeui/sim-hdui-unknown-tags.js` | 未知列 / 未知分组行一律卸妆 + 行结构逐行校验 + 新标签保留站点底色、未知图标有 SVG 兜底 |
 
 仿真剧本：`tests/lib/sim/hdhome-ui-page.js`（**结构化复刻、零私有数据**，
-变体 `hdhome-ui` / `-broken` / `-shape` / `-nocalc` / `-empty` / `-notable` / `-nonav`）；
-共享工具 `tests/lib/hdui-help.js`；`harness.withSim(fn, { scriptPath })` 支持测任意脚本
+变体 `hdhome-ui` / `-broken` / `-shape` / `-nocalc` / `-empty` / `-notable` / `-nonav` /
+`-unknown`（公告 + 新标签 + 未登记图标）/ `-unknown-notable`（**非种子页** + 公告）/ `-extracol` /
+`-grouprow` / `-grouprow-first` / `-laterow`）；
+共享工具 `tests/lib/hdui-help.js` 与 **`tests/lib/hdui-scan.js`**（五档渲染扫描 + 金丝雀探针）；
+`harness.withSim(fn, { scriptPath })` 支持测任意脚本
 （**缺省注入的是 PTAutoCheckIn**，测本脚本必须显式传 `{ scriptPath: H.HDUI_PATH }`）。
+
+> **判据纪律（写新断言时照抄）**：只看"元素存在/矩形非零"抓不到屏蔽 ——
+> 必须叠加 **hit-test**（防被裁被压）、**对比度 Δ≥40**（防隐形；取 20 会让"纯黑字压片基"蒙混过关）、
+> **图标至少一层是内联 SVG**（防被清成空白）。每条断言都要用"删掉对应生产兜底"反向验证一次。
 
 ---
 

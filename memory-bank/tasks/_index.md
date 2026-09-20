@@ -58,6 +58,19 @@
   **遗留**：非种子页无自动化覆盖（需用户提供整页样本）；真站 86/100 行置顶 ⇒ 金边过满待拍板。
   见 `TASK020-hdhomeui-real-site-fixes.md`。
 
+- [TASK021] HDHomeUI「未知元素不默认屏蔽」安全测试 + 未知结构一律卸妆 — **已完成实施（`2026.09.20.1`，待审核）**。
+  用户诉求：加测试保证站点改版冒出来的**消息弹窗 / 公告 / 新种子标签**不被主题屏蔽。
+  摸底：全脚本只有 3 条对外 `display:none`，`visibility/opacity/clip-path/content-visibility` 零使用 ——
+  **风险全在"元素还在、人却看不见"的 4 条隐蔽通道**（P66），此前零覆盖。
+  实施：① 新增 5 个用例（静态/运行时双层隐藏白名单 + 金丝雀 + 浮层专项 + 未知列行/标签）；
+  ② 新增共享基建 `tests/lib/hdui-scan.js`（五档扫描 + 金丝雀探针，从 gitignore 提升入库）；
+  ③ 顺带修 3 处真 Bug（`table.torrents{color:#000}` 未重置致新元素继承纯黑、
+     促销徽章无兜底致未登记 `pro_*` 变空白、inline 白底兜底漏 6 位 `#ffffff`）；
+  ④ 落地用户裁决「**未知结构一律卸妆**」：`E_COLUMN_UNEXPECTED` / `E_ROW_UNKNOWN`，
+     不进等结构窗口；行结构由只查 `rows[1]` 改为**逐行**校验（P68）。
+  ⑤ 每条新断言都跑了反例（8 条反例中 2 条一开始是绿的 ⇒ 判据已收紧）。
+  测试数 **29 → 34**，全绿。见 `pitfalls.md` P66–P69、`scripts/HDHomeUI.md` §2.1。
+
 - [TASK001] PTAutoCheckIn v2 实测校准并入正式版 — **已并入正式版**（1.10 完成），其余逐站实测校准继续（核心主线）
 - [TASK002] 修复 BTSchoolHelper 时魔数值恒为 0（P2）— 待实施
 - [TASK003] 修复 BTSchoolHelper 命名不一致（P10）— 待实施，N 键前置

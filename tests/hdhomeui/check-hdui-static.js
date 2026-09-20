@@ -494,8 +494,13 @@ ok(/input\.btn:hover[^}]*var\(--hdui-accent\)/.test(buildCssBlock),
 // 覆盖常见的写法(rgb/white/大小写/带不带空格), 删一条等于把那个写法漏出深色。
 const INLINE_OK = [
     'background-color: rgb(255, 255, 255)', 'background-color:rgb(255,255,255)',
-    'background-color: white', 'background-color: white', 'background-color: #fff', 'background-color:#fff',
-    'background-color: #FFF', 'background-color:#FFF'
+    'background-color: white', 'background-color:white', 'background-color: #fff', 'background-color:#fff',
+    'background-color: #FFF', 'background-color:#FFF',
+    // .26 补: 只有 3 位简写时, 站点写 6 位 `#ffffff` 一条都命中不了(公告/跑马灯最常这么写)。
+    // ⚠️ 漏这块时**漏白与对比度两条扫描都抓不到** —— 白底 + 黑字的对比度是满分(P67)。
+    'background: #ffffff', 'background:#ffffff',
+    'background-color: #ffffff', 'background-color:#ffffff',
+    'background: white', 'background:white'
 ];
 INLINE_OK.forEach(function (w) {
     ok(buildCssBlock.indexOf(w) >= 0,
@@ -503,6 +508,30 @@ INLINE_OK.forEach(function (w) {
 });
 ok(/td\.toolbar,html\[data-hdui-theme\] td\.navigation/.test(buildCssBlock),
     '常见 NexusPHP 容器类 td.toolbar / td.navigation 已压深(.14)');
+
+// ---------- 14. 未知元素不默认屏蔽(P66 / P67) ----------
+section('14. 未知元素不默认屏蔽: 继承色 / 图标兜底 / 写死的前景色');
+// ① 站点 `table.torrents{...color:#000}` 必须被重置 —— 否则种子表里任何**没有显式上色**的新元素
+//    (站点将来加的徽章/角标)都会继承纯黑, 在深色片基上等于隐形。已上色的元素都是自己的声明, 不受影响。
+ok(/html\[data-hdui-theme\] #torrenttable\{[^}]*color:var\(--hdui-fg\)/.test(buildCssBlock),
+    '#torrenttable 重置了 color(站点 table.torrents{color:#000} 会让新元素继承纯黑 = 隐形, P66)');
+// ② 促销徽章必须有**兜底**, 且兜底要排在 PRO_BADGES 枚举之前(同特异性下后写的胜出)。
+//    ⚠️ 选择器是拼出来的(`img.' + x[0] + '{content:`), 不能拿 `img.pro_50pctdown{` 当锚点。
+const proFbAt = iconCssBlock.indexOf('img[class*="pro_"]{content:');
+const proEnumAt = iconCssBlock.indexOf('PRO_BADGES.forEach');
+ok(proFbAt >= 0, '促销徽章有兜底图形(未登记的 pro_* 家族不该变成 16×16 空白, P66)');
+ok(proFbAt >= 0 && proEnumAt >= 0 && proFbAt < proEnumAt,
+    '促销兜底排在具体家族之前(否则会把 pro_free / pro_50pctdown 也盖成同一个兜底图形)');
+// ③ 站点写死的**前景色**要有人管: 底被压深了, 字还是黑的 = 隐形(公告/提示块高发区)。
+//    ⚠️ 选择器按 FONT_BLACK 数组生成, 源码里没有 `font[color="#000000"]` 这种字面量。
+const fontBlack = (src.match(/const FONT_BLACK = Object\.freeze\(\[([^\]]*)\]/) || [])[1] || '';
+ok(/'#000000'/.test(fontBlack) && /'#000'/.test(fontBlack),
+    'FONT_BLACK 覆盖 #000000 与 #000 两种写法(漏一种就漏一处黑字, P66)');
+ok(/FONT_BLACK\.map[\s\S]{0,200}font\[color=/.test(buildCssBlock),
+    '<font color> 的纯黑字有救援(P66)');
+ok(/FONT_BLACK\.map[\s\S]{0,300}\[style\*="color:? ?" \+ hex/.test(buildCssBlock)
+    || /\[style\*="color: ' \+ hex/.test(buildCssBlock),
+    'inline style 里的纯黑字也有救援(公告条常写 style="background:#fff;color:#000", P66)');
 
 console.log('');
 if (failed) {

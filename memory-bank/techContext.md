@@ -14,6 +14,11 @@
 覆盖安全向为主（见 P30），站点功能向由 `sim-hdhome-pagetext.js` 打样（已签/点击落地/入口消失三态，
 站点页面模型见 `tests/lib/sim/sites.js`，支持按 host 路由不同页面模型的假站）。另有真实页面 HTML 样本
 （`src/BTSchoolTorrentsTableSample.html`）+ 浏览器 F12 console 手动验证。测试约定与「如何测 userscript」技法见 `tests/README.md`。
+HDHomeUI 另有 **5 个「未知元素安全」用例**（`check/sim-hdui-hide-allowlist`、`sim-hdui-unknown-canary`、
+`sim-hdui-overlay-safety`、`sim-hdui-unknown-tags`）—— 它们是**反向（deny-by-default）断言**，
+专门回答「站点改版冒出来的东西还在不在」，与既有正向断言互补；配套共享基建
+`tests/lib/hdui-scan.js`（五档渲染扫描 + 金丝雀探针，从 gitignore 的 `_verify-hdui-real-render.js` 提升而来，
+不入库就永远无法回归）。详见 `pitfalls.md` P66–P69。
 - **CI**：`.github/workflows/ci.yml` —— GitHub Actions，`ubuntu-latest` × Node 20/22 矩阵：
   `node --check src/*.user.js` 语法检查 + `node tests/run-all.js -v` 跑全部测试。
   （旧版 ci.yml 是从一个 Python/uv/pytest 仓库复制过来忘了清理的，2026-09-18 已整体替换。）

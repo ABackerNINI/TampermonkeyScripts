@@ -269,6 +269,8 @@ function headRow(opts) {
         cells.push(`<td class="colhead" style="cursor: pointer;" id="calcTHeadA" title="A值">A</td>`);
         cells.push(`<td class="colhead" style="cursor: pointer;" id="calcTHeadAve" title="每GB的A值">A/GB</td>`);
     }
+    // 变体: 站点**新增了一列**(「热度」不在列字典里) —— 主题认不出它, 按裁决应整体不上妆
+    if (opts && opts.extraCol) cells.push(`<td class="colhead">热度</td>`);
     cells.push(`<td class="colhead"><a href="/torrents.php?sort=9&amp;type=desc">发布者</a></td>`);
     return `<tr>${cells.join('')}</tr>`;
 }
@@ -352,6 +354,15 @@ function torrentRow(i, opts) {
         + `&nbsp;<a title="${title}" href="/details.php?id=${id}&amp;hit=1"><b>${title}</b></a> `
         + `<img class="${promo}" src="/static/trans.gif" alt="${promoTitle}" title="${promoTitle}"><br>`
         + tags
+        // 变体: 站点改版后**新出现**的标签/徽章/图标(都不在脚本的清单里)。
+        // 判据是"它们仍然看得见", 不是"它们被画成什么样" —— 未知的东西不该被屏蔽。
+        + ((opts && opts.unknown && i === 0)
+            ? '<span class="tags tgznew" data-canary="tag-unknown" title="新分类">新分类</span>'
+            + '<span class="badge_new" data-canary="badge-unknown">全新徽章</span>'
+            + '<img class="c_znewcat" data-canary="icon-unknown-cat" src="/static/trans.gif"'
+            + ' style="background-image:url(/static/catsprites.png)" alt="newcat">'
+            + '<img class="pro_znewpromo" data-canary="icon-unknown-pro" src="/static/trans.gif" alt="newpromo">'
+            : '')
         + `<span style="float:left;padding: 2px;line-height: 20px;">模拟副标题/别名 Fixture</span></td>`
         + `<td width="20" class="embedded" valign="middle"><table><tbody><tr>`
         + `<td class="embedded"><div style="text-align:right;margin-right:3px;width:50px">`
@@ -369,13 +380,36 @@ function torrentRow(i, opts) {
         + `<td class="rowfollow" align="center"><b><a href="/details.php?id=${id}&amp;hit=1&amp;dllist=1#seeders">${seeders}</a></b></td>`
         + `<td class="rowfollow"><b><a href="/details.php?id=${id}&amp;hit=1&amp;dllist=1#leechers">${leechers}</a></b></td>`
         + `<td class="rowfollow"><a href="/viewsnatches.php?id=${id}"><b>${100 + i}</b></a></td>`
-        + ((opts && opts.rowDrop) ? '' : `<td align="center">-</td>`)
+        // lateRowDrop: 只有**中间某一条**行少一格(模拟外部脚本补列补到一半, 但第一行已经补完)
+        + ((opts && (opts.rowDrop || (opts.lateRowDrop && i === 5))) ? '' : `<td align="center">-</td>`)
         + ((opts && opts.noCalc) ? '' : `<td class="rowfollow" data-calc-a="${(seeders / 4).toFixed(2)}">${(seeders / 4).toFixed(2)}</td>`
             + `<td class="rowfollow" data-calc-ave="0.08"><span>0.08</span></td>`)
+        + ((opts && opts.extraCol) ? `<td class="rowfollow" data-canary="col-unknown">${900 + i}</td>` : '')
         + `<td class="rowfollow"><span class="nowrap"><a href="/userdetails.php?id=${120000 + i}" class="Uploader_Name"><b>simuploader</b></a>`
         + (i % 5 === 0 ? '<img class="star" src="/static/trans.gif" alt="Donor" style="margin-left: 2pt">' : '')
         + `</span></td>`
         + `</tr>`;
+}
+
+/**
+ * 站点公告 / 通知的三种常见写法(bgcolor 属性 / inline 白底黑字 / marquee)。
+ * 主题会把它们的**底**压深(那是刻意的), 但**写死的前景色**如果不管, 就是黑字黑底 = 隐形。
+ * 这三个 data-canary 就是给「未知元素不被软屏蔽」当标本用的。
+ */
+function announceBlock() {
+    return `<table width="1100" class="main" border="0" cellspacing="0" cellpadding="0"><tbody><tr>`
+        + `<td class="embedded">`
+        + `<table bgcolor="#ffffcc" width="100%"><tbody><tr><td class="text">`
+        + `<font color="#000000" data-canary="ann-bgcolor">站点公告: 本周五例行维护</font></td></tr></tbody></table>`
+        + `<div style="background:#fff;color:#000;padding:6px" data-canary="ann-inline">通知: 新的上传规则已生效</div>`
+        + `<marquee style="color:#000;background:#ffffff" data-canary="ann-marquee">跑马灯公告</marquee>`
+        + `</td></tr></tbody></table>`;
+}
+
+/** 站点插进种子表的分组行(带 colspan) —— 不是数据行, 主题不该把它当数据行排版 */
+function groupRow() {
+    return `<tr class="group"><td class="rowfollow" colspan="20" align="left" data-canary="row-group">`
+        + `<b>置顶分组</b></td></tr>`;
 }
 
 function pager() {
@@ -392,18 +426,30 @@ function outerBody(opts) {
         + `<b><a href="/userdetails.php?id=100001"><font color="white">离新人考核结束还有 <span title="2026-10-18">29天</span></font></a></b>`
         + `</td></tr></tbody></table><p></p>`;
     if (!o.noTable) {
-        body += `<table width="1100" class="main" border="0" cellspacing="0" cellpadding="0"><tbody><tr><td class="embedded">`
+        // groupRow = 分组行插在中间; groupRowFirst = 插在第一条数据行之前(rows[1]) ——
+        // 后者是旧代码唯一会检查的位置, 前者才暴露"只查第一行"的盲区。
+        const rows = [];
+        for (let i = 0; i < ROWS; i++) {
+            if (o.groupRowFirst && i === 0) rows.push(groupRow());
+            if (o.groupRow && i === 3) rows.push(groupRow());
+            if (!o.empty) rows.push(torrentRow(i, o));
+        }
+        body += (o.unknown ? announceBlock() : '')
+            + `<table width="1100" class="main" border="0" cellspacing="0" cellpadding="0"><tbody><tr><td class="embedded">`
             + searchBox()
             + pager()
             + `<table class="torrents" cellspacing="0" cellpadding="5" width="100%" id="torrenttable"><tbody>`
             + headRow(o)
-            + (o.empty ? '' : Array.from({ length: ROWS }, function (_, i) { return torrentRow(i, o); }).join(''))
+            + rows.join('')
             + `</tbody></table>`
             + `<script>${RSS_JS}</script>`
             + pager()
             + `</td></tr></tbody></table>`;
     } else {
-        body += `<table width="1100" class="main"><tbody><tr><td class="embedded"><h1>模拟详情页(无种子表)</h1></td></tr></tbody></table>`;
+        // 非种子页(我的/论坛/详情页)同样要吃公告: 主题的 `[bgcolor]` / inline 白底 / `font[color]`
+        // 三条兜底都是**全局规则**, 在这里一样生效 —— 未知元素的风险不在种子表专属区。
+        body += (o.unknown ? announceBlock() : '')
+            + `<table width="1100" class="main"><tbody><tr><td class="embedded"><h1>模拟详情页(无种子表)</h1></td></tr></tbody></table>`;
     }
     return body;
 }
@@ -437,7 +483,19 @@ const SCENARIOS = {
     'hdhome-ui-nocalc': () => page({ noCalc: true }),
     'hdhome-ui-empty': () => page({ empty: true }),
     'hdhome-ui-notable': () => page({ noTable: true }),
-    'hdhome-ui-nonav': () => page({ noNav: true })
+    'hdhome-ui-nonav': () => page({ noNav: true }),
+    // 站点改版: 页面上一上来就有公告 + 新标签 / 新徽章 / 未登记的类别图标 / 未登记的促销徽章
+    'hdhome-ui-unknown': () => page({ unknown: true }),
+    // 站点加了一列(认不出) —— 按裁决: 未知结构一律卸妆
+    'hdhome-ui-extracol': () => page({ extraCol: true }),
+    // 站点在种子表**中间**插了一条分组行(带 colspan)
+    'hdhome-ui-grouprow': () => page({ groupRow: true }),
+    // 分组行插在第一条数据行之前(rows[1]) —— 旧代码唯一会查到的位置
+    'hdhome-ui-grouprow-first': () => page({ groupRowFirst: true }),
+    // 只有第 6 条数据行少一格(第一行是好的) —— 专抓"行结构只查 rows[1]"的盲区
+    'hdhome-ui-laterow': () => page({ lateRowDrop: true }),
+    // 非种子页(我的/论坛/详情页) + 公告 —— 主题那三条全局兜底在这里一样生效
+    'hdhome-ui-unknown-notable': () => page({ unknown: true, noTable: true })
 };
 
 module.exports = { SCENARIOS, page, calcHeadCells, calcRowCells };

@@ -67,7 +67,17 @@ flowchart TD
 9. **铁律：私有资源与凭据**——`resources-do-not-track/`（私有站点另存为的整页网页）**永不被 Git 追踪**，
    其中的 **passkey / authkey / token / cookie / uid 禁止以任何形式外泄**（不进回复、日志、截图、提交、
    issue、测试夹具、示例 HTML）；只描述结构、值脱敏为 `***`。详见 `conventions.md` 第 0.5 节、`pitfalls.md` P32。
-10. **HDHomeUI 换肤铁律（2026-09-19 起）**——它是**纯样式层**：不增删/移动/克隆站内节点、不挂事件、不改 `href`，
+10. **HDHomeUI「未知元素不默认屏蔽」铁律（2026-09-20 起）**——站点改版冒出来的东西
+    （**消息弹窗 / 公告条 / 新的种子标签 / 未登记的类别·促销图标**）**一律不许屏蔽**。
+    ⚠️ 屏蔽不止 `display:none` 一种写法：清掉 `background-image` 不补 content（变空白）、
+    只压深背景不管**写死的前景色**（黑字黑底 = 隐形）、`overflow` 裁切、`z-index` 压住、
+    `contain` 改定位基准 —— 全都算，且**元素还在、矩形非零**，只看"存在性"抓不到（P66）。
+    判据必须叠加：**hit-test 命中自身** + **对比度 Δ≥40** + **图标至少一层是内联 SVG**。
+    隐藏类声明走**白名单（deny-by-default）**：白名单外即红，且每条必须写理由
+    （`check/sim-hdui-hide-allowlist` 双层把守）。
+    **未知结构（认不出的列 / 带 colspan 的分组行）一律卸妆**（`E_COLUMN_UNEXPECTED` / `E_ROW_UNKNOWN`），
+    不猜、不进等窗口 —— 因为主题是 nth-child 槽位排版，硬上妆只会把未知内容摆错位或压成一坨（P69）。
+11. **HDHomeUI 换肤铁律（2026-09-19 起）**——它是**纯样式层**：不增删/移动/克隆站内节点、不挂事件、不改 `href`，
     站内功能靠「功能基线快照 + hit-test」两道仿真断言守住；页面结构不符时**必须提示并回退默认 UI**，
     禁止带错上妆。主题必须有**可辨识的布局骨架**（不能只换配色），由 `sim-hdui-theme-switch.js` 逐条钉死。
     **入口必须内嵌**——量 `ul#mainmenu` 末尾空档摆成导航栏的小文字钮 `界面 · <主题名> ▾`，禁用 fixed 悬浮 FAB
@@ -79,4 +89,4 @@ flowchart TD
     补列补到一半（表头插了、行没插完 ⇒ `ROW_CELL_COUNT_MISMATCH`）**先等窗口**再决定要不要弹横幅。
     判定口诀：**「点重试就好了」= 时序问题，不是结构问题**。由 `sim-hdui-optional-columns.js` 钉死。
     详见 `scripts/HDHomeUI.md`、`tasks/TASK018-hdhome-ui-themes.md` 与 `pitfalls.md` P33。
-11. **测试**：`tests/` 是开发期测试区（零依赖，无测试框架）——按脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个测试，以退出码表达结果；`node tests/run-all.js` 一次跑完全部。改 PTAutoCheckIn 后必跑 `node tests/ptautocheckin/check-ptac-budget.js`（校验超时预算不变式 + 状态阶梯结构 + 不透明步骤的 `budgetMs` 声明），必须全绿；新增 `function` 步骤/自定义 `alreadyCheck` 时**必须**声明 `budgetMs` / `alreadyCheckBudgetMs`（同步判定写 `0`）。测试约定与「如何测 userscript」技法见 `tests/README.md`，原理见 `pitfalls.md` P28。
+12. **测试**：`tests/` 是开发期测试区（零依赖，无测试框架）——按脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个测试，以退出码表达结果；`node tests/run-all.js` 一次跑完全部。改 PTAutoCheckIn 后必跑 `node tests/ptautocheckin/check-ptac-budget.js`（校验超时预算不变式 + 状态阶梯结构 + 不透明步骤的 `budgetMs` 声明），必须全绿；新增 `function` 步骤/自定义 `alreadyCheck` 时**必须**声明 `budgetMs` / `alreadyCheckBudgetMs`（同步判定写 `0`）。测试约定与「如何测 userscript」技法见 `tests/README.md`，原理见 `pitfalls.md` P28。

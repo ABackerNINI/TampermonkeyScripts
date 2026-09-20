@@ -2,8 +2,8 @@
 // @name         HDHomeUI
 // @name:zh-CN   HDHome 界面主题套件
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.19.25
-// @description  HDHome 界面主题: 胶片墙(齿孔片边 · 帧号 · 做种金), 可一键切回原站默认。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); A/A·GB 两列由其它脚本注入, 有或没有都能上妆、补进来会自动重摆; 搜索 / 下拉框 / 按钮等表单元素全部深色化(站点的白底在深色片基上刺眼); 标题格四个动作按钮(豆瓣/IMDb/下载/收藏)跟在标题后面同行; 导航栏页签(首页/论坛等)清掉站点的浅灰底; 站点自绘的图标(类别/促销/置顶图钉/推荐星/排序箭头/信箱等)全部换成主题 SVG; 表头六个指标列的概念图标(评论/存活/大小/做种/下载/完成)用概念图而非上下方向图标, 避免与「激活排序方向」混淆; 下载进度指示器的英文 "Leeching" 替换为中文「下载中」; 分享率、魔力值等统计值与数据行的暗红标记按主题重新上色(站点原色在深色底上几乎看不见); 滚动条 / 下拉弹层 / 自动填充等浏览器自带界面一并深色化; 非种子页(我的/论坛等)同样铺深色底, 站点用 inline style 画的白底/分页/工具栏容器一并压深, 不留大面积浅色块; 页面结构异常时先等结构就绪, 超时才提示并回退默认界面。
+// @version      2026.09.20.1
+// @description  HDHome 界面主题: 胶片墙(齿孔片边 · 帧号 · 做种金), 可一键切回原站默认。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); A/A·GB 两列由其它脚本注入, 有或没有都能上妆、补进来会自动重摆; 搜索 / 下拉框 / 按钮等表单元素全部深色化(站点的白底在深色片基上刺眼); 标题格四个动作按钮(豆瓣/IMDb/下载/收藏)跟在标题后面同行; 导航栏页签(首页/论坛等)清掉站点的浅灰底; 站点自绘的图标(类别/促销/置顶图钉/推荐星/排序箭头/信箱等)全部换成主题 SVG; 表头六个指标列的概念图标(评论/存活/大小/做种/下载/完成)用概念图而非上下方向图标, 避免与「激活排序方向」混淆; 下载进度指示器的英文 "Leeching" 替换为中文「下载中」; 分享率、魔力值等统计值与数据行的暗红标记按主题重新上色(站点原色在深色底上几乎看不见); 滚动条 / 下拉弹层 / 自动填充等浏览器自带界面一并深色化; 非种子页(我的/论坛等)同样铺深色底, 站点用 inline style 画的白底/分页/工具栏容器一并压深, 不留大面积浅色块; 页面结构异常时先等结构就绪, 超时才提示并回退默认界面; 出现认不出来的列或行(分组行 / 公告行 / 新徽章)时不猜、直接回退原站界面, 绝不把未知内容画到错误的槽位或压成空白。
 // @author       ABacker
 // @license      GNU GPL-3.0
 // @match        *://*.hdhome.org/*
@@ -49,8 +49,11 @@
     }));
     // 结构类错误码: 这类失败**先等一个窗口**再决定要不要弹横幅 —— 外部脚本补列是有时间差的,
     // 表头插了、数据行还没插完的瞬间就会命中 ROW_CELL_COUNT_MISMATCH, 直接弹横幅是误报。
-    // 只等这一个码: E_COLUMN_UNKNOWN / E_ANCHOR_MISSING 都是"必需的东西没了",
-    // 那是真坏了, 等也没用(拖 8 秒才报错只会让人以为脚本卡死), 直接回退。
+    // 只等这一个码: E_COLUMN_UNKNOWN / E_ANCHOR_MISSING / E_COLUMN_UNEXPECTED / E_ROW_UNKNOWN
+    // 都是"结构真的变了", 等也没用(拖 8 秒才报错只会让人以为脚本卡死), 直接回退。
+    //   · E_COLUMN_UNEXPECTED = 出现了认不出的**列**(站点加列)
+    //   · E_ROW_UNKNOWN       = 出现了认不出的**行**(带 colspan 的分组/公告行)
+    //   —— 两者都不猜: 主题是 nth-child 槽位排版, 未知成员没有槽位, 一律不上妆。
     const STRUCT_CODES = Object.freeze(['ROW_CELL_COUNT_MISMATCH']);
     // 配置类错误: 不是页面结构坏了, 是 GM 存储里的值失效(主题被删 / 被手改成乱值)。
     // 与结构类分开 —— 结构类要「等窗口」, 配置类等也没用; 横幅措辞也不一样(见 showAlert)。
@@ -256,6 +259,13 @@
 
     /** 未命中任何家族时的兜底色(见 iconCss 里那条 `[class*="c_"]`) */
     const CAT_FALLBACK_COLOR = '#8b857c';
+    /**
+     * 促销徽章兜底色。站点会随改版新增 `pro_*` 家族, 而 PRO_BADGES 是**按名枚举**的 ——
+     * 没登记的那个新徽章会被 `#torrenttable img[class*="pro_"]{background:none}` 压成 16×16,
+     * 却**没有任何可显示的内容** ⇒ 空白方块 / 雪碧图碎片。这就是「新标签被屏蔽」的典型路径。
+     * 与类别图标同一套纪律: 先给一个**兜底图形**, 具体家族再逐个覆盖。
+     */
+    const PRO_FALLBACK_COLOR = '#c9a86a';
 
     /**
      * 促销徽章: 真站促销是 `<img class="pro_50pctdown|pro_free|pro_free2up">`(36×11 雪碧图),
@@ -423,6 +433,19 @@
     ]);
 
     /**
+     * .26 纯黑字救援(「软屏蔽」里最常见的一种)。
+     *
+     * 公告条 / 提示块在站点上通常是「浅底 + 黑字」(`<font color="#000000">` 或 `style="...;color:#000"`)。
+     * 主题把它们的**底**压成了深色(`[bgcolor]` 与 `[style*="background:#fff"]` 两条兜底),
+     * 但**写死的前景色没人管** ⇒ 黑字黑底: 内容还在 DOM 里、矩形也非零, 人就是看不见。
+     * 这正是"看不见也算屏蔽", 而且漏白/近白/残留装饰三档扫描全都扫不出来(它们只看背景)。
+     *
+     * ⚠️ inline style 那条是**子串匹配**, `color:#000` 会连 `color:#0000ff` 一起命中 ——
+     *    代价是"纯蓝被提亮成前景色", 换来"纯黑不再隐形"。取可见性优先(不可见 = 信息全丢)。
+     */
+    const FONT_BLACK = Object.freeze(['#000000', '#000', 'black', 'rgb(0, 0, 0)', 'rgb(0,0,0)']);
+
+    /**
      * 生成内联 SVG 的 data URI(实心 + 指定色)。
      * ⚠️ 必须带 width/height: 这些图是给 `img{content:url(...)}` 用的,
      *    SVG 只写 viewBox 的话**没有固有尺寸**, 替换内容后 img 宽高会算成 0,
@@ -482,6 +505,13 @@
         });
         // 促销徽章(真站是 img.pro_*, 不是标签)。站点用 `background:url(icons.gif)` 简写(无 !important),
         // 这里也一并显式清掉, 免得站点改版加上 !important 后旧账重来。
+        // ⚠️ 兜底必须先写: 站点新增的 pro_* 家族没登记在 PRO_BADGES 里, 不兜底就是 16×16 的空白
+        //    (上面那条 filmCss 的 `img[class*="pro_"]{background:none}` 只清底不换图)。
+        //    与类别图标同一套纪律: 兜底排在所有具体家族之前(同特异性下后写的胜出)。
+        out.push('html[data-hdui-theme] #torrenttable img[class*="pro_"]{content:'
+            + iconUri('medal', PRO_FALLBACK_COLOR)
+            + ';background-image:none !important;background-size:contain;'
+            + 'background-repeat:no-repeat;background-position:center;}');
         PRO_BADGES.forEach(function (x) {
             out.push('html[data-hdui-theme] #torrenttable img.' + x[0] + '{content:'
                 + iconUri(x[1], x[2]) + ';background-image:none !important;}');
@@ -770,6 +800,8 @@ H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-ga
             tdRule(m, ['comments', 'alive', 'a', 'ave'], 'font-size:11.5px;color:var(--hdui-dim);'),
             tdRule(m, ['leechers', 'snatched'], 'font-size:13px;color:var(--hdui-muted);'),
             tdSel(m, 'size') + '{font-size:12px;color:var(--hdui-muted);white-space:nowrap;}',
+            // 站点用 <br> 把「8.15GB」和「-」拆成两行; 数值列改等宽单行后它只是多余的行距。
+            // ⚠️ 只隐藏**这一个列里的** <br>(选择器带列号), 不是通杀 —— 隐藏必须有理由且够具体。
             tdSel(m, 'size') + ' br{display:none;}',
             // 做种: 唯一的大字锚点 + 内嵌占比条
             tdSel(m, 'seeders') + '{display:block;font-size:20px;line-height:1.1;font-weight:600;color:var(--hdui-accent);}',
@@ -932,18 +964,24 @@ H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-ga
  *   于是脚本又补了一遍 ⇒ 真站渲染成「发布者 发布者 ↓」。这个标志位就是修这个的抓手。
  */
 function detectColumns(table) {
+    const EMPTY_SHAPE = { unknownCols: [], spanRow: -1 };
     const body = table.tBodies && table.tBodies[0];
-    if (!body) return { map: null, missing: REQUIRED_COLUMNS.slice(), absent: [], headText: {}, reason: 'TABLE_NO_TBODY' };
+    if (!body) return Object.assign({ map: null, missing: REQUIRED_COLUMNS.slice(), absent: [], headText: {}, reason: 'TABLE_NO_TBODY' }, EMPTY_SHAPE);
     const head = body.rows[0];
-    if (!head) return { map: null, missing: REQUIRED_COLUMNS.slice(), absent: [], headText: {}, reason: 'TABLE_NO_HEAD' };
+    if (!head) return Object.assign({ map: null, missing: REQUIRED_COLUMNS.slice(), absent: [], headText: {}, reason: 'TABLE_NO_HEAD' }, EMPTY_SHAPE);
     const map = {};
     const headText = {};
+    const unknownCols = [];
     const cells = head.cells;
     for (let i = 0; i < cells.length; i++) {
         const key = headerKey(cells[i]);
         if (key && map[key] === undefined) {
             map[key] = i + 1;
             headText[key] = (cells[i].textContent || '').trim().length > 0;
+        } else if (!key) {
+            // 认不出的列。主题是按「每列一个 nth-child 槽位」排版的, 多出来的列**没有槽位** ——
+            // 硬上妆就等于把它画到错误的槽位(或压成一坨), 所以交给 validateContract 一律回退。
+            unknownCols.push(i + 1);
         }
     }
     const missing = [];
@@ -954,14 +992,30 @@ function detectColumns(table) {
     for (let i = 0; i < OPTIONAL_COLUMNS.length; i++) {
         if (map[OPTIONAL_COLUMNS[i]] === undefined) absent.push(OPTIONAL_COLUMNS[i]);
     }
-    // 数据行必须与表头列数一致, 否则说明站点改版导致错位(也可能是外部脚本补列补到一半)
+    // 分组行 / 公告行: 单元格带 colspan 的行**不是数据行**(站点常这么插「置顶分组」「没有种子」)。
+    // 它一旦被当成数据行 flex 化, 内容会被压成一坨 —— 属于未知结构, 一律回退。
+    let spanRow = -1;
+    for (let i = 1; i < body.rows.length; i++) {
+        const cs = body.rows[i].cells;
+        for (let j = 0; j < cs.length; j++) {
+            if ((cs[j].colSpan || 1) > 1) { spanRow = i; break; }
+        }
+        if (spanRow >= 0) break;
+    }
+    // 数据行必须与表头列数一致, 否则说明站点改版导致错位(也可能是外部脚本补列补到一半)。
+    // ⚠️ 必须**逐行**查: 旧代码只看 rows[1], 而补列是逐行插的 —— 第一行补完了、后面还没补的
+    //    那一刻会被判成"结构正常", 于是把 10 列的行硬塞进 12 列的槽位(列全错位)。
     let shapeOk = true;
-    if (body.rows.length > 1 && body.rows[1].cells.length !== cells.length) shapeOk = false;
+    for (let i = 1; i < body.rows.length; i++) {
+        if (body.rows[i].cells.length !== cells.length) { shapeOk = false; break; }
+    }
     return {
         map: missing.length ? null : map,
         missing: missing,
         absent: absent,
         headText: headText,
+        unknownCols: unknownCols,
+        spanRow: spanRow,
         reason: shapeOk ? '' : 'ROW_CELL_COUNT_MISMATCH',
         headCount: cells.length
     };
@@ -985,6 +1039,25 @@ function detectColumns(table) {
 
         const d = detectColumns(table);
         const shapeMsg = '种子表数据行列数与表头不一致(表头 ' + d.headCount + ' 列)';
+        // ---- 未知结构一律卸妆(2026.09.20 用户裁决) ----
+        // 主题是「每列一个 nth-child 槽位」的排版: 站点多一列 / 多一种行, 主题就无从知道该把它摆哪 ——
+        // 硬上妆的结果要么是内容被摆到错误的槽位, 要么被 overflow 压成一坨(都等于"被屏蔽")。
+        // 「对未知元素不默认屏蔽」的底线是**不猜**: 认不出来就整体不上妆, 把页面还给原站。
+        // ⚠️ 这两类**不进等结构窗口** —— 它们不是"A / A·GB 还没补完"那种时序问题, 等也没有用。
+        if (d.unknownCols && d.unknownCols.length) {
+            return {
+                ok: false, code: 'E_COLUMN_UNEXPECTED',
+                detail: '种子表出现未识别的列(第 ' + d.unknownCols.join('、') + ' 列, 共 ' + d.headCount + ' 列)',
+                colMap: null, headText: {}
+            };
+        }
+        if (d.spanRow >= 0) {
+            return {
+                ok: false, code: 'E_ROW_UNKNOWN',
+                detail: '种子表第 ' + (d.spanRow + 1) + ' 行不是数据行(单元格带 colspan, 可能是分组/公告行)',
+                colMap: null, headText: {}
+            };
+        }
         // 必需列识别不全 -> 拒绝上妆(列一旦错位, 主题会把数据摆到错误的槽位)
         if (!d.map) {
             const detail = d.reason === 'ROW_CELL_COUNT_MISMATCH'
@@ -1089,9 +1162,18 @@ function detectColumns(table) {
             + 'html[data-hdui-theme] [style*="background-color:#fff"],'
             + 'html[data-hdui-theme] [style*="background-color: #FFF"],'
             + 'html[data-hdui-theme] [style*="background-color:#FFF"],'
-            + 'html[data-hdui-theme] [style*="background: rgb(255, 255, 255)"],'
+            +             'html[data-hdui-theme] [style*="background: rgb(255, 255, 255)"],'
             + 'html[data-hdui-theme] [style*="background: #fff"],'
-            + 'html[data-hdui-theme] [style*="background:#fff"]{background:var(--hdui-panel) !important;}',
+            + 'html[data-hdui-theme] [style*="background:#fff"],'
+            // ⚠️ .26 补: 上面只有 3 位简写, 站点写 6 位 `#ffffff` 时**一条都命中不了**
+            //    (公告条 / 跑马灯最常这么写) —— 漏一块白底, 上面的黑字反而"看得见",
+            //    于是漏白扫描和对比度扫描都发现不了它, 只有人眼能看到。
+            + 'html[data-hdui-theme] [style*="background: #ffffff"],'
+            + 'html[data-hdui-theme] [style*="background:#ffffff"],'
+            + 'html[data-hdui-theme] [style*="background-color: #ffffff"],'
+            + 'html[data-hdui-theme] [style*="background-color:#ffffff"],'
+            + 'html[data-hdui-theme] [style*="background: white"],'
+            + 'html[data-hdui-theme] [style*="background:white"]{background:var(--hdui-panel) !important;}',
             // 常见 NexusPHP 容器类: toolbar(顶部工具条) / navigation(分页) 等仍是浅色
             'html[data-hdui-theme] td.toolbar,html[data-hdui-theme] td.navigation{background:var(--hdui-panel);}',
             // 分页页码 + 当前页高亮: 站点是 `p[align=center] a / b`, 已设了 fg/muted/accent,
@@ -1109,6 +1191,15 @@ function detectColumns(table) {
             FONT_DARK_RED.map(function (hex) {
                 return 'html[data-hdui-theme] font[color="' + hex + '"]';
             }).join(',') + '{color:#e5705f;}',
+            // ---- 纯黑字: 底已被压深, 字还是黑的 = 隐形(公告/提示块高发区) ----
+            // `<font color>` 是精确属性匹配, 安全; inline style 只能子串匹配(见 FONT_BLACK 的注释)。
+            FONT_BLACK.map(function (hex) {
+                return 'html[data-hdui-theme] font[color="' + hex + '"]';
+            }).join(',') + '{color:var(--hdui-fg);}',
+            FONT_BLACK.map(function (hex) {
+                return 'html[data-hdui-theme] [style*="color: ' + hex + '"],'
+                    + 'html[data-hdui-theme] [style*="color:' + hex + '"]';
+            }).join(',') + '{color:var(--hdui-fg) !important;}',
             // ⚠️ 必须**一条一色**分开写: 把 7 个选择器并成一条、声明块里连写 7 个 color,
             //    只有最后一个生效(前面的被覆盖), 7 个统计值会变成同一个色。
             INFO_COLORS.map(function (x) {
@@ -1297,7 +1388,13 @@ function detectColumns(table) {
             'html[data-hdui-theme] p[align="center"]{color:var(--hdui-muted);font-size:var(--hdui-fs-sm);}',
             'html[data-hdui-theme] p[align="center"] a{color:var(--hdui-link);}',
             'html[data-hdui-theme] p[align="center"] a:hover{color:var(--hdui-accent);}',
-            'html[data-hdui-theme] #torrenttable{width:100%;border-collapse:collapse;background:transparent;}',
+            // ⚠️ color 不能省: 站点 `table.torrents{...color:#000}` 是**格子自己**的声明,
+            //    而主题只重置了 background/border/padding, 没管 color ⇒
+            //    种子表里任何**没有显式上色**的元素(站点将来新增的徽章 / 角标 / 提示)都会继承到纯黑,
+            //    在深色片基上等于隐形。已上色的那些(标题链接 / 数值列 / data-hdui-prog / font.color_*)
+            //    都是自己的声明, 继承值压不过它们, 不受影响。
+            'html[data-hdui-theme] #torrenttable{width:100%;border-collapse:collapse;'
+            + 'background:transparent;color:var(--hdui-fg);}',
             // 把站点的 td 默认边框/底色/内边距全抹掉, 防止 card/grid 里漏出浅色格线
             'html[data-hdui-theme] table.torrents td,html[data-hdui-theme] #torrenttable td{border:0;padding:0;background:transparent;vertical-align:middle;}',
             // ⚠️ 列头这两条不能省: 站点 `td.colhead{color:#ffffff;font-weight:bold}` 是**格子自己的**声明,

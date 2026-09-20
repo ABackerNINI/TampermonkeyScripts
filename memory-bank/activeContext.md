@@ -4,7 +4,31 @@
 
 ## 当前工作焦点
 
-**HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.19.24`，2026-09-19 新建，TASK018/TASK019）——HDHome 界面主题：胶片墙。**
+**HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.20.1`，2026-09-19 新建，TASK018/TASK019）——HDHome 界面主题：胶片墙。**
+**2026-09-20 `.26`（已改码，**待审核**）——「未知元素不默认屏蔽」专项（用户诉求）+ T6 基建入库：**
+诉求：加测试保证**站点改版冒出来的东西（消息弹窗 / 公告 / 新种子标签）不被主题屏蔽**。
+先摸底：**全脚本只有 3 条对外 `display:none`**（两个 `<br>` + 搜索箱折叠小图标），
+`visibility/opacity/clip-path/content-visibility/text-indent/font-size:0` **零使用** ⇒ 立白名单成本最低。
+真正的风险是 4 条隐蔽通道（**此前一条测试都没有**，P66），实测抓到 **2 个真 Bug**：
+① **站点 `table.torrents{...color:#000}` 从未被重置** —— 主题只写了 background/border/padding。
+   已上色的元素（标题链接/数值列/`td[data-hdui-prog]`/`font.color_*`）都是**自己的声明**所以一直没暴露，
+   但站点将来在种子表里加的任何新徽章都会**继承纯黑** ⇒ 深色片基上隐形。修：`#torrenttable{...color:var(--hdui-fg)}`。
+② **促销徽章没有兜底** —— `PRO_BADGES` 按名枚举，而 filmCss 的通配
+   `#torrenttable img[class*="pro_"]{background:none}` 只清底不换图 ⇒ 站点新增 `pro_xxx` = 16×16 空白。
+   修：枚举**之前**补一条兜底（与类别图标同一纪律：兜底必须排在具体家族之前）。
+③ 顺带补上 inline 白底兜底漏掉的 **6 位写法 `#ffffff`**（公告/跑马灯最常这么写；
+   漏白与对比度两条扫描**都抓不到它**，因为白底+黑字对比度是满分 —— P67）。
+**结构裁决（用户）：未知结构一律卸妆** —— 新增 `E_COLUMN_UNEXPECTED`（认不出的列）/
+`E_ROW_UNKNOWN`（带 colspan 的分组行），**不进等结构窗口**（不是时序问题）。
+顺带修 `detectColumns` 只查 `rows[1]` 的盲区 ⇒ 改**逐行**校验（P68）。
+新增 5 个用例 + 1 个共享基建，共 **34/34 全绿**：
+`check/sim-hdui-hide-allowlist`（静态/运行时双层白名单）、`sim-hdui-unknown-canary`（金丝雀 8 道断言）、
+`sim-hdui-overlay-safety`（浮层专项）、`sim-hdui-unknown-tags`（卸妆 + 标签前向兼容）；
+`tests/lib/hdui-scan.js`（五档扫描 + 金丝雀探针，从 gitignore 的 `_verify-hdui-real-render.js` 提升入库）。
+**实测结论：`contain:inline-size` 不改变 fixed 后代的定位基准（改成 strict 才会）——
+T4 的位置断言把它钉死了。**
+**判据纪律**：只看"元素存在/矩形非零"抓不到屏蔽，必须叠 hit-test + 对比度 Δ≥40 + 图标至少一层内联 SVG；
+本轮 8 条反例里有 2 条一开始是绿的（判据太松），靠反例才发现。
 **2026-09-19 `.20`（已改码，**已提交**）——第四轮用户实拍，4 个红框问题全部修掉（P58/P59/P60）：**
 ① **标题栏错位**（12 列全部 `Δl=10`）：片头 `padding:10px 0 9px`（左右 0）vs 数据行 `padding:7px 10px`
    （左右 10）—— **两条独立 flex 行的横向内边距不等**。片头补成 `10px 10px 9px` ⇒ 实测 `Δl: 10 → 0`。

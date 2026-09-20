@@ -122,6 +122,7 @@ chrome --headless=new \
 | `lib/sim/cdp.js` | 迷你 CDP 客户端（用 Node 22 内置 `WebSocket`，零依赖） |
 | `lib/sim/harness.js` | `withSim()`：起服务器 + 起一次性 Chrome（独立 profile）+ 注入 + 收尾 |
 | `lib/sim/tcase.js` | 用例外壳：浏览器门禁（无浏览器打印 `SKIP` 退 0）+ 断言 + `waitStore()` 轮询 |
+| `lib/hdui-scan.js` | **HDHomeUI 渲染扫描器**（五档：漏白 / 小件近白 / 残留装饰 / 对比度 / UA 界面）+ **金丝雀探针**（`canaries(page, ids)` 一次量完「是否还看得见」）。从 gitignore 的 `_verify-hdui-real-render.js` 提升而来 —— 不入库就永远无法回归 | P64 / P66 |
 
 **用例里怎么用**（注意 require 路径：`tests/<脚本名>/` → `../lib/sim/`）：
 
@@ -187,6 +188,11 @@ runCase('Sxx 某某', async () => {
 | `hdhomeui/sim-hdui-film-fidelity.js` | **与原型 `film.html` 的保真度**（27 条，全部运行时实测）：列头 6 列补出 `::before` 图标 / 列头不是站点默认的白粗字 / 数据行左对齐（压住站点居中）/ 三层灰（dim·muted·金）/ 类别色块 34px·圆角 10 / **所有类别（含清单外的未知家族）都换成 SVG（兜底生效）** / 促销 `img.pro_*` 换成 16px 内联 SVG / 标签是药丸且**保留站点分类底色** / 标题与 RSS 同行 + 省略号 / 导航 7px 11px 与末 6 项弱化 / **导航项清掉站点的 `#dedede` 浅灰底 + 1px 白边（.15，站点那条已复刻进仿真页）** / **真实鼠标悬停有底色** / **color-scheme 已设 dark（.18：滚动条与下拉弹层是 UA 画的，扫描看不见）** / **7 个 `font.color_*` 统计值各有可读色位且两两不同**（.17，专防「7 条连写只有最后一条生效」）/ 入口胶囊 150×27 且不与导航项相交 / 面板 340px 卡片 | P48 / P49 / P53 / P55 / P56 / P58 / P61 |
 | `hdhomeui/sim-hdui-meta-actions.js` | **标题格动作区与图标背景层**（真站独有，原型 `film.html` 里没有那四个按钮）：类别图标 `background-image` 已清成 `none`（站点那条带 `!important`，简写清不掉 → P50）/ 豆瓣·IMDb·下载·收藏 `content` 与 `background-image` **双双**换成 SVG / 四个 chip 竖排两列（评分列 \| 操作列）且**两两不重叠**（量矩形）/ 无种子表页 `table` 底色已压深（P51） | P50 / P51 / P52 |
 | `hdhomeui/sim-hdui-css-validity.js` | **生成的 CSS 无「静默失败」**（P57）：把 `style#hdui-css` 按顶层 `{}` 逐条喂给 CSSOM，**切出来 N 条就必须解析出 N 条**（差多少就是多少条被浏览器静默丢掉，且把原文打印出来定位）/ 规则数 > 60 防 CSS 没生成 / CSS 体积 < 400KB 防「逐行生成」把样式撑爆。CSS 出错不报错也不渲染，前四档渲染扫描都发现不了 | P57 |
+| `hdhomeui/check-hdui-hide-allowlist.js` | **隐藏类声明白名单（deny-by-default，静态）**：任何 `display:none`/`visibility:hidden`/`opacity:0`/`clip-path`/`content-visibility`/`text-indent:-`/`font-size:0` 都必须落在白名单里（多一条即红并打印原文）；禁 `!important` 隐藏、禁裸元素/通配、每条必须有 `//` 理由；`contain` 只许 `inline-size`；`overflow:hidden` / `z-index` / `position:fixed` 分别白名单化（后两者只准留在自持 UI 上） | P66 |
+| `hdhomeui/sim-hdui-hide-allowlist.js` | **运行时 CSSOM 版白名单**：静态那份扫的是源码文本，而选择器是**运行时拼的**（`:nth-child(N)` / 拼接常量 / 可选列缺席时整段不生成），这里看浏览器**解析后真正生效的那张表**；外加「每条规则的选择器必须锚定已知根（`html[data-hdui-theme]` / `#torrenttable` / `ul#mainmenu`）」—— `table{display:none}` 级别的事故就靠这条拦 | P66 |
+| `hdhomeui/sim-hdui-unknown-canary.js` | **未知元素金丝雀**（本轮核心）：站点改版冒出来的公告 / 新标签 / 新徽章 / 未登记图标，以及运行时注入的消息弹窗 / 提示框 / iframe，**一个都不许消失**。每条过 8 道断言：在 DOM / 面积 ≥ 8×8 / 可见性 / **hit-test 命中自身**（防被裁被压）/ **对比度 Δ≥40**（防隐形）/ 图标至少一层是内联 SVG（防被清成空白）/ 面积不低于不上妆对照组的 60% / 注入后不许卸妆。分三组：加载期自带 / 运行期注入 / **非种子页**（我的·论坛·详情页 —— 主题那三条兜底是全局规则，在那里一样生效） | P66 |
+| `hdhomeui/sim-hdui-overlay-safety.js` | **浮层 / 弹窗 / 公告专项**：body 上与 `#torrenttable` 内的 fixed 弹窗**上妆前后位置一致**（专抓 `contain` 改定位基准；实测 `inline-size` 安全、改成 `strict` 必红）/ 弹窗关闭按钮点得到 / 滚动后站内消息条不被片头压住 / 站点提示框 `niceTitle` 切成 visible 后仍可读 / 错误横幅存在时站内消息条没被删也没被隐藏，关掉横幅后可点 | P64 / P66 |
+| `hdhomeui/sim-hdui-unknown-tags.js` | **未知列 / 未知分组行一律卸妆**（P69 用户裁决）：`E_COLUMN_UNEXPECTED` / `E_ROW_UNKNOWN` ⇒ 直接回退 + 横幅写明错误码 + 写 `lastError`，**不进等结构窗口**；卸妆后未知内容本身仍可见可点；行结构**逐行**校验（剧本 `hdhome-ui-laterow` 专抓「只查 rows[1]」的盲区）；新标签保留站点分类底色、未知图标有 SVG 兜底 | P69 / P68 |
 
 ## 待铺的路（候选，按价值排序）
 
