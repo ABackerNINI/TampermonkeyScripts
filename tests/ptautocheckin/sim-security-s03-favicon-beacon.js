@@ -18,8 +18,11 @@ const BEACON = 'http://evil.test/beacon.png';
 
 runCase('S03 favicon 外链跨站信标(应被同站约束挡下)', async () => {
     await withSim(async (sim) => {
-        const pageA = await sim.open(`${A}/?sim=evil-favicon-exfil`, { waitMs: 5000 });
-        await sim.sleep(2000);
+        const pageA = await sim.open(`${A}/?sim=evil-favicon-exfil`);
+        // ⚠️ 固定 sleep 不可靠: 慢机器上脚本还没跑到 collectFavicon() 就去读存储,
+        //    negative 断言会**假绿**(stored 为 undefined 也算通过, 等于没验)。
+        //    collectFavicon() 在 main() 第一行, UI 在其后挂载 ⇒ 轮询到 UI 即代表已执行完。
+        await pageA.waitFor(`return !!document.getElementById('ptac-root-v2')`, 20000, 'ptac-ui');
         const stored = sim.get(`ptac_favicon_${UID}`);
         assert(!stored, `跨站 icon 不应落存储, 实际: ${JSON.stringify(stored)}`);
         assert(String(stored || '').indexOf('evil.test') < 0, '跨站 icon 落进了存储');
@@ -38,8 +41,10 @@ runCase('S03 favicon 外链跨站信标(应被同站约束挡下)', async () => 
 
         // 正向: 本站 icon 仍应被正常采集(不能把功能一起砍掉)
         sim.reset();
-        const pageC = await sim.open(`${A}/?sim=favicon-same-site`, { waitMs: 5000 });
-        await sim.sleep(2000);
+        const pageC = await sim.open(`${A}/?sim=favicon-same-site`);
+        // 同上: 等 UI 挂载(代表脚本已跑完), 而不是固定 sleep —— 这条是**正向**断言,
+        // 慢机器上 sleep 不够会直接误报成"本站 icon 没采集到"。
+        await pageC.waitFor(`return !!document.getElementById('ptac-root-v2')`, 20000, 'ptac-ui');
         const ok = sim.get(`ptac_favicon_${UID}`);
         assert(ok === 'http://www.tangpt.top/static/logo.png',
             `本站 icon 应正常采集, 实际: ${JSON.stringify(ok)}`);

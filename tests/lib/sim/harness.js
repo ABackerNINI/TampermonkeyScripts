@@ -11,7 +11,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 
 const { createSimServer } = require('./server');
 const { SHIM } = require('./gm-shim');
@@ -41,6 +41,22 @@ function findChrome() {
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+/**
+ * 杀掉一个进程**及其子进程树**(只针对 harness 自己 spawn 出来的那个 PID)。
+ * Windows: taskkill /T /F; POSIX: 杀进程组。
+ */
+function killTree(proc) {
+    try {
+        if (process.platform === 'win32') {
+            // 用同步版本: 异步 spawn 可能还没来得及执行, 宿主进程就退出了
+            spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
+        } else {
+            try { process.kill(-proc.pid, 'SIGKILL'); } catch (e) { /* 没有进程组则退化为单进程 */ }
+        }
+    } catch (e) { /* ignore */ }
+    try { proc.kill('SIGKILL'); } catch (e) { /* ignore */ }
+}
 
 function browserArgs(port) {
     return [
@@ -188,7 +204,11 @@ class Sim {
     async close() {
         try { await this.cdp.send('Browser.close'); } catch (e) { /* ignore */ }
         this.cdp.close();
-        try { this.proc.kill('SIGKILL'); } catch (e) { /* ignore */ }
+        // ⚠️ 只 kill 主进程是不够的: Windows 上 Chrome 的渲染进程等**子进程会变成孤儿**,
+        //    每跑一个用例泄漏一批 ⇒ 套件跑到后面进程堆积、资源紧张, 于是**随机**有 1 个用例超时
+        //    (症状: 每次红的还不一样 —— 极易被误判成"某个用例不稳定")。
+        //    这里改成杀整棵树; /T 只作用于本用例自己拉起的那个 PID, 不碰用户正在用的浏览器。
+        try { killTree(this.proc); } catch (e) { /* ignore */ }
         try { this.server.close(); } catch (e) { /* ignore */ }
         try { fs.rmSync(this.profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (e) { /* ignore */ }
     }
