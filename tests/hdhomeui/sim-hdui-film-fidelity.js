@@ -110,7 +110,9 @@ const ROW_PROBE = [
     '    pad: cs(cat0, "padding-left") } : null,',
     '  catAllSvg: catImgs.map(function (im) { return String(cs(im, "content")).indexOf("data:image/svg+xml") >= 0; }),',
     '  catCls: catImgs.map(function (im) { return im.className; }),',
+    // .29: 文字徽章宽度按字数走, 必须同时量 h —— 只量 w 的话"被压扁"看不出来
     '  pro: pro ? { w: Math.round(pro.getBoundingClientRect().width),',
+    '    h: Math.round(pro.getBoundingClientRect().height),',
     '    svg: String(cs(pro, "content")).indexOf("data:image/svg+xml") >= 0 } : null,',
     '  tag: tag ? { float: cs(tag, "float"), radius: cs(tag, "border-radius"),',
     '    bg: cs(tag, "background-color") } : null,',
@@ -208,10 +210,16 @@ runCase('HDHomeUI · 胶片墙与原型 film.html 的保真度', async function 
         assert(row.catCls.some(function (c) { return /c_cartoon|c_misc|c_4kuhd/.test(c); }),
             '仿真页确实覆盖了原型清单之外的类别家族, 实际 ' + JSON.stringify(row.catCls));
 
-        // 促销徽章: 真站是 img.pro_*, 原型是"药丸"; 图形化后 16px 内联 SVG
+        // 促销徽章: 真站是 img.pro_*, 原型是"药丸"。
+        // ⚠️ .29 从**图形**改成**文字**徽章(用户实拍"Free 等促销标签不具辨识度"):
+        //    图形是定宽 16×16; 文字宽度必须按字数走("50%" 与 "2X Free" 不一样宽),
+        //    所以这里不再断言 16, 改成断言"高度 14 + 宽度按文字自然展开"。
         assert(!!row.pro, '找得到促销图标 img.pro_*');
         assert(row.pro.svg, '促销图标换成内联 SVG(真站的 36×11 雪碧图已替换)');
-        assertEq(row.pro.w, 16, '促销徽章 16px');
+        assertEq(row.pro.h, 14, '促销徽章高 14px(.29: 文字徽章的高度基准)');
+        assert(row.pro.w >= 16,
+            '促销徽章宽度 >= 16px 且按文字展开(.29: 文字比图形宽, 写死 16 会把 "2X Free" 压扁), '
+            + '实际 ' + row.pro.w);
 
         // 标签: 保留站点 23 种分类色, 只改形状
         assert(!!row.tag, '找得到行内标签 span.tags');

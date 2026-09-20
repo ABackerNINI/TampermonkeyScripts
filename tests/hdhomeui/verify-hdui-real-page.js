@@ -227,9 +227,23 @@ const GM_MIN = [
             'const tags = Array.prototype.slice.call(document.querySelectorAll("#torrenttable span.tags"));',
             'const fams = {};',
             'cats.forEach(function (i) { const f = (String(i.className).match(/^c_[a-z]+/) || ["?"])[0]; fams[f] = (fams[f] || 0) + 1; });',
+            // .29: 促销徽章是**文字** —— 只验"是 SVG"抓不到换回图形, 必须解码查字
+            'function decode(c) {',
+            '  const m = /url\\("(.+)"\\)/.exec(String(c));',
+            '  if (!m) return "";',
+            '  try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }',
+            '}',
+            'const proText = {};',
+            'pros.forEach(function (i) {',
+            '  const t = decode(cs(i, "content"));',
+            '  const m = />([^<>]+)<\\/text>/.exec(t);',
+            '  const k = String(i.className);',
+            '  if (m) { proText[k] = m[1]; } else { proText[k] = "(无文字)"; }',
+            '});',
             'return {',
             '  catN: cats.length, catSvg: cats.filter(svg).length,',
             '  proN: pros.length, proSvg: pros.filter(svg).length,',
+            '  proText: proText,',
             '  tagN: tags.length,',
             '  tagPill: tags.filter(function (s) { return cs(s, "float") === "none" && cs(s, "border-radius") === "999px"; }).length,',
             '  tagColored: tags.filter(function (s) { return cs(s, "background-color") !== "rgba(0, 0, 0, 0)"; }).length',
@@ -239,6 +253,13 @@ const GM_MIN = [
             '类别图标全部换成 SVG(含未登记家族的兜底): ' + icons.catSvg + '/' + icons.catN);
         ok(icons.proN > 0 && icons.proSvg === icons.proN,
             '促销徽章全部换成 SVG: ' + icons.proSvg + '/' + icons.proN);
+        // .29: 徽章是**文字**而非图形(用户实拍"Free 等促销标签不具辨识度")
+        const proNoText = Object.keys(icons.proText || {}).filter(function (k) {
+            return icons.proText[k] === '(无文字)';
+        });
+        ok(proNoText.length === 0,
+            '促销徽章都带**文字**(.29): ' + JSON.stringify(icons.proText)
+            + (proNoText.length ? ' —— 无文字的家族: ' + proNoText.join(', ') : ''));
         ok(icons.tagN > 0 && icons.tagPill === icons.tagN && icons.tagColored === icons.tagN,
             '标签是药丸且**保留站点分类底色**: ' + icons.tagPill + '/' + icons.tagN + ' 药丸, '
             + icons.tagColored + '/' + icons.tagN + ' 保留底色');
@@ -260,6 +281,22 @@ const GM_MIN = [
         ].join('\n'));
         ok(sticky.n === 0 || sticky.bad === 0,
             '置顶行内外两层都有背景(P65): 共 ' + sticky.n + ' 个, 透明 ' + sticky.bad + ' 个');
+
+        // ④b 置顶分区(.29): 站点用 inline 底色标记「置顶区2」, 两区必须给不同颜色。
+        //    只报告数量 + 在两区都存在时断言颜色不同 —— 样本里可能只有区1(z2=0), 那时不误报。
+        const zones = await p2.eval([
+            'const o = Array.prototype.slice.call(document.querySelectorAll("#torrenttable > tbody > tr.sticky_top"));',
+            'const bg = function (e) { return getComputedStyle(e).backgroundColor; };',
+            'const marked = function (e) { return /background/.test(e.getAttribute("style") || ""); };',
+            'const z2 = o.filter(marked), z1 = o.filter(function (e) { return !marked(e); });',
+            'return { n: o.length, z1: z1.length, z2: z2.length,',
+            '  z1bg: z1.length ? bg(z1[0]) : null, z2bg: z2.length ? bg(z2[0]) : null };'
+        ].join('\n'));
+        ok(zones.z1 + zones.z2 === zones.n,
+            '置顶两区计数自洽(.29): 共 ' + zones.n + ' = 区1 ' + zones.z1 + ' + 区2 ' + zones.z2);
+        // ⚠️ 两区都存在时才比色 —— 样本只有区1 时这条自动跳过, 不制造假红
+        ok(!(zones.z1 > 0 && zones.z2 > 0) || zones.z1bg !== zones.z2bg,
+            '置顶区1 与区2 底色不同(.29 分色生效): 区1=' + zones.z1bg + ' 区2=' + zones.z2bg);
         ok(sticky.neither === 0,
             '每个置顶行都落在 R 或 TN 的作用域内(无第三层嵌套, P65/P75): 共 ' + sticky.n
             + ' 个 = R ' + sticky.byR + ' + TN ' + sticky.byTN + ', 漏网 ' + sticky.neither + ' 个');

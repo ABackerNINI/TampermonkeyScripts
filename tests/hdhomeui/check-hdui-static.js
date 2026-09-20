@@ -330,9 +330,17 @@ ok(/function colMapSig\(map, headText\)/.test(src),
 
 // 图标总数(含列头补充图标 + 促销徽章 + 面板图标)
 ok(iconKeys.length >= 38, 'ICONS 至少 38 个图形(实际 ' + iconKeys.length + ')');
-['hcat', 'htitle', 'hprog', 'hcalc', 'hratio', 'prodown', 'proFree', 'pro2up'].forEach(function (n) {
-    ok(iconKeys.indexOf(n) >= 0, '列头/促销图标已定义: ' + n);
+['hcat', 'htitle', 'hprog', 'hcalc', 'hratio'].forEach(function (n) {
+    ok(iconKeys.indexOf(n) >= 0, '列头图标已定义: ' + n);
 });
+// ⚠️ .29: 促销徽章从**图形**改成**文字**, 不再依赖 ICONS 里的 prodown/proFree/pro2up。
+//    这三个图形还在 ICONS 里但已无人引用(留着无害), 断言改验"文字生成函数 + 站点原文"。
+ok(/function promoBadgeUri\(label, color\)/.test(src),
+    '促销徽章走文字生成器 promoBadgeUri(.29: 图形在 14px 下不具辨识度)');
+ok(/const PRO_FALLBACK_LABEL = '促销'/.test(src),
+    '未登记的 pro_* 家族有可读的文字兜底「促销」(.29: 用户提醒不止 3 个标签, 兜底不能是空白)');
+ok(/promoBadgeUri\(PRO_FALLBACK_LABEL, PRO_FALLBACK_COLOR\)/.test(src),
+    '兜底排在具体家族之前且用的是文字徽章(P66: 新增 pro_* 不能变 16×16 空白)');
 ['douban', 'imdb', 'getdown', 'mark'].forEach(function (n) {
     ok(iconKeys.indexOf(n) >= 0, '标题格动作图标已定义: ' + n);
 });
@@ -414,14 +422,15 @@ ok(/input\[type=password\]/.test(src),
     'password / number / email 等输入框也深色化(.18: 原来只写了 type=text, 登录页会漏)');
 
 // ---- .20 三种促销徽章必须分色(用户实拍「种子缺少Free标记」: 原来全是同一个金, 分不出哪个是免费) ----
-ok(/\['pro_50pctdown', 'prodown', '#f5b342'\]/.test(src), '5折徽章=琥珀(#f5b342)');
-ok(/\['pro_free', 'proFree', '#7fb84e'\]/.test(src), '免费徽章=绿(#7fb84e), 与 5折 分得开');
-ok(/\['pro_free2up', 'pro2up', '#9b7fd4'\]/.test(src), '免费+双倍徽章=紫(#9b7fd4)');
+ok(/\['pro_50pctdown', '50%', '#f5b342'\]/.test(src), '5折徽章=琥珀(#f5b342), 文字=[50%]');
+ok(/\['pro_free', 'Free', '#7fb84e'\]/.test(src), '免费徽章=绿(#7fb84e), 文字=[Free], 与 5折 分得开');
+ok(/\['pro_free2up', '2X Free', '#9b7fd4'\]/.test(src), '免费+双倍徽章=紫(#9b7fd4), 文字=[2X Free]');
 // 反断言: 三种不能又是同一个色
 // 逐条取(不用一条 alternation 正则: `free` 会先匹配到 `free2up` 的前缀再回溯, 容易漏)
+// ⚠️ .29: 第二项现在是**文字**(含 % 与空格), 不能再用 '[a-zA-Z]+' 匹配
 const proColors = ['50pctdown', 'free', 'free2up'].map(function (k) {
-    const m = new RegExp("\\['pro_" + k + "', '[a-zA-Z]+', '(#[0-9a-f]{6})'\\]").exec(src);
-    return m ? m[1] : null;
+    const m = new RegExp("\\['pro_" + k + "', '(.+?)', '(#[0-9a-f]{6})'\\]").exec(src);
+    return m ? m[2] : null;
 });
 ok(proColors.length >= 3 && new Set(proColors).size === proColors.length,
     '三种促销徽章颜色两两不同(实际 ' + proColors.join(',') + ')');
@@ -447,19 +456,64 @@ ok(/\.dock \.dot\{width:7px;height:7px;[^}]*box-shadow:0 0 6px/.test(src),
 // 而 R 是直接子代选择器(`#torrenttable > tbody > tr`)只够到外层 —— 内层漏规则就露出站点默认底色。
 // ⚠️ 判据必须严: 原来这条带一个 `table.searchbox[\s\S]*TN \+ '.sticky_top` 的兜底,
 //    `[\s\S]*` 跨行通配几乎恒真 —— 把修复整条删掉它也不会红, 等于**没有断言**(.27 才补)。
-ok(/TN \+ '\.sticky_top\{background:var\(--hdui-card\) !important;\}'/.test(src),
-    '嵌套 tr.sticky_top 有片基背景(P65 漏掉时透明; .28 还得 !important 才压得住站点 inline 底色)');
+ok(/TN \+ '\.sticky_top\{background:var\(--hdui-zone1\) !important;\}'/.test(src),
+    '嵌套置顶行有区1 底色(P65 漏掉时透明; .28 起须 !important 压住站点 inline 底色)');
 // ---- .28 站点给**部分**置顶行加了 inline `style="background:#FAEEF4"`(粉白 lum 241) ----
 // inline 声明特异性 (1,0,0,0) 压得过本主题所有选择器 ⇒ 补普通规则没用, 必须 !important。
 // 既有兜底救不了的原因: `tr[bgcolor]` 那条本来就带 !important(所以不是 bgcolor 属性);
 // 而 inline **白**底兜底只枚举 rgb(255,255,255)/white/#fff/#ffffff, 粉白一条都不命中。
 // ⚠️ 这条规则在源码里是**跨行拼接**的(`...accent);'` 换行 `+ 'background:...`),
 //    正则必须容忍中间的 `'\s*\+\s*'`, 否则会因换行匹配不上而误报(刚踩了一次)。
-ok(/R \+ '\.sticky_top\{box-shadow:inset 3px 0 0 var\(--hdui-accent\);'\s*\+\s*'background:var\(--hdui-card\) !important;\}'/.test(src),
+ok(/R \+ '\.sticky_top\{box-shadow:inset 3px 0 0 var\(--hdui-accent\);'\s*\+\s*'background:var\(--hdui-zone1\) !important;\}'/.test(src),
     '外层置顶行底色带 !important(.28: 站点的 inline 粉白 #FAEEF4 压得过普通规则)');
 // ⚠️ !important 会把 `R + ':hover'` 的悬停反馈一起吃掉, 必须补一条同级的 hover
-ok(/R \+ '\.sticky_top:hover\{background:var\(--hdui-rule\) !important;\}'/.test(src),
-    '置顶行 hover 有 !important 补偿(.28: 否则底色 !important 会吃掉悬停反馈)');
+ok(/R \+ '\.sticky_top:hover\{background:var\(--hdui-zone1h\) !important;\}'/.test(src),
+    '置顶区1 有 hover 亮档(.28: 底色带 !important 会把悬停反馈吃掉, 必须补偿)');
+ok(/R \+ '\.sticky_top\[style\*="background"\]:hover\{background:var\(--hdui-zone2h\) !important;\}'/.test(src),
+    '置顶区2 有 hover 亮档(特异性 (1,4,2) 才压得住同特异性 (1,3,2) 的区2 底色)');
+
+// ---- .29 置顶两区分色(真站: 行 1-41 无 inline / 行 42-50 带 inline 粉白) ----
+ok(/R \+ '\.sticky_top\[style\*="background"\]\{background:var\(--hdui-zone2\) !important;\}'/.test(src),
+    '置顶区2 用 [style*="background"] 与区1 区分并换色相(.29)');
+ok(/TN \+ '\.sticky_top\[style\*="background"\]\{background:var\(--hdui-zone2\) !important;\}'/.test(src),
+    '嵌套的置顶区2 同样换色(否则标题格那块仍是区1 的色, 一行两色)');
+// ⚠️ 按**子串**匹配而不是精确值: 站点写的是 `background-color: rgb(250, 238, 244);`(带空格带分号)
+ok(/\[style\*="background"\]/.test(src) && !/\[style\*="background-color: rgb\(250, 238, 244\)"\]/.test(src),
+    '区2 选择器用子串而非精确值(站点格式带空格/分号, 按值匹配极易漏)');
+// 内层跟随外层 hover: 不跟的话标题格会留一块"没跟着亮"的补丁
+ok(/R \+ '\.sticky_top:hover table\.torrentname > tbody > tr\.sticky_top'/.test(src)
+    && /R \+ '\.sticky_top\[style\*="background"\]:hover table\.torrentname > tbody > tr\.sticky_top'/.test(src),
+    '内层跟随外层 hover 的规则存在(.29: 否则外层变亮、标题格不变, 留一块补丁)');
+// ⚠️ 反断言(本题最值钱的一条): 拼**后代**选择器时**不能**用 TN ——
+//    TN 以 `#torrenttable` 开头, 拼成 `tr.sticky_top:hover #torrenttable table.torrentname ...`
+//    会要求置顶行内部再套一个 #torrenttable ⇒ **语法合法但永远匹配不上** = 死规则。
+//    这条当初是靠"仿真 hover 实测"抓到的, 静态断言只能验字符串存在, 抓不到死规则。
+ok(!/:hover ' \+ TN/.test(src),
+    'hover 后代选择器用相对路径, 没误用 TN(用 TN 会拼出 #torrenttable 后代 ⇒ 规则变死)');
+// 配色: 两区必须不同, 且都亮于片基(保住"置顶比普通亮一档")
+ok(/'--hdui-zone1': '#2e2718', '--hdui-zone1h': '#3a3120'/.test(src), '区1 金调配色已定义');
+ok(/'--hdui-zone2': '#182e28', '--hdui-zone2h': '#1f3a33'/.test(src), '区2 青绿调配色已定义');
+(function () {
+    const z = ['--hdui-zone1', '--hdui-zone2'];
+    const vals = z.map(function (k) {
+        const m = new RegExp("'" + k + "': '(#(?:[0-9a-f]{3}|[0-9a-f]{6}))'").exec(src);
+        return m ? m[1].toLowerCase() : null;
+    });
+    ok(vals[0] && vals[1] && vals[0] !== vals[1] && vals[0] !== '#201c18' && vals[1] !== '#201c18',
+        '两区配色互不相同且都不等于片基 #201c18(分不出来 = 没做), 实际 ' + vals.join(' / '));
+    // hover 档必须比本区更亮, 否则悬停变暗像是"按下去"
+    const lum = function (hex) {
+        let h = String(hex).replace('#', '');
+        if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+        return 0.2126 * parseInt(h.substr(0, 2), 16) + 0.7152 * parseInt(h.substr(2, 2), 16)
+            + 0.0722 * parseInt(h.substr(4, 2), 16);
+    };
+    const v1 = vals[0], v1h = '#3a3120', v2 = vals[1], v2h = '#1f3a33';
+    ok(v1 && lum(v1h) > lum(v1) + 5, '区1 hover 比区1 底色更亮(实际 ' + Math.round(lum(v1)) + ' -> '
+        + Math.round(lum(v1h)) + '), 否则悬停像按下去');
+    ok(v2 && lum(v2h) > lum(v2) + 5, '区2 hover 比区2 底色更亮(实际 ' + Math.round(lum(v2)) + ' -> '
+        + Math.round(lum(v2h)) + ')');
+})();
 // 内层只补背景, 不能带金边 —— 外层已有 inset 金条, 内外各一条 = 视觉重复
 ok(!/TN \+ '\.sticky_top\{[^}]*box-shadow:inset/.test(src),
     '嵌套 tr.sticky_top 不带金色 inset(否则内外各一条金边, 视觉重复)');

@@ -2,7 +2,7 @@
 // @name         HDHomeUI
 // @name:zh-CN   HDHome 界面主题套件
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.20.3
+// @version      2026.09.20.4
 // @description  HDHome 界面主题: 胶片墙(齿孔片边 · 帧号 · 做种金), 可一键切回原站默认。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); A/A·GB 两列由其它脚本注入, 有或没有都能上妆、补进来会自动重摆; 搜索 / 下拉框 / 按钮等表单元素全部深色化(站点的白底在深色片基上刺眼); 标题格四个动作按钮(豆瓣/IMDb/下载/收藏)跟在标题后面同行; 导航栏页签(首页/论坛等)清掉站点的浅灰底; 站点自绘的图标(类别/促销/置顶图钉/推荐星/排序箭头/信箱等)全部换成主题 SVG; 表头六个指标列的概念图标(评论/存活/大小/做种/下载/完成)用概念图而非上下方向图标, 避免与「激活排序方向」混淆; 下载进度指示器的英文 "Leeching" 替换为中文「下载中」; 分享率、魔力值等统计值与数据行的暗红标记按主题重新上色(站点原色在深色底上几乎看不见); 滚动条 / 下拉弹层 / 自动填充等浏览器自带界面一并深色化; 非种子页(我的/论坛等)同样铺深色底, 站点用 inline style 画的白底/分页/工具栏容器一并压深, 不留大面积浅色块; 页面结构异常时先等结构就绪, 超时才提示并回退默认界面; 出现认不出来的列或行(分组行 / 公告行 / 新徽章)时不猜、直接回退原站界面, 绝不把未知内容画到错误的槽位或压成空白。
 // @author       ABacker
 // @license      GNU GPL-3.0
@@ -279,11 +279,15 @@
      *    现在按语义分色: 免费=绿(通行语义)、5折=琥珀、免费+双倍=紫(叠加的"更划算")。
      *    判据是「色相/饱和/亮度三者不能同时接近」, 与导航 16 色同一套纪律。
      */
+    // ⚠️ .29: 第二项从"图标名"改成**文字**(站点原文), 三者靠"字"而不是"形"区分。
+    //    未登记的 pro_* 家族走下面的「促销」文字兜底 —— 仍比图形兜底可读, 也不会变空白(P66)。
     const PRO_BADGES = Object.freeze([
-        ['pro_50pctdown', 'prodown', '#f5b342'],   // 5折 —— 琥珀
-        ['pro_free', 'proFree', '#7fb84e'],        // 免费 —— 绿(PT 通行语义)
-        ['pro_free2up', 'pro2up', '#9b7fd4']       // 免费 + 双倍上传 —— 紫
+        ['pro_50pctdown', '50%', '#f5b342'],       // 5折 —— 琥珀
+        ['pro_free', 'Free', '#7fb84e'],           // 免费 —— 绿(PT 通行语义)
+        ['pro_free2up', '2X Free', '#9b7fd4']      // 免费 + 双倍上传 —— 紫
     ]);
+    /** 未登记 pro_* 家族的兜底文案(用户提醒"不止这 3 个促销标签", 兜底必须可读) */
+    const PRO_FALLBACK_LABEL = '促销';
 
     /**
      * 片头补充图标: 真站这几格**只有文字、没有图标**(类型/标题/进度/A/A·GB/发布者),
@@ -467,6 +471,34 @@
     }
 
     /**
+     * 促销**文字**徽章(.29) —— 把文字画进 SVG, 仍是纯样式层(换 content/background, 不碰 DOM)。
+     *
+     * 为什么不用图形: 站点促销是 `<img class="pro_*">`, `<img>` 是替换元素、**伪元素不渲染**
+     * (所以 `content:attr(alt)` / `::after{content:"免费"}` 都出不来), 想显示"字"只能画进图里。
+     * 图形徽章(图标)在 14px 高度下彼此难分辨 —— 用户实拍反馈"Free 等促销标签不具辨识度"。
+     *
+     * ⚠️ 三条硬约束:
+     * ① **必须带 width/height**(P42): 没固有尺寸的 SVG 会让 img 塌成 0 宽, 连累外层布局。
+     * ② 高度与 filmCss 里的 `height:14px` 对齐; 宽度按字数算 —— CJK 按 1.7 个西文宽计,
+     *    否则「促销」两个字会挤出圆角框。
+     * ③ 文案取**站点原文**(真站 img 的 alt): Free / 50% / 2X Free; 未登记家族用「促销」兜底。
+     */
+    function promoBadgeUri(label, color) {
+        const txt = String(label || '促销');
+        let units = 0;
+        for (let i = 0; i < txt.length; i++) units += txt.charCodeAt(i) > 255 ? 1.7 : 1;
+        const w = Math.max(18, Math.round(10 + units * 6.2));
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="14"'
+            + ' viewBox="0 0 ' + w + ' 14">'
+            + '<rect x="0.5" y="0.5" width="' + (w - 1) + '" height="13" rx="3" fill="'
+            + (color || PRO_FALLBACK_COLOR) + '"/>'
+            + '<text x="' + (w / 2) + '" y="10.5" text-anchor="middle"'
+            + ' font-family="Verdana,DejaVu Sans,sans-serif" font-size="9" font-weight="bold"'
+            + ' fill="#12100d">' + txt + '</text></svg>';
+        return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+    }
+
+    /**
      * 图标替换 CSS(类别 / 促销 / 表头指标 / RSS / 标题格内 4 个行内动作)。
      * 只写 content + 底色, 不写死尺寸 —— 各主题用更高特异性的选择器自己定 width/height。
      *
@@ -509,12 +541,12 @@
         //    (上面那条 filmCss 的 `img[class*="pro_"]{background:none}` 只清底不换图)。
         //    与类别图标同一套纪律: 兜底排在所有具体家族之前(同特异性下后写的胜出)。
         out.push('html[data-hdui-theme] #torrenttable img[class*="pro_"]{content:'
-            + iconUri('medal', PRO_FALLBACK_COLOR)
+            + promoBadgeUri(PRO_FALLBACK_LABEL, PRO_FALLBACK_COLOR)
             + ';background-image:none !important;background-size:contain;'
             + 'background-repeat:no-repeat;background-position:center;}');
         PRO_BADGES.forEach(function (x) {
             out.push('html[data-hdui-theme] #torrenttable img.' + x[0] + '{content:'
-                + iconUri(x[1], x[2]) + ';background-image:none !important;}');
+                + promoBadgeUri(x[1], x[2]) + ';background-image:none !important;}');
         });
         for (const k in ICON_MET) {
             if (!Object.prototype.hasOwnProperty.call(ICON_MET, k)) continue;
@@ -768,9 +800,20 @@ H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-ga
             //       而 inline 白底兜底**只枚举白色系**(rgb(255,255,255)/white/#fff/#ffffff), 粉白一条都不命中。
             //    修: 置顶行底色显式 `!important`(作者样式表的 !important 压得住 inline 的非 important 声明)。
             //    ⚠️ 必须**同时**补一条 hover: `!important` 会把 `R + ':hover'` 的悬停反馈一起吃掉。
+            // 置顶区1(暖金调): 兜底给**所有**置顶行, 下面区2 再按 inline 标记覆盖。
             R + '.sticky_top{box-shadow:inset 3px 0 0 var(--hdui-accent);'
-            + 'background:var(--hdui-card) !important;}',
-            R + '.sticky_top:hover{background:var(--hdui-rule) !important;}',
+            + 'background:var(--hdui-zone1) !important;}',
+            // 置顶区2(青绿调): 站点用 inline 底色标记这批行。
+            // ⚠️ 用 `[style*="background"]` 而不是精确值 —— 站点写的是
+            //    `background-color: rgb(250, 238, 244);`(带空格、带分号), 按值匹配极易漏;
+            //    而 `tr` 上的 inline style 只可能是底色, 用子串匹配最稳。
+            R + '.sticky_top[style*="background"]{background:var(--hdui-zone2) !important;}',
+            // hover: 两区各给一个更亮档。**顺序不能变** —— zone2(1,3,2) 与 hover(1,3,2) 同特异性,
+            // 靠后来者胜; 区2 的 hover 再加一层 `[style*="background"]` 提到 (1,4,2) 才压得住。
+            // ⚠️ 不能用 --hdui-rule 当置顶的 hover: rule 亮度 37 **低于** zone1 39 / zone2 41,
+            //    悬停反而变暗, 看着像"点下去了"。
+            R + '.sticky_top:hover{background:var(--hdui-zone1h) !important;}',
+            R + '.sticky_top[style*="background"]:hover{background:var(--hdui-zone2h) !important;}',
             R + ' > td{overflow:hidden;min-width:0;}',
             // ⚠️ .25: 上面那条 R + '.sticky_top' **只匹配外层** `tr.sticky_top`(`R` 是直接子代选择器)。
             //    标题格里**嵌套的** `<table class="torrentname">` 也有 `tr.sticky_top`(共 86 个里有 43 个),
@@ -779,7 +822,21 @@ H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-ga
             //    另 43 个透明 —— 嵌套那批全裸奔。
             //    修: 给嵌套 tr.sticky_top **显式背景**(不加金边, 避免外内双金边), 让它和外层一致。
             //    ⚠️ .28: 同外层那条 —— 内层同样会被站点的 inline 粉白盖住, 必须一起 !important。
-            TN + '.sticky_top{background:var(--hdui-card) !important;}',
+            //    ⚠️ 内层**不能**写成 transparent: 它背后是外层行的 `<td>`(站点 `td.rowfollow` 有浅底),
+            //       透明会直接露出那块浅底 —— 这正是 .25 之前"内层白底"的来源。
+            TN + '.sticky_top{background:var(--hdui-zone1) !important;}',
+            TN + '.sticky_top[style*="background"]{background:var(--hdui-zone2) !important;}',
+            // 内层跟随外层的 hover: 外层变色而内层不变的话, 标题格那块(真站约 315px 宽)
+            // 会留下一块"没跟着亮"的补丁。外层 :hover 作祖先选择器。
+            // ⚠️⚠️ 这里**不能用 TN**: TN 以 `#torrenttable` 开头, 拼在后代组合器后面就成了
+            //    `tr.sticky_top:hover #torrenttable table.torrentname ...` —— 要求置顶行内部
+            //    再套一个 #torrenttable, **永远不可能匹配**(规则是死的)。
+            //    必须写成**相对**的 `table.torrentname > tbody > tr`。
+            //    (这个 bug 是仿真 hover 实测抓到的: 静态断言只验"字符串存在", 抓不到死规则。)
+            R + '.sticky_top:hover table.torrentname > tbody > tr.sticky_top'
+            + ':not([style*="background"]){background:var(--hdui-zone1h) !important;}',
+            R + '.sticky_top[style*="background"]:hover table.torrentname > tbody > tr.sticky_top'
+            + '{background:var(--hdui-zone2h) !important;}',
             basis.join('\n'),
             // 数据行对齐: 站点 `table.torrents td.rowfollow{text-align:center}` 会把标题也居中
             tdRule(m, ['type', 'title', 'uploader'], 'text-align:left;'),
@@ -823,8 +880,13 @@ H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-ga
             tdSel(m, 'uploader') + '{font-size:11.5px;color:var(--hdui-dim);overflow:hidden;text-overflow:ellipsis;}',
             tdSel(m, 'uploader') + ' a{color:var(--hdui-dim);}',
             tdSel(m, 'uploader') + ' a:hover{color:var(--hdui-accent);}',
-            // 促销徽章: 真站是 img.pro_*(36×11 雪碧图), 换成 16px 金徽章并清掉雪碧图底
-            '#torrenttable img[class*="pro_"]{width:16px;height:16px;background:none;'
+            // 促销徽章: 真站是 img.pro_*(36×11 雪碧图)。
+            // ⚠️ .29 改**文字**徽章: 原来是 16×16 的图形(用户反馈"不具辨识度"),
+            //    文字比图形占地方 ⇒ 高度定 14px、**宽度交给 SVG 固有尺寸**(width:auto),
+            //    每个徽章按字数算宽(见 promoBadgeUri)。写死 16×16 会把 "2X Free" 压成一坨。
+            //    ⚠️ 必须 `height` 给值 + `width:auto`: 两个都 auto 时部分浏览器按 36×11 的
+            //    站点属性算, 文字会被纵向压扁。
+            '#torrenttable img[class*="pro_"]{width:auto;height:14px;background:none;'
             + 'vertical-align:-2px;margin-left:6px;}',
             // 标签: 保留站点 23 种分类底色(信息量不丢), 只把形状改成药丸 ——
             // 站点原本是 `float:left;height:16px;padding:2px 3px;color:#fff` 的硬边小方块
@@ -913,6 +975,15 @@ H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-ga
                 '--hdui-fg': '#f2ede5', '--hdui-muted': '#a79e93', '--hdui-dim': '#7a7267',
                 '--hdui-accent': '#f5b342',
                 '--hdui-link': '#f2ede5', '--hdui-line': '#332c26', '--hdui-rule': '#2a241f',
+                // .29 置顶两区分色。站点本来就用**两个不同底色**区分置顶区1/区2(真站实测 101 行:
+                //   区1 = 行 1-41, 站点 CSS 的 #bad6f4 浅蓝, 无 inline;
+                //   区2 = 行 42-50, inline `style="background-color: rgb(250,238,244)"` 粉白),
+                //   主题原先一律压成片基色 ⇒ 两区不可分辨。现在保留"色相差异"改成深色:
+                //   区1 走强调金的暖调(金=置顶/做种是本主题语义), 区2 换青绿(避开金色系与 7 种类别色)。
+                //   四色亮度: 片基 28 < 区1 39 ≈ 区2 41 < 区1h 50 ≈ 区2h 52
+                //   ⇒ 保住"置顶比普通亮一档"的层级, 又让两区靠色相区分(单看亮度分不出)。
+                '--hdui-zone1': '#2e2718', '--hdui-zone1h': '#3a3120',
+                '--hdui-zone2': '#182e28', '--hdui-zone2h': '#1f3a33',
                 '--hdui-headbg': '#191512', '--hdui-headfg': '#a79e93',
                 '--hdui-zebra1': '#201c18', '--hdui-zebra2': '#23201b',
                 '--hdui-font': '"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif',
