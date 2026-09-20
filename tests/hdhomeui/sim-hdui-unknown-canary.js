@@ -72,10 +72,14 @@ const INJECT = [
     + ' "tip-absolute", "<b>提示: 这是新功能</b>"));',
     '  const outer = document.getElementById("outer");',
     '  if (outer) {',
-    // ④ 站点嵌的 iframe(公告/视频那种)
+    // ④ 站点嵌的 iframe(公告/视频那种)。
+    //    ⚠️ 必须插在**容器开头**而不是末尾: 插末尾时它在页面很下方, __hit 会 scrollIntoView
+    //    把它滚到**视口正中**, 正好撞上 ① 那个居中的 fixed 弹窗 —— 于是 hit-test 命中的是弹窗。
+    //    (Windows 上页面滚不到底、iframe 落在弹窗下方, 本地"侥幸通过"; Linux CI 字体度量不同
+    //    就能滚到位, 于是红 —— 本地绿不代表判据稳。)
     '    const fr = mk("iframe", "width:240px;height:140px;border:0", "iframe-unknown");',
     '    fr.setAttribute("src", "about:blank");',
-    '    outer.appendChild(fr);',
+    '    outer.insertBefore(fr, outer.firstChild);',
     // ⑤ 标题格里的行内新徽章(站点最爱往标题后面加东西)
     '    const cell = document.querySelector("#torrenttable td.rowfollow table.torrentname td.embedded");',
     '    if (cell) cell.appendChild(mk("b", "display:inline-block;padding:2px 6px;background:#c0392b;'
