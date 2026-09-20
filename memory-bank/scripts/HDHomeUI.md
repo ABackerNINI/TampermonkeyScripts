@@ -296,6 +296,7 @@
 | `tests/hdhomeui/sim-hdui-unknown-canary.js` | **未知元素金丝雀**（核心）：公告 / 新标签 / 新徽章 / 未登记图标 / 弹窗 / 提示框，一个都不许消失（8 道断言，见 P66）。三组：**加载期自带** / **运行期注入** / **非种子页**（我的·论坛·详情页 —— 主题那三条兜底是**全局规则**，在那里一样生效，不能只测种子页） |
 | `tests/hdhomeui/sim-hdui-overlay-safety.js` | 浮层/弹窗专项：fixed 弹窗位置不被 `contain` 改动、关闭按钮点得到、片头不压站内浮层、提示框可见态可读、错误横幅不吞站内消息条 |
 | `tests/hdhomeui/sim-hdui-unknown-tags.js` | 未知列 / 未知分组行一律卸妆 + 行结构逐行校验 + 新标签保留站点底色、未知图标有 SVG 兜底 |
+| `tests/hdhomeui/verify-hdui-real-page.js` | **真站脱敏整页离线渲染验收**（P49 硬要求，从 gitignore 提升入库）。缺样本/缺浏览器则 SKIP 退 0；有样本时验：仍正常上妆 / 不撑宽 / CSS 无静默失败 / 图标全换 SVG / 标签保留底色 / 置顶双层有背景 / 五档扫描全无 / color-scheme=dark。**只输出结构·几何·颜色·计数**（铁律 5）。⚠️ 量之前要等 CSS 过渡跑完（导航项 `transition:background .14s`，上妆瞬间读到的是 `rgba(222,222,222,.616)` 中间态，会被小件近白扫描误报）—— 等时间，不要放宽阈值 |
 
 仿真剧本：`tests/lib/sim/hdhome-ui-page.js`（**结构化复刻、零私有数据**，
 变体 `hdhome-ui` / `-broken` / `-shape` / `-nocalc` / `-empty` / `-notable` / `-nonav` /
