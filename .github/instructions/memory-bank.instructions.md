@@ -20,11 +20,11 @@ flowchart TD
     PB[projectbrief.md] --> PC[productContext.md]
     PB --> SP[systemPatterns.md]
     PB --> TC[techContext.md]
-    
+
     PC --> AC[activeContext.md]
     SP --> AC
     TC --> AC
-    
+
     AC --> P[progress.md]
     AC --> TF[tasks/ folder]
 ```
@@ -66,9 +66,12 @@ flowchart TD
    - Current status
    - Known issues
 
-7. `tasks/` folder
+7. `pitfalls.md`
+   - Pitfalls encountered
+
+8. `tasks/` folder
    - Contains individual markdown files for each task
-   - Each task has its own dedicated file with format `TASKID-taskname.md`
+   - Each task has its own dedicated file with format `YY-MM-DD-HHMM-taskname.md`
    - Includes task index file (`_index.md`) listing all tasks with their statuses
    - Preserves complete thought process and history for each task
 
@@ -87,10 +90,10 @@ Create additional files/folders within memory-bank/ when they help organize:
 flowchart TD
     Start[Start] --> ReadFiles[Read Memory Bank]
     ReadFiles --> CheckFiles{Files Complete?}
-    
+
     CheckFiles -->|No| Plan[Create Plan]
     Plan --> Document[Document in Chat]
-    
+
     CheckFiles -->|Yes| Verify[Verify Context]
     Verify --> Strategy[Develop Strategy]
     Strategy --> Present[Present Approach]
@@ -113,7 +116,7 @@ flowchart TD
     NewFile --> Think[Document Thought Process]
     Think --> Plan[Create Implementation Plan]
     Plan --> Index[Update _index.md]
-    
+
     Execute[Execute Task] --> Update[Add Progress Log Entry]
     Update --> StatusChange[Update Task Status]
     StatusChange --> IndexUpdate[Update _index.md]
@@ -133,16 +136,16 @@ Memory Bank updates occur when:
 ```mermaid
 flowchart TD
     Start[Update Process]
-    
+
     subgraph Process
         P1[Review ALL Files]
         P2[Document Current State]
         P3[Clarify Next Steps]
         P4[Update instructions]
-        
+
         P1 --> P2 --> P3 --> P4
     end
-    
+
     Start --> Process
 ```
 
@@ -155,19 +158,19 @@ The instructions files are my learning journal for each project. It captures imp
 ```mermaid
 flowchart TD
     Start{Discover New Pattern}
-    
+
     subgraph Learn [Learning Process]
         D1[Identify Pattern]
         D2[Validate with User]
         D3[Document in instructions]
     end
-    
+
     subgraph Apply [Usage]
         A1[Read instructions]
         A2[Apply Learned Patterns]
         A3[Improve Future Work]
     end
-    
+
     Start --> Learn
     Learn --> Apply
 ```
@@ -186,8 +189,8 @@ The format is flexible - focus on capturing valuable insights that help me work 
 
 The `tasks/` folder contains individual markdown files for each task, along with an index file:
 
-- `tasks/_index.md` - Master list of all tasks with IDs, names, and current statuses
-- `tasks/TASKID-taskname.md` - Individual files for each task (e.g., `TASK001-implement-login.md`)
+- `tasks/_index.md` - Master list of all tasks, **generated** - do not edit by hand, rebuild it with `python scripts/gen_tasks_index.py` (a guard test fails if it drifts from the generator output)
+- `tasks/YY-MM-DD-<slug>.md` - Individual files for each task (e.g., `26-09-18-webui-error-reason.md`). **The name is derived from the topic, never from a serial number**: date to the day (no time), then an `<area>-<topic>` slug (area enum: `webui` / `backend` / `rule` / `memory-bank` / `docs` / `test` / `deps` / `config`). Two clones picking up the same topic on the same day therefore collide on the same path and the duplicate surfaces immediately, instead of silently becoming two files. **Check for an existing slug before creating a file** - never "take the next number".
 
 ### Task Index Structure
 
@@ -197,32 +200,36 @@ The `_index.md` file maintains a structured record of all tasks sorted by status
 # Tasks Index
 
 ## In Progress
-- [TASK003] Implement user authentication - Working on OAuth integration
-- [TASK005] Create dashboard UI - Building main components
+- [26-09-18-webui-error-reason] Implement user authentication - Working on OAuth integration
+- [26-09-17-webui-component-libraries] Create dashboard UI - Building main components
 
 ## Pending
-- [TASK006] Add export functionality - Planned for next sprint
-- [TASK007] Optimize database queries - Waiting for performance testing
+- [26-09-15-docs-restructure] Add export functionality - Planned for next sprint
+- [26-09-15-rule-tracker-groups] Optimize database queries - Waiting for performance testing
 
 ## Completed
-- [TASK001] Project setup - Completed on 2025-03-15
-- [TASK002] Create database schema - Completed on 2025-03-17
-- [TASK004] Implement login page - Completed on 2025-03-20
+- [26-09-14-memory-bank-migration] Project setup - Completed on 2025-03-15
+- [26-09-15-backend-file-split] Create database schema - Completed on 2025-03-17
+- [26-09-15-webui-tvshows-view] Implement login page - Completed on 2025-03-20
 
 ## Abandoned
-- [TASK008] Integrate with legacy system - Abandoned due to API deprecation
+- [26-09-15-deps-env-modernization] Integrate with legacy system - Abandoned due to API deprecation
 ```
+
+The key inside `[...]` is the **file stem** (date prefix + slug), not a task number. Entries inside a section are ordered by `**Updated:**` descending (most recently touched first), so an old-but-active task never sinks out of sight.
 
 ### Individual Task Structure
 
 Each task file follows this format:
 
 ```markdown
-# [Task ID] - [Task Name]
+# <file stem: YY-MM-DD-<slug>> - [Task Name]
 
-**Status:** [Pending/In Progress/Completed/Abandoned]  
-**Added:** [Date Added]  
+**Status:** [Pending/In Progress/Completed/Abandoned]
+**Added:** [Date Added]
 **Updated:** [Date Last Updated]
+**Summary:** [One line - this is what `_index.md` is generated from]
+**Legacy-ID:** [TASKnnn - only for files migrated from the old numbering, kept for back-references]
 
 ## Original Request
 [The original task description as provided by the user]
@@ -276,7 +283,7 @@ When you request **add task** or use the command **create task**, I will:
 5. Update the _index.md file to include the new task
 
 For existing tasks, the command **update task [ID]** will prompt me to:
-1. Open the specific task file 
+1. Open the specific task file
 2. Add a new progress log entry with today's date
 3. Update the task status if needed
 4. Update the _index.md file to reflect any status changes
