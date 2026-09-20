@@ -447,8 +447,19 @@ ok(/\.dock \.dot\{width:7px;height:7px;[^}]*box-shadow:0 0 6px/.test(src),
 // 而 R 是直接子代选择器(`#torrenttable > tbody > tr`)只够到外层 —— 内层漏规则就露出站点默认底色。
 // ⚠️ 判据必须严: 原来这条带一个 `table.searchbox[\s\S]*TN \+ '.sticky_top` 的兜底,
 //    `[\s\S]*` 跨行通配几乎恒真 —— 把修复整条删掉它也不会红, 等于**没有断言**(.27 才补)。
-ok(/TN \+ '\.sticky_top\{background:var\(--hdui-card\);\}'/.test(src),
-    '嵌套 tr.sticky_top 有片基背景(P65: 漏掉时 43 个透明 = 用户实拍的白色置顶段)');
+ok(/TN \+ '\.sticky_top\{background:var\(--hdui-card\) !important;\}'/.test(src),
+    '嵌套 tr.sticky_top 有片基背景(P65 漏掉时透明; .28 还得 !important 才压得住站点 inline 底色)');
+// ---- .28 站点给**部分**置顶行加了 inline `style="background:#FAEEF4"`(粉白 lum 241) ----
+// inline 声明特异性 (1,0,0,0) 压得过本主题所有选择器 ⇒ 补普通规则没用, 必须 !important。
+// 既有兜底救不了的原因: `tr[bgcolor]` 那条本来就带 !important(所以不是 bgcolor 属性);
+// 而 inline **白**底兜底只枚举 rgb(255,255,255)/white/#fff/#ffffff, 粉白一条都不命中。
+// ⚠️ 这条规则在源码里是**跨行拼接**的(`...accent);'` 换行 `+ 'background:...`),
+//    正则必须容忍中间的 `'\s*\+\s*'`, 否则会因换行匹配不上而误报(刚踩了一次)。
+ok(/R \+ '\.sticky_top\{box-shadow:inset 3px 0 0 var\(--hdui-accent\);'\s*\+\s*'background:var\(--hdui-card\) !important;\}'/.test(src),
+    '外层置顶行底色带 !important(.28: 站点的 inline 粉白 #FAEEF4 压得过普通规则)');
+// ⚠️ !important 会把 `R + ':hover'` 的悬停反馈一起吃掉, 必须补一条同级的 hover
+ok(/R \+ '\.sticky_top:hover\{background:var\(--hdui-rule\) !important;\}'/.test(src),
+    '置顶行 hover 有 !important 补偿(.28: 否则底色 !important 会吃掉悬停反馈)');
 // 内层只补背景, 不能带金边 —— 外层已有 inset 金条, 内外各一条 = 视觉重复
 ok(!/TN \+ '\.sticky_top\{[^}]*box-shadow:inset/.test(src),
     '嵌套 tr.sticky_top 不带金色 inset(否则内外各一条金边, 视觉重复)');

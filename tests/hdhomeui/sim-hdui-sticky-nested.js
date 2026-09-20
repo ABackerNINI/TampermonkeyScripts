@@ -99,6 +99,25 @@ runCase('HDHomeUI · 置顶行内外两层都上妆(P65)', async function () {
             '外层置顶行保留金色 inset 金边(置顶的视觉锚点), 实际 ' + outerGold.length
             + '/' + r.outer.length + ' 个: ' + JSON.stringify(r.outer.slice(0, 1)));
 
+        // ---- ④ 站点的 inline 底色必须被压住(.28) ----
+        // 真站有 **8 段**置顶行带 inline `style="background:#FAEEF4"`(粉白 lum 241)。
+        // inline 声明特异性 (1,0,0,0) 压得过本主题**所有**选择器 ⇒ 补普通规则没用, 主题必须 !important。
+        // 既有两条兜底都救不了: `tr[bgcolor]` 本来就带 !important(所以不是 bgcolor 属性);
+        // inline **白**底兜底只枚举 rgb(255,255,255)/white/#fff/#ffffff, 粉白一条都不命中。
+        // ⚠️ 这条是本题的**直接复现** —— 删掉 `!important` 它会立刻变红。
+        const inlineBg = await page.eval([
+            'const rs = Array.prototype.slice.call(document.querySelectorAll("#torrenttable tr.sticky_top"));',
+            'rs.forEach(function (r) { r.setAttribute("style", "background:#FAEEF4"); });',
+            'return rs.map(function (r) { return { bg: getComputedStyle(r).backgroundColor,',
+            '  hasShadow: /inset/.test(getComputedStyle(r).boxShadow) }; });'
+        ].join('\n'));
+        assert(inlineBg.length > 0, '拿到置顶行用于 inline 底色测试, 实际 ' + inlineBg.length);
+        const beatByInline = inlineBg.filter(function (x) { return x.bg !== CARD; });
+        assertEq(beatByInline.length, 0,
+            '站点的 inline 粉白底色被压住, 置顶行仍是片基色 ' + CARD
+            + '(.28: 真站 104 个里有 16 个被 inline #FAEEF4 盖成 lum241 粉白), 实际异常 '
+            + beatByInline.length + ' 个: ' + JSON.stringify(beatByInline.slice(0, 2)));
+
         await page.close();
     }, { scriptPath: H.HDUI_PATH });
 });

@@ -2,7 +2,7 @@
 // @name         HDHomeUI
 // @name:zh-CN   HDHome 界面主题套件
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.20.2
+// @version      2026.09.20.3
 // @description  HDHome 界面主题: 胶片墙(齿孔片边 · 帧号 · 做种金), 可一键切回原站默认。纯样式层, 不重建 DOM、不接管交互, 原站功能全部保留; 开关内嵌在导航栏末尾(不占悬浮位、不与其它脚本的浮动按钮打架); A/A·GB 两列由其它脚本注入, 有或没有都能上妆、补进来会自动重摆; 搜索 / 下拉框 / 按钮等表单元素全部深色化(站点的白底在深色片基上刺眼); 标题格四个动作按钮(豆瓣/IMDb/下载/收藏)跟在标题后面同行; 导航栏页签(首页/论坛等)清掉站点的浅灰底; 站点自绘的图标(类别/促销/置顶图钉/推荐星/排序箭头/信箱等)全部换成主题 SVG; 表头六个指标列的概念图标(评论/存活/大小/做种/下载/完成)用概念图而非上下方向图标, 避免与「激活排序方向」混淆; 下载进度指示器的英文 "Leeching" 替换为中文「下载中」; 分享率、魔力值等统计值与数据行的暗红标记按主题重新上色(站点原色在深色底上几乎看不见); 滚动条 / 下拉弹层 / 自动填充等浏览器自带界面一并深色化; 非种子页(我的/论坛等)同样铺深色底, 站点用 inline style 画的白底/分页/工具栏容器一并压深, 不留大面积浅色块; 页面结构异常时先等结构就绪, 超时才提示并回退默认界面; 出现认不出来的列或行(分组行 / 公告行 / 新徽章)时不猜、直接回退原站界面, 绝不把未知内容画到错误的槽位或压成空白。
 // @author       ABacker
 // @license      GNU GPL-3.0
@@ -759,7 +759,18 @@ H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-ga
             + 'text-align:center;font-family:var(--hdui-font-num);font-size:9.5px;'
             + 'letter-spacing:.06em;color:var(--hdui-dim);}',
             // 置顶: 左侧金色内阴影(不占流, 不把列推开)
-            R + '.sticky_top{box-shadow:inset 3px 0 0 var(--hdui-accent);}',
+            // ⚠️ .28: 站点给**部分**置顶行加了 inline `style="background:#FAEEF4"`(粉白, lum 241) ——
+            //    用户实拍「第二段置顶种子仍是白色背景」的真凶。三处佐证:
+            //    ① 真站探针: 104 个 tr.sticky_top 里 16 个(外层 8 + 标题格内层 8)是 rgb(250,238,244);
+            //       其余 88 个正常深色, 结构切分 R=52 / TN=52 / neither=0 ⇒ **不是**漏规则, 是被更强的声明盖住。
+            //    ② inline 声明特异性 (1,0,0,0), 压得过本主题所有选择器 —— 所以"补一条普通规则"没用。
+            //    ③ 既有兜底救不了: `tr[bgcolor]` 那条(下)确实带 !important, 所以不是 bgcolor 属性;
+            //       而 inline 白底兜底**只枚举白色系**(rgb(255,255,255)/white/#fff/#ffffff), 粉白一条都不命中。
+            //    修: 置顶行底色显式 `!important`(作者样式表的 !important 压得住 inline 的非 important 声明)。
+            //    ⚠️ 必须**同时**补一条 hover: `!important` 会把 `R + ':hover'` 的悬停反馈一起吃掉。
+            R + '.sticky_top{box-shadow:inset 3px 0 0 var(--hdui-accent);'
+            + 'background:var(--hdui-card) !important;}',
+            R + '.sticky_top:hover{background:var(--hdui-rule) !important;}',
             R + ' > td{overflow:hidden;min-width:0;}',
             // ⚠️ .25: 上面那条 R + '.sticky_top' **只匹配外层** `tr.sticky_top`(`R` 是直接子代选择器)。
             //    标题格里**嵌套的** `<table class="torrentname">` 也有 `tr.sticky_top`(共 86 个里有 43 个),
@@ -767,7 +778,8 @@ H + '{position:sticky;top:0;z-index:6;display:flex;align-items:stretch;column-ga
             //    真站探测证实: 86 个 tr.sticky_top, 父级全在 tbody 下, 但只有 43 个背景 rgb(32,28,24)(themed),
             //    另 43 个透明 —— 嵌套那批全裸奔。
             //    修: 给嵌套 tr.sticky_top **显式背景**(不加金边, 避免外内双金边), 让它和外层一致。
-            TN + '.sticky_top{background:var(--hdui-card);}',
+            //    ⚠️ .28: 同外层那条 —— 内层同样会被站点的 inline 粉白盖住, 必须一起 !important。
+            TN + '.sticky_top{background:var(--hdui-card) !important;}',
             basis.join('\n'),
             // 数据行对齐: 站点 `table.torrents td.rowfollow{text-align:center}` 会把标题也居中
             tdRule(m, ['type', 'title', 'uploader'], 'text-align:left;'),
