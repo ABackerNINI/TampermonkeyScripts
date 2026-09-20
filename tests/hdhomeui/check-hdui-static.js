@@ -311,8 +311,26 @@ ok(catMiss.length === 0,
 ok(/img\[class\*="c_"\]/.test(src), '类别图标有兜底规则(img[class*="c_"])');
 
 // 促销: 真站是 <img class="pro_*">, 不是 span.tags
-ok(/const PRO_BADGES/.test(src) && /pro_50pctdown/.test(src) && /pro_free2up/.test(src),
-    '促销徽章按真站的 img.pro_* 三个类名做');
+// ⚠️ .30 起**显示站点原图** —— 断言方向反过来: 不是"有换图规则", 而是"**没有**换图规则"。
+//    站点 src 是透明占位图, 图标全靠 `background:url(icons.gif)` 画 ⇒
+//    任何 `content:` 或 `background-image:none` 都会把原图干掉。
+const proRule = (src.match(/#torrenttable img\[class\*="pro_"]\{([^}]*)\}/) || [])[1] || '';
+ok(/background:none|background-image:none/.test(proRule) === false,
+    '促销规则**不清背景**(.30: 原图是 background 雪碧图, 清掉就只剩 36×11 空框), 实际: ' + proRule);
+// ⚠️ 只禁**精确**尺寸(width/height), 放行 min-* —— min-width/min-height 是给"站点忘了
+//    给尺寸的新家族"兜底防塌成 1×1 的(P66), 已知族是 36×11 大于 min 所以不受影响。
+ok(!/(^|;)\s*(width|height)\s*:/.test(proRule),
+    '促销规则**不写精确尺寸**(.30: sprites 按 36×11 定位, 改尺寸会露出相邻图标), 实际: ' + proRule);
+ok(/min-width:\s*\d+px/.test(proRule) && /min-height:\s*\d+px/.test(proRule),
+    '促销有 min-width/min-height 兜底(.30/P66: 站点没给尺寸的新家族不至于塌成 1×1 隐形), 实际: '
+    + proRule);
+// 反断言: 不能有任何给 pro_* 换 content 的规则(这是 .20/.29 的老做法, 已被用户否决)
+ok(!/img\[class\*="pro_"]\{[^}]*content:url/.test(src)
+    && !/img\.(pro_free|pro_50pctdown|pro_free2up)\{[^}]*content:/.test(src),
+    '促销没有 content 换图规则(.30: 用户要站点原图, 换 content 会把原图盖掉)');
+// 记录备查: 三族语义仍应在注释里留档(便于后续维护), 但不参与生成样式
+ok(/pro_free[\s\S]{0,200}pro_50pctdown[\s\S]{0,200}pro_free2up/.test(src),
+    '促销三族语义在源码注释中留档(不参与生成样式)');
 // ⚠️ 只看**非注释**代码: 注释里会提到旧类名来说明来由, 那不是"还在用"
 const srcCode = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 ok(srcCode.indexOf('.tags.tfree') < 0,
@@ -333,14 +351,12 @@ ok(iconKeys.length >= 38, 'ICONS 至少 38 个图形(实际 ' + iconKeys.length 
 ['hcat', 'htitle', 'hprog', 'hcalc', 'hratio'].forEach(function (n) {
     ok(iconKeys.indexOf(n) >= 0, '列头图标已定义: ' + n);
 });
-// ⚠️ .29: 促销徽章从**图形**改成**文字**, 不再依赖 ICONS 里的 prodown/proFree/pro2up。
-//    这三个图形还在 ICONS 里但已无人引用(留着无害), 断言改验"文字生成函数 + 站点原文"。
-ok(/function promoBadgeUri\(label, color\)/.test(src),
-    '促销徽章走文字生成器 promoBadgeUri(.29: 图形在 14px 下不具辨识度)');
-ok(/const PRO_FALLBACK_LABEL = '促销'/.test(src),
-    '未登记的 pro_* 家族有可读的文字兜底「促销」(.29: 用户提醒不止 3 个标签, 兜底不能是空白)');
-ok(/promoBadgeUri\(PRO_FALLBACK_LABEL, PRO_FALLBACK_COLOR\)/.test(src),
-    '兜底排在具体家族之前且用的是文字徽章(P66: 新增 pro_* 不能变 16×16 空白)');
+// ⚠️ .30: 促销显示**站点原图** ⇒ `promoBadgeUri` / `PRO_BADGES` / `PRO_FALLBACK_*` 全部移除。
+//    留着就是死代码, 而且会误导后来者以为"促销还是我们在画"。
+ok(!/function promoBadgeUri/.test(src),
+    '文字徽章生成器 promoBadgeUri 已随 .30 移除(.30: 改回站点原图, 不留死代码)');
+ok(!/const PRO_BADGES\b/.test(src) && !/PRO_FALLBACK_LABEL/.test(src),
+    '促销枚举 PRO_BADGES / PRO_FALLBACK_LABEL 已移除(.30: 不再按名枚举换图)');
 ['douban', 'imdb', 'getdown', 'mark'].forEach(function (n) {
     ok(iconKeys.indexOf(n) >= 0, '标题格动作图标已定义: ' + n);
 });
@@ -421,19 +437,10 @@ ok(/::placeholder/.test(src),
 ok(/input\[type=password\]/.test(src),
     'password / number / email 等输入框也深色化(.18: 原来只写了 type=text, 登录页会漏)');
 
-// ---- .20 三种促销徽章必须分色(用户实拍「种子缺少Free标记」: 原来全是同一个金, 分不出哪个是免费) ----
-ok(/\['pro_50pctdown', '50%', '#f5b342'\]/.test(src), '5折徽章=琥珀(#f5b342), 文字=[50%]');
-ok(/\['pro_free', 'Free', '#7fb84e'\]/.test(src), '免费徽章=绿(#7fb84e), 文字=[Free], 与 5折 分得开');
-ok(/\['pro_free2up', '2X Free', '#9b7fd4'\]/.test(src), '免费+双倍徽章=紫(#9b7fd4), 文字=[2X Free]');
-// 反断言: 三种不能又是同一个色
-// 逐条取(不用一条 alternation 正则: `free` 会先匹配到 `free2up` 的前缀再回溯, 容易漏)
-// ⚠️ .29: 第二项现在是**文字**(含 % 与空格), 不能再用 '[a-zA-Z]+' 匹配
-const proColors = ['50pctdown', 'free', 'free2up'].map(function (k) {
-    const m = new RegExp("\\['pro_" + k + "', '(.+?)', '(#[0-9a-f]{6})'\\]").exec(src);
-    return m ? m[2] : null;
-});
-ok(proColors.length >= 3 && new Set(proColors).size === proColors.length,
-    '三种促销徽章颜色两两不同(实际 ' + proColors.join(',') + ')');
+// ---- .30 促销改回站点原图: .20/.29 那套"我们自己给促销上色"的断言全部作废 ----
+// 历程(别再绕回去): .20 图形徽章(三色) → .29 文字徽章 → **.30 显示站点原图**(用户最终选择)。
+// 现在不该有任何"促销配色"约束 —— 促销长什么样完全由站点决定。
+// (原「三种促销徽章颜色两两不同」断言随 .30 删除 —— 促销改回站点原图后, 配色由站点决定)
 
 // ---- .24 隐藏态元素(DomTT 提示框 / 表情面板): 渲染扫描抓不到, 必须主动按选择器查 ----
 // 站点 `div.niceTitle{background:#7c98ae;color:#000}` 平时 visibility:hidden,
@@ -590,11 +597,13 @@ ok(/html\[data-hdui-theme\] #torrenttable\{[^}]*color:var\(--hdui-fg\)/.test(bui
     '#torrenttable 重置了 color(站点 table.torrents{color:#000} 会让新元素继承纯黑 = 隐形, P66)');
 // ② 促销徽章必须有**兜底**, 且兜底要排在 PRO_BADGES 枚举之前(同特异性下后写的胜出)。
 //    ⚠️ 选择器是拼出来的(`img.' + x[0] + '{content:`), 不能拿 `img.pro_50pctdown{` 当锚点。
+// ⚠️ .30 促销改回**站点原图** ⇒ P66 的满足方式变了: 不再是"我们给一个兜底图形",
+//    而是"**根本不去动它**" —— 未登记的新 pro_* 家族会直接显示站点给它配的图, 天然不空白。
+//    所以这里从"必须有兜底规则"翻转为"**必须没有**任何 pro_* 换图规则"。
 const proFbAt = iconCssBlock.indexOf('img[class*="pro_"]{content:');
 const proEnumAt = iconCssBlock.indexOf('PRO_BADGES.forEach');
-ok(proFbAt >= 0, '促销徽章有兜底图形(未登记的 pro_* 家族不该变成 16×16 空白, P66)');
-ok(proFbAt >= 0 && proEnumAt >= 0 && proFbAt < proEnumAt,
-    '促销兜底排在具体家族之前(否则会把 pro_free / pro_50pctdown 也盖成同一个兜底图形)');
+ok(proFbAt < 0 && proEnumAt < 0,
+    '促销不再生成任何换图规则(.30 显示站点原图 ⇒ 未登记家族直接显示站点配图, P66 天然满足)');
 // ③ 站点写死的**前景色**要有人管: 底被压深了, 字还是黑的 = 隐形(公告/提示块高发区)。
 //    ⚠️ 选择器按 FONT_BLACK 数组生成, 源码里没有 `font[color="#000000"]` 这种字面量。
 const fontBlack = (src.match(/const FONT_BLACK = Object\.freeze\(\[([^\]]*)\]/) || [])[1] || '';

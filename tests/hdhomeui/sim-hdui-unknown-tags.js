@@ -140,6 +140,16 @@ runCase('HDHomeUI · 未知列 / 未知分组行一律卸妆, 新标签保留站
         ['icon-unknown-cat', 'icon-unknown-pro'].forEach(function (id) {
             const v = ic[id];
             assert(v && v.w >= 8, '[' + id + '] 未知图标有尺寸(实测 ' + (v && v.w) + 'px)');
+            // ⚠️ .30 例外: 促销 `pro_*` 改为**显示站点原图**(用户明确要求), 契约变了 ——
+            //    不再要求它换成主题 SVG, 只要求**没被压没**(尺寸 ≥ 8px, 由上面那条把关)。
+            //    真站任何 pro_* 在 sprites.css 里都有自己的背景图, 不会空白;
+            //    仿真这只 `icon-unknown-pro` 是"站点没给它配背景"的极端探针。
+            //    **类别**图标(`icon-unknown-cat`)仍必须换 SVG —— 45×46 定位裁到 16×16 会碎。
+            if (id === 'icon-unknown-pro') {
+                assert(v && v.content === 'normal',
+                    '[' + id + '] 促销显示站点原图 ⇒ content 未被替换(.30), 实际 ' + v.content);
+                return;
+            }
             assert(v && (v.content.indexOf('data:image/svg+xml') >= 0
                 || v.bg.indexOf('data:image/svg+xml') >= 0),
                 '[' + id + '] 未知图标换成了主题 SVG 兜底图形(不是空白); 实测 content='

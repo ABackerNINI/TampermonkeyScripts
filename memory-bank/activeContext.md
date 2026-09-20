@@ -5,7 +5,20 @@
 ## 当前工作焦点
 
 **HDHomeUI（`src/HDHomeUI.user.js`，`2026.09.20.2`，2026-09-19 新建，TASK018/TASK019）——HDHome 界面主题：胶片墙。**
-**2026-09-20 `.29`（已改码，**待审核**）——新需求：置顶两区分色 + 促销改文字徽章。**
+**2026-09-20 `.30`（已改码，**待审核**）——促销改回站点原图（.29 的文字徽章被否决）。**
+用户明确要求「促销标签改为原图 img 显示」。
+**认知**：站点 `<img class="pro_*">` 的 src 是**透明占位图**(trans.gif)，图标全靠
+`background:url(icons.gif) -Xpx 0` 画 ⇒ 任何 `content:` 或 `background-image:none` 都会干掉原图。
+**修**：`iconCss` 不再为 pro_* 生成任何规则；`filmCss` 只留 `min-width:16px;min-height:11px`
+（兜底防新家族塌成 1×1）+ 排版微调，**不写精确 width/height**（sprites 按 36×11 定位，改了露相邻图标）、
+**不写 background**。删除死代码 `promoBadgeUri`/`PRO_BADGES`/`PRO_FALLBACK_LABEL`/`PRO_FALLBACK_COLOR`。
+**配套**：`hdui-scan.js` 的 scanDeco 给 `img[class*="pro_"]` 加白名单例外，否则保留的雪碧图
+会被报成「站点残留装饰 bg-img」（实测 69 个）。两个金丝雀用例（unknown-canary / unknown-tags）
+对 `icon-unknown-pro` 的契约随之改：不再要求换主题 SVG，只要求没被压没；**类别**图标仍必须换 SVG。
+真站实测 70/70 content 未被替换、70/70 雪碧图还在。
+**历程（别再绕）**：.20 图形徽章 → .29 文字徽章 → **.30 站点原图**（用户最终选择）。
+⇒ 促销这种"站点自己画得挺好、尺寸也刚好"的东西，**不要替它重新设计**。
+**2026-09-20 `.29`（已提交 `8776b4e` 并推送）——新需求：置顶两区分色 + 促销改文字徽章。**
 ① **三区分色**：用户报「无法分辨置顶区1/区2/普通区」。发探针量真站 101 行 =
   表头(0) / 置顶区1(1-41，无 inline) / 置顶区2(42-50，带 inline `background-color: rgb(250,238,244);`)
   / 普通区(51-100) ⇒ **站点本来就用两个不同底色区分两区**，是 .28 一律压成片基色才分不出来。

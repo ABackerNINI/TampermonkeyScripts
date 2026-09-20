@@ -110,10 +110,11 @@ const ROW_PROBE = [
     '    pad: cs(cat0, "padding-left") } : null,',
     '  catAllSvg: catImgs.map(function (im) { return String(cs(im, "content")).indexOf("data:image/svg+xml") >= 0; }),',
     '  catCls: catImgs.map(function (im) { return im.className; }),',
-    // .29: 文字徽章宽度按字数走, 必须同时量 h —— 只量 w 的话"被压扁"看不出来
+    // .30: 显示**站点原图** —— 要量 content(是否被换) / background-image(雪碧图是否还在) / 尺寸
     '  pro: pro ? { w: Math.round(pro.getBoundingClientRect().width),',
     '    h: Math.round(pro.getBoundingClientRect().height),',
-    '    svg: String(cs(pro, "content")).indexOf("data:image/svg+xml") >= 0 } : null,',
+    '    content: String(cs(pro, "content")),',
+    '    bg: String(cs(pro, "background-image")) } : null,',
     '  tag: tag ? { float: cs(tag, "float"), radius: cs(tag, "border-radius"),',
     '    bg: cs(tag, "background-color") } : null,',
     '  titleTop: titleA ? Math.round(titleA.getBoundingClientRect().top) : null,',
@@ -215,11 +216,15 @@ runCase('HDHomeUI · 胶片墙与原型 film.html 的保真度', async function 
         //    图形是定宽 16×16; 文字宽度必须按字数走("50%" 与 "2X Free" 不一样宽),
         //    所以这里不再断言 16, 改成断言"高度 14 + 宽度按文字自然展开"。
         assert(!!row.pro, '找得到促销图标 img.pro_*');
-        assert(row.pro.svg, '促销图标换成内联 SVG(真站的 36×11 雪碧图已替换)');
-        assertEq(row.pro.h, 14, '促销徽章高 14px(.29: 文字徽章的高度基准)');
-        assert(row.pro.w >= 16,
-            '促销徽章宽度 >= 16px 且按文字展开(.29: 文字比图形宽, 写死 16 会把 "2X Free" 压扁), '
-            + '实际 ' + row.pro.w);
+        // ⚠️ .30 用户要求**显示站点原图**(历程: .20 图形徽章 → .29 文字徽章 → .30 原图)。
+        //    断言方向随之反过来: 不是"换成了 SVG", 而是"**没被动过**"。
+        assertEq(row.pro.content, 'normal',
+            '促销 content 仍是 normal(.30: 显示站点原图, 换 content 会把原图盖掉), 实际 '
+            + row.pro.content);
+        assert(/icons\.gif/.test(row.pro.bg),
+            '促销背景仍是站点雪碧图 icons.gif(.30: 清成 none 就只剩 36×11 空框), 实际 ' + row.pro.bg);
+        assertEq(row.pro.w, 36, '促销宽仍是站点原尺寸 36(.30: sprites 按此定位), 实际 ' + row.pro.w);
+        assertEq(row.pro.h, 11, '促销高仍是站点原尺寸 11(.30), 实际 ' + row.pro.h);
 
         // 标签: 保留站点 23 种分类色, 只改形状
         assert(!!row.tag, '找得到行内标签 span.tags');

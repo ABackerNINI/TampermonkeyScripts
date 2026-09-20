@@ -107,7 +107,11 @@ function checkOne(c, id, opt) {
     }
     // ⚠️ 不能只判"不是 none": 站点雪碧图也是"不是 none", 看不出到底换没换成主题图标。
     //    直接要求**至少一层是内联 SVG** —— 这才等价于"未知图标也有兜底图形, 不会变空白"。
-    if (o.icon) {
+    //    ⚠️⚠️ .30 例外: **促销** `pro_*` 改为显示站点原图(用户明确要求), 契约随之改变 ——
+    //       不再要求它换成主题 SVG, 只要求它**没被压没**(尺寸 ≥ 8×8, 由上面的面积断言把关)。
+    //       真站任何 pro_* 家族在 sprites.css 里都有自己的背景图, 不存在"变空白";
+    //       仿真这只 `icon-unknown-pro` 是人为造的、站点没给它配背景的极端探针。
+    if (o.icon && !o.allowOriginal) {
         const isSvg = function (v) {
             return typeof v === 'string' && v.indexOf('data:image/svg+xml') >= 0;
         };
@@ -148,7 +152,12 @@ runCase('HDHomeUI · 未知元素金丝雀(公告 / 弹窗 / 新标签一律不�
         // A 组: 加载期就存在的未知元素(**注入之前**量, 免得被自己注入的浮层盖住)
         const load = await scan.canaries(page, LOAD_IDS);
         LOAD_IDS.forEach(function (id) {
-            checkOne(load[id], id, { icon: /^icon-/.test(id), text: !/^icon-/.test(id) });
+            // .30: 促销 `pro_*` 改显示站点原图 ⇒ 不要求它换成主题 SVG(见 checkOne 的注释)
+            checkOne(load[id], id, {
+                icon: /^icon-/.test(id),
+                text: !/^icon-/.test(id),
+                allowOriginal: id === 'icon-unknown-pro'
+            });
         });
 
         // B 组: 运行期动态冒出来的

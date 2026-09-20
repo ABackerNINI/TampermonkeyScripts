@@ -149,7 +149,12 @@ const DECO_JS = [
     '  if (r.width < 2 || r.height < 2) return;',
     '  const hits = [];',
     '  const bi = __cs(e, "background-image");',
-    '  if (bi && bi !== "none" && bi.indexOf("data:") < 0) hits.push("bg-img");',
+    // ⚠️ .30: 促销 img.pro_* 的站点雪碧图是**刻意保留**的(用户要求显示原图) ——
+    //    它不是"我们没清干净的站点残留", 而是本主题明确决定不碰的东西。
+    //    不排除的话, 真站验收会把它报成 bg-img 残留(实测 pro_50pctdown 33 + pro_free 27
+    //    + pro_free2up 9 = 69 个)。与下面 tr.sticky_top 的金边同理, 都是"白名单例外"。
+    '  const keepPro = !!(e.matches && e.matches(\'img[class*="pro_"]\'));',
+    '  if (bi && bi !== "none" && bi.indexOf("data:") < 0 && !keepPro) hits.push("bg-img");',
     '  const bs = __cs(e, "box-shadow");',
     // tr.sticky_top 那条 inset 金边是我们自己的置顶标记, 不是站点残留
     '  if (bs && bs !== "none" && !(e.matches && e.matches("tr.sticky_top"))) hits.push("shadow");',

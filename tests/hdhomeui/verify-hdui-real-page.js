@@ -227,23 +227,23 @@ const GM_MIN = [
             'const tags = Array.prototype.slice.call(document.querySelectorAll("#torrenttable span.tags"));',
             'const fams = {};',
             'cats.forEach(function (i) { const f = (String(i.className).match(/^c_[a-z]+/) || ["?"])[0]; fams[f] = (fams[f] || 0) + 1; });',
-            // .29: 促销徽章是**文字** —— 只验"是 SVG"抓不到换回图形, 必须解码查字
-            'function decode(c) {',
-            '  const m = /url\\("(.+)"\\)/.exec(String(c));',
-            '  if (!m) return "";',
-            '  try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }',
-            '}',
-            'const proText = {};',
+            // .30: 促销**保持站点原图** —— 站点的 src 是透明占位图, 图标全靠 background 画。
+            //    所以判据是"content 没被换" + "background 雪碧图还在", 与类别图标正好相反。
+            'const proContent = {};',
+            'const proBg = {};',
             'pros.forEach(function (i) {',
-            '  const t = decode(cs(i, "content"));',
-            '  const m = />([^<>]+)<\\/text>/.exec(t);',
             '  const k = String(i.className);',
-            '  if (m) { proText[k] = m[1]; } else { proText[k] = "(无文字)"; }',
+            '  proContent[k] = String(cs(i, "content"));',
+            '  proBg[k] = String(cs(i, "background-image"));',
             '});',
             'return {',
             '  catN: cats.length, catSvg: cats.filter(svg).length,',
-            '  proN: pros.length, proSvg: pros.filter(svg).length,',
-            '  proText: proText,',
+            '  proN: pros.length,',
+            '  proNormal: pros.filter(function (i) { return String(cs(i, "content")) === "normal"; }).length,',
+            '  proWithBg: pros.filter(function (i) {',
+            '    return String(cs(i, "background-image")).indexOf("url(") >= 0; }).length,',
+            '  proContent: proContent,',
+            '  proBg: proBg,',
             '  tagN: tags.length,',
             '  tagPill: tags.filter(function (s) { return cs(s, "float") === "none" && cs(s, "border-radius") === "999px"; }).length,',
             '  tagColored: tags.filter(function (s) { return cs(s, "background-color") !== "rgba(0, 0, 0, 0)"; }).length',
@@ -251,15 +251,14 @@ const GM_MIN = [
         ].join('\n'));
         ok(icons.catN > 0 && icons.catSvg === icons.catN,
             '类别图标全部换成 SVG(含未登记家族的兜底): ' + icons.catSvg + '/' + icons.catN);
-        ok(icons.proN > 0 && icons.proSvg === icons.proN,
-            '促销徽章全部换成 SVG: ' + icons.proSvg + '/' + icons.proN);
-        // .29: 徽章是**文字**而非图形(用户实拍"Free 等促销标签不具辨识度")
-        const proNoText = Object.keys(icons.proText || {}).filter(function (k) {
-            return icons.proText[k] === '(无文字)';
-        });
-        ok(proNoText.length === 0,
-            '促销徽章都带**文字**(.29): ' + JSON.stringify(icons.proText)
-            + (proNoText.length ? ' —— 无文字的家族: ' + proNoText.join(', ') : ''));
+        // ⚠️ .30 促销改回**站点原图** —— 判据反转: 不再要求"换成 SVG", 而要求"**没被动过**"。
+        //    历程: .20 图形徽章 → .29 文字徽章 → .30 站点原图(用户最终选择)。
+        ok(icons.proN === 0 || icons.proNormal === icons.proN,
+            '促销 content 全部未被替换(.30 显示站点原图): ' + icons.proNormal + '/' + icons.proN
+            + (icons.proNormal === icons.proN ? '' : ' 实际 ' + JSON.stringify(icons.proContent)));
+        ok(icons.proN === 0 || icons.proWithBg === icons.proN,
+            '促销的站点雪碧图背景都还在(.30: 清成 none 就只剩空框): ' + icons.proWithBg + '/'
+            + icons.proN + (icons.proWithBg === icons.proN ? '' : ' 实际 ' + JSON.stringify(icons.proBg)));
         ok(icons.tagN > 0 && icons.tagPill === icons.tagN && icons.tagColored === icons.tagN,
             '标签是药丸且**保留站点分类底色**: ' + icons.tagPill + '/' + icons.tagN + ' 药丸, '
             + icons.tagColored + '/' + icons.tagN + ' 保留底色');
