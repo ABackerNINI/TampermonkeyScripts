@@ -443,10 +443,18 @@ ok(/\.dock\{display:flex;[^}]*background:rgba\(245,179,66,\.22\)/.test(src)
     '切换按钮 (.dock) 用实底色金 22% opacity + 粗体(.25: 原 4.5% opacity 看不见)');
 ok(/\.dock \.dot\{width:7px;height:7px;[^}]*box-shadow:0 0 6px/.test(src),
     'dock 加了发光 dot(.25)');
-// 嵌套置顶: 标题格里嵌套的 tr.sticky_top 之前漏了, 露出站点默认白底
-ok(/table\.searchbox[\s\S]*TN \+ '\.sticky_top/.test(src)
-    || /\bTN \+ '\.sticky_top\{background:var\(--hdui-card\)/.test(src),
-    '嵌套 tr.sticky_top 也加了背景(.25: 之前 43 个透明)');
+// 嵌套置顶(P65): 真站 tr.sticky_top 有**内外两层**(86 = 外层 43 + 标题格嵌套表 43),
+// 而 R 是直接子代选择器(`#torrenttable > tbody > tr`)只够到外层 —— 内层漏规则就露出站点默认底色。
+// ⚠️ 判据必须严: 原来这条带一个 `table.searchbox[\s\S]*TN \+ '.sticky_top` 的兜底,
+//    `[\s\S]*` 跨行通配几乎恒真 —— 把修复整条删掉它也不会红, 等于**没有断言**(.27 才补)。
+ok(/TN \+ '\.sticky_top\{background:var\(--hdui-card\);\}'/.test(src),
+    '嵌套 tr.sticky_top 有片基背景(P65: 漏掉时 43 个透明 = 用户实拍的白色置顶段)');
+// 内层只补背景, 不能带金边 —— 外层已有 inset 金条, 内外各一条 = 视觉重复
+ok(!/TN \+ '\.sticky_top\{[^}]*box-shadow:inset/.test(src),
+    '嵌套 tr.sticky_top 不带金色 inset(否则内外各一条金边, 视觉重复)');
+// 不能为了"省事"退化成通用后代选择器: 那会扩大打击面到 meta 格里的嵌套小表
+ok(!/#torrenttable \.sticky_top\{/.test(src),
+    '置顶规则保持直接子代作用域, 未退化成通用后代选择器(防扩大打击面)');
 // 搜索箱重新设计: 表格改卡片, 不能用 !important 破坏折叠
 ok(/table\.searchbox\{[\s\S]*display:block/.test(src),
     '搜索箱改成卡片布局(.25: 用户说"完全重新设计")');

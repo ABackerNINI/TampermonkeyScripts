@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HDHomeUI · 第二段置顶种子白底 — 诊断与修复计划</title>
+<style>
+  /* ---------- 排版骨架 ---------- */
+  :root{
+    --ink:#1a1714; --ink-2:#3a352e; --ink-3:#6b6258; --ink-4:#9c9286;
+    --paper:#fbfaf7; --rule:#e6dfd2; --rule-strong:#cdc4b0;
+    --accent:#8a5a00;          /* 报告类文档用棕金，不用高饱和橙 */
+    --accent-soft:#f4ecd6;
+    --ok:#3a6b3a; --warn:#8a5a00; --bad:#8a1f1f;
+    --code-bg:#f5f1e6;
+    --code-fg:#2a241c;
+    --max:760px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#ece5d3; --ink-2:#cfc6b1; --ink-3:#9a907b; --ink-4:#6e6553;
+      --paper:#16140e; --rule:#2a261c; --rule-strong:#3e3727;
+      --accent:#d6a44a; --accent-soft:#2a2410;
+      --ok:#7fb84e; --warn:#d6a44a; --bad:#d97070;
+      --code-bg:#1d1a12; --code-fg:#d4cbb5;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Source Serif Pro","Noto Serif CJK SC","Songti SC",Georgia,serif;
+    font-size:16px; line-height:1.65;
+    color:var(--ink); background:var(--paper);
+    -webkit-font-smoothing:antialiased;
+  }
+  main{
+    max-width:var(--max);
+    margin:0 auto;
+    padding:56px 28px 96px;
+  }
+
+  /* ---------- 元数据条 ---------- */
+  .meta{
+    font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    font-size:11.5px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-3);
+    border-top:1px solid var(--rule);
+    border-bottom:1px solid var(--rule);
+    padding:10px 0;
+    margin-bottom:36px;
+    display:flex; flex-wrap:wrap; gap:18px;
+  }
+  .meta b{color:var(--ink-2); font-weight:600}
+
+  /* ---------- 标题 ---------- */
+  h1{
+    font-family:"Source Serif Pro","Noto Serif CJK SC","Songti SC",Georgia,serif;
+    font-weight:600;
+    font-size:34px; line-height:1.2;
+    margin:0 0 8px;
+    letter-spacing:-.01em;
+  }
+  h1 .punct{color:var(--ink-4); margin:0 6px; font-weight:400}
+  .lede{
+    font-size:16px; color:var(--ink-2); margin:0 0 36px;
+    max-width:640px;
+  }
+
+  /* ---------- 节 ---------- */
+  h2{
+    font-size:20px; font-weight:600;
+    margin:48px 0 14px;
+    padding-bottom:6px;
+    border-bottom:1px solid var(--rule-strong);
+  }
+  h2 .num{
+    font-family:"SF Mono","JetBrains Mono",monospace;
+    font-size:13px; color:var(--ink-3); margin-right:10px;
+    letter-spacing:.08em;
+  }
+  h3{
+    font-size:16px; font-weight:600; margin:28px 0 8px;
+    color:var(--ink-2);
+  }
+
+  /* ---------- 正文 ---------- */
+  p{margin:0 0 14px}
+  ul,ol{margin:0 0 14px; padding-left:22px}
+  li{margin:4px 0}
+  strong{font-weight:600; color:var(--ink)}
+  em{font-style:italic; color:var(--ink-2)}
+
+  /* ---------- 引用 ---------- */
+  blockquote{
+    margin:18px 0;
+    padding:10px 16px;
+    border-left:3px solid var(--accent);
+    background:var(--accent-soft);
+    font-size:14.5px;
+    color:var(--ink-2);
+  }
+  blockquote p:last-child{margin-bottom:0}
+
+  /* ---------- 代码 ---------- */
+  code{
+    font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    font-size:13.5px;
+    color:var(--code-fg);
+    background:var(--code-bg);
+    padding:1px 5px;
+    border-radius:2px;
+  }
+  pre{
+    margin:14px 0;
+    padding:14px 16px;
+    background:var(--code-bg); color:var(--code-fg);
+    border:1px solid var(--rule);
+    border-radius:2px;
+    overflow-x:auto;
+    font-size:13px;
+    line-height:1.55;
+  }
+  pre code{background:transparent; padding:0; font-size:inherit}
+  /* 行级注释高亮 */
+  pre .com{color:var(--ink-3); font-style:italic}
+  pre .key{color:var(--accent)}
+  pre .val{color:var(--ok)}
+
+  /* ---------- 表格 ---------- */
+  table{
+    width:100%; border-collapse:collapse;
+    margin:18px 0;
+    font-size:14px;
+  }
+  th,td{
+    text-align:left;
+    padding:8px 10px;
+    border-bottom:1px solid var(--rule);
+    vertical-align:top;
+  }
+  th{
+    font-weight:600;
+    color:var(--ink-2);
+    border-bottom:1px solid var(--rule-strong);
+    font-size:12.5px;
+    letter-spacing:.04em;
+  }
+  td.num{font-family:"SF Mono",monospace; font-variant-numeric:tabular-nums}
+
+  /* ---------- 标签 / 状态色块 ---------- */
+  .tag{
+    display:inline-block;
+    font-family:"SF Mono","JetBrains Mono",monospace;
+    font-size:11px; letter-spacing:.04em;
+    padding:2px 7px;
+    border:1px solid var(--rule-strong);
+    border-radius:2px;
+    color:var(--ink-2);
+    background:var(--paper);
+    margin-right:4px;
+  }
+  .tag.ok{color:var(--ok); border-color:var(--ok)}
+  .tag.warn{color:var(--warn); border-color:var(--warn)}
+  .tag.bad{color:var(--bad); border-color:var(--bad)}
+  .tag.accent{color:var(--accent); border-color:var(--accent); background:var(--accent-soft)}
+
+  /* ---------- 决策点 / 验证清单 ---------- */
+  .checklist{
+    list-style:none; padding-left:0;
+    counter-reset:check;
+  }
+  .checklist li{
+    counter-increment:check;
+    position:relative;
+    padding:6px 0 6px 32px;
+    border-bottom:1px dotted var(--rule);
+  }
+  .checklist li::before{
+    content:counter(check,decimal-leading-zero);
+    position:absolute; left:0; top:7px;
+    font-family:"SF Mono",monospace; font-size:11px;
+    color:var(--ink-3);
+    width:24px;
+  }
+  .checklist li b{font-weight:600; color:var(--ink-2); margin-right:6px}
+
+  /* ---------- 页脚 ---------- */
+  .foot{
+    margin-top:64px;
+    padding-top:16px;
+    border-top:1px solid var(--rule);
+    font-size:12.5px; color:var(--ink-3);
+    font-family:"SF Mono",monospace;
+    letter-spacing:.04em;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+  }
+
+  /* ---------- 打印 ---------- */
+  @media print{
+    body{font-size:12pt}
+    main{max-width:none; padding:0}
+    .meta, .foot{color:#444}
+    pre{white-space:pre-wrap}
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <div class="meta">
+    <span><b>Date</b> 2026-09-20 16:58</span>
+    <span><b>Author</b> WorkBuddy (analysis)</span>
+    <span><b>Scope</b> HDHomeUI · 胶片墙主题</span>
+    <span><b>Type</b> Plan · Bug diagnosis + Fix proposal</span>
+    <span><b>Status</b> 计划文档 · 未改码</span>
+  </div>
+
+  <h1>第二段置顶种子白底<span class="punct">·</span>诊断与修复计划</h1>
+  <p class="lede">
+    用户实拍（<code>屏幕截图 2026-09-20 165720.png</code>）发现种子列表中带「热门」标签的置顶行第二段背景为白色。
+    本计划定位根因、给出最小修复、并列出可机械验收的检查项。
+  </p>
+
+  <h2><span class="num">01</span>症状与定位</h2>
+
+  <h3>用户描述</h3>
+  <blockquote>
+    「第二段置顶种子仍是白色背景」—— 即种子列表中带「热门」置顶标识的行，
+    其中部分行的背景仍为站点默认白底，未跟随主题上色。
+  </blockquote>
+
+  <h3>观察事实（真站探测，2026-09-19 .25 实施时已做）</h3>
+  <ul>
+    <li>真站 <code>#torrenttable</code> 内 <code>tr.sticky_top</code> 共 <b>86 个</b>。</li>
+    <li>其中 <b>43 个</b>位于 <code>#torrenttable &gt; tbody &gt; tr</code>（外层种子行）。</li>
+    <li>另 <b>43 个</b>位于 <code>#torrenttable table.torrentname &gt; tbody &gt; tr</code>（标题格内嵌表里的行）。</li>
+    <li>上妆后背景探测：43 themed（<code>rgb(32,28,24)</code>）+ <b>43 透明</b>（露出站点默认白底）。</li>
+    <li>行 class 完全相同（都是 <code>sticky_top</code>），但选择器只命中其中一半 —— 这正是症状的成因。</li>
+  </ul>
+
+  <h3>对照截图</h3>
+  <p>用户截图中的「第二段置顶种子」白底 —— 即站点种子列表中某一条标题格内嵌的置顶行
+    （典型形态：外层行已上色、内嵌标题格那条仍白），与 .25 实施时复现的 bug 同源。</p>
+
+  <h2><span class="num">02</span>根因分析</h2>
+
+  <h3>选择器特异性盲区</h3>
+  <p>胶片墙主题 CSS 里的置顶规则写法：</p>
+<pre><code><span class="com">// src/HDHomeUI.user.js:644</span>
+<span class="key">const</span> R  = <span class="val">'#torrenttable &gt; tbody &gt; tr:not(.colhead)'</span>;
+<span class="key">const</span> TN = <span class="val">'#torrenttable table.torrentname &gt; tbody &gt; tr'</span>;
+
+<span class="com">// src/HDHomeUI.user.js:762</span>
+R + <span class="val">'.sticky_top{box-shadow:inset 3px 0 0 var(--hdui-accent);}'</span>;</code></pre>
+
+  <p>
+    <code>R</code> 是<b>直接子代</b>选择器（<code>&gt;</code>），只能命中 <code>#torrenttable &gt; tbody &gt; tr</code> 这一层。
+    标题格里嵌套的 <code>&lt;table class="torrentname"&gt;</code> 同样有 <code>tbody &gt; tr.sticky_top</code>，但属于
+    <b>间接后代</b>（隔了一层 <code>&lt;td&gt;</code> → <code>&lt;table&gt;</code> → <code>&lt;tbody&gt;</code>），选择器够不到。
+  </p>
+
+  <h3>为什么之前没暴露</h3>
+  <ul>
+    <li><b>仿真页从原型派生</b>（<code>film.html</code> 与 <code>torrentname</code> 内嵌表的「置顶嵌套行」结构是 .11/.12 才被加回仿真）。</li>
+    <li>原站 DOM 嵌套表非常常见，<b>同 class 出现在两层</b>是种子列表的常态 —— 不是边缘 case。</li>
+    <li><b>漏白扫描只跑「可见 + 大面积 + 亮度 &gt; 200」</b>：标题格里的内层行面积小，且被外层深色块「遮一半」视觉上能蒙混过关。</li>
+  </ul>
+
+  <h3>判据复盘（P49 / P65 一脉相承）</h3>
+  <blockquote>
+    凡是「DOM 选择器匹配数 ≠ 应有元素数」的规则，都有理由怀疑漏了某种结构。
+    这条 86 个 <code>tr.sticky_top</code>，但只有 43 个 themed —— 一眼看出漏了一半。
+  </blockquote>
+
+  <h2><span class="num">03</span>修复方案</h2>
+
+  <h3>最小修复（一行 CSS）</h3>
+<pre><code><span class="com">// src/HDHomeUI.user.js:770（已写入 .25）</span>
+TN + <span class="val">'.sticky_top{background:var(--hdui-card);}'</span>;</code></pre>
+
+  <table>
+    <thead>
+      <tr><th>选择器</th><th>命中数（修前）</th><th>命中数（修后预期）</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>R + '.sticky_top'</code></td><td class="num">43 / 86</td><td class="num">43 / 86</td></tr>
+      <tr><td><code>TN + '.sticky_top'</code>（新增）</td><td class="num">0 / 86</td><td class="num">43 / 86</td></tr>
+      <tr><td><b>合计 themed</b></td><td class="num"><b>43 / 86</b></td><td class="num"><b>86 / 86</b></td></tr>
+    </tbody>
+  </table>
+
+  <h3>为什么「只加背景不加金边」</h3>
+  <ul>
+    <li>外层那条 <code>R + '.sticky_top'</code> 的 <code>box-shadow:inset 3px 0 0 var(--hdui-accent)</code> 金条只在<b>种子行左缘</b>生效 —— 它作用在外层 <code>&lt;tr&gt;</code> 的盒子上，视觉位置是行首。</li>
+    <li>嵌套内层 <code>&lt;tr&gt;</code> 是标题格里的小行，<b>再加一条金边会出现内外双金条</b>（用户视觉负担 + 与「行首置顶」的语义重复）。</li>
+    <li>置顶的视觉语义已经由外层金边承担；内层只需要「底色跟上主题」即可。</li>
+  </ul>
+
+  <h3>不动的部分</h3>
+  <ul>
+    <li><b>不引入通用后代选择器</b>（<code>#torrenttable .sticky_top</code> 一把梭）—— 会意外命中 meta 格里的嵌套表（豆瓣 IMDb + 下载收藏），而那些 <code>&lt;tr&gt;</code> 没有 <code>sticky_top</code> class，命中为 0；将来站点若加 class，泛化规则反而扩大打击面。</li>
+    <li><b>不动</b> <code>R</code> 的定义 —— 直接子代选择器对其它规则（行高、padding、frame counter）仍是正确的最小作用域。</li>
+    <li><b>不动</b>外层 <code>R + '.sticky_top'</code> 的金边 —— 视觉锚点保留。</li>
+  </ul>
+
+  <h2><span class="num">04</span>回归与验收</h2>
+
+  <h3>静态防线（<code>tests/hdhomeui/check-hdui-static.js</code>）</h3>
+  <ul class="checklist">
+    <li><b>规则存在性</b> — 在产物 CSS 中能找到 <code>TN + '.sticky_top{background:var(--hdui-card)}'</code>（防规则被误删）。</li>
+    <li><b>无金边覆盖</b> — 嵌套选择器<b>不能包含</b> <code>box-shadow:inset 3px 0 0 var(--hdui-accent)</code>，避免内外双金条。</li>
+    <li><b>作用域最小</b> — 该规则不与 <code>R + '.sticky_top'</code> 合并到通用后代选择器（保留直接子代的精确性）。</li>
+  </ul>
+
+  <h3>仿真用例（<code>tests/hdhomeui/sim-hdui-meta-actions.js</code> 或新文件）</h3>
+  <ul class="checklist">
+    <li><b>仿真页构造</b> — 在 <code>torrentname</code> 内嵌表里加一行 <code>tr.sticky_top</code>（含「热门」标识），模拟真站嵌套结构。</li>
+    <li><b>底色断言</b> — 该行的 <code>getComputedStyle().backgroundColor</code> 应解析为 <code>rgb(32,28,24)</code>（即 <code>--hdui-card</code>），非 <code>transparent</code>。</li>
+    <li><b>无金边断言</b> — 该行 <code>box-shadow</code> 应为空（无 <code>inset 3px 0 0</code>），保证不会内外双金条。</li>
+    <li><b>外层金边保留</b> — 同行的<b>外层</b> <code>tr.sticky_top</code> 仍应有 <code>inset 3px 0 0 rgb(245,179,66)</code> 金边。</li>
+  </ul>
+
+  <h3>真站验收（<code>.workbuddy-ai/_verify-hdui-real-render.js</code>）</h3>
+  <ul class="checklist">
+    <li><b>86/86 themed</b> — 真站所有 <code>tr.sticky_top</code> 的 <code>background-color</code> 不为 <code>transparent</code> 且不等于 <code>#ffffff</code>。</li>
+    <li><b>漏白扫描</b> — <code>scanWhite</code> 在标题格嵌套表区域返回 0 条告警。</li>
+    <li><b>小件近白扫描</b> — <code>scanNearWhite</code> 在同区域返回 0 条告警。</li>
+    <li><b>几何对齐</b> — 嵌套行不撑高外层（行高 / padding / frame counter 保持不变）。</li>
+  </ul>
+
+  <h3>反向验证（必做）</h3>
+  <blockquote>
+    删掉 <code>TN + '.sticky_top{...}'</code> 这一行 → 重跑仿真 + 真站 → 必须恢复为「43 themed + 43 transparent」才视为修复有效。
+  </blockquote>
+
+  <h2><span class="num">05</span>影响面与风险</h2>
+
+  <table>
+    <thead>
+      <tr><th>维度</th><th>评估</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>影响范围</td><td>仅嵌套 <code>tr.sticky_top</code> 的底色（≈43 个元素），其余 0 改动。</td></tr>
+      <tr><td>性能</td><td>新增一条 CSS 规则、零 JS 改动，可忽略。</td></tr>
+      <tr><td>回归风险</td><td>低 —— 只动 <code>background</code>，不碰 <code>box-shadow</code> / <code>display</code> / 盒模型。</td></tr>
+      <tr><td>未知站结构</td><td>若站点将来在 <code>torrentname</code> 之外的其它嵌套表里给 <code>tr</code> 加 <code>sticky_top</code>，本规则不命中 —— 需再次复盘。</td></tr>
+      <tr><td>跨主题</td><td>本规则写在 <code>filmCss()</code>（胶片墙专属）。其它主题各自实现置顶样式，但目前已无其它主题（<code>.7</code> 移除）—— 风险为 0。</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="num">06</span>实测结论与当前状态</h2>
+
+  <blockquote>
+    <p><b>⚠️ 修正：本表初版写「静态 / 仿真 / 真站验收全缺」是基于不完整阅读，实测后推翻。</b>
+    三项其实都已存在（<code>check-hdui-static.js</code>:446、<code>verify-hdui-real-page.js</code>:247、
+    <code>sim-hdui-theme-switch.js</code>:46）。真正的问题是**断言强度不足**，不是缺失。</p>
+    <p><b>核心结论：代码侧修复早已生效，本轮不需要改行为。</b>
+    真站样本上 86 个 <code>tr.sticky_top</code>（外 43 + 内 43）<b>全部</b> <code>self=29</code> 深色；
+    置顶验收 86/86、漏白 / 小件近白<b>双双干净</b>；全页 <code>lum&gt;120</code> 的只剩
+    <code>span.tags</code> 的 23 种分类色（TASK019 用户拍板刻意保留）与一个金色 <code>a</code>。
+    ⇒ 用户所见<b>高度疑似跑在 <code>.25</code> 之前的旧版本</b>。</p>
+  </blockquote>
+
+  <h3>三类切分：先证伪自己的结论，再下判断</h3>
+  <p>
+    初版探针只按「在不在 <code>table.torrentname</code> 里」<b>二分</b> ——
+    若存在<b>既不匹配 <code>R</code> 也不匹配 <code>TN</code></b> 的第三层置顶行，会被误分类成「外层」，
+    那么「修复已生效」的结论就不成立。补做三类切分实测：
+    <b><code>all=86, byR=43, byTN=43, both=0, neither=0</code></b> —— 43 + 43 正好等于 86，
+    <b>不存在第三层</b>，结论站得住。
+  </p>
+  <p>
+    已固化为 <code>verify-hdui-real-page.js</code> 的新断言 <code>all === byR + byTN 且 neither === 0</code>。
+    ⚠️ 它验的是 <b>DOM 结构</b>不是 CSS 覆盖 —— 删 CSS 不会让它变红，
+    反向验证必须<b>注入一个合成的同 class 嵌套行</b>（实测注入后 <code>neither</code> 0 → 1，确认可证伪）。
+    <b>教训：只断言「这几个都盖住了」，证明不了「没有下一层」—— 覆盖类断言要配一条结构类断言兜底。</b>
+  </p>
+
+  <h3>「透明 ≠ 白」—— 为什么扫描抓不到这个 bug</h3>
+  <p>
+    把修复删掉后重跑真站验收，报「共 86 个，<b>透明 43 个</b>」——
+    但<b>漏白与小件近白两条扫描依然报干净</b>。原因：内层 <code>tr</code> 是
+    <code>transparent</code>，透出的是<b>外层那条已经上妆的深色 card</b>，视觉上根本不是一块白。
+    两档扫描看的都是「元素自身<b>声明了</b>亮色」，抓不到「本来该有底色、结果<b>没有</b>」这种声明缺失。
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>环节</th><th>状态</th><th>实测</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>代码修复</td>
+        <td><span class="tag ok">已生效</span></td>
+        <td><code>src/HDHomeUI.user.js:770</code>（<code>cfbeb86</code> / .25 入库）。真站 86/86 深色。</td>
+      </tr>
+      <tr>
+        <td>静态断言</td>
+        <td><span class="tag ok">已加强</span></td>
+        <td>原断言带 <code>[\s\S]*</code> 恒真兜底，<b>删掉修复它也不红</b>（= 假断言）。改三条严断言。</td>
+      </tr>
+      <tr>
+        <td>仿真断言</td>
+        <td><span class="tag ok">已新增</span></td>
+        <td><code>sim-hdui-sticky-nested.js</code>：分层计数 + 验到色值 <code>rgb(32,28,24)</code>。</td>
+      </tr>
+      <tr>
+        <td>真站验收</td>
+        <td><span class="tag ok">已有 + 已加固</span></td>
+        <td><code>verify-hdui-real-page.js</code>:247 —— 86 个 / 透明 0；<b>新增</b>结构断言 <code>all === R + TN 且 neither === 0</code>（防第三层，已注入合成行验证可证伪）。</td>
+      </tr>
+      <tr>
+        <td>反例验证</td>
+        <td><span class="tag ok">三条逐条验过</span></td>
+        <td>① 删 <code>background</code> ⇒ sim 红（内层 <code>rgba(0,0,0,0)</code>）+ 静态红（1 项）+ 真站红（透明 43）；② 给内层<b>加</b>金边 ⇒ sim 红；③ 删外层金边 ⇒ sim 红（0/2）。恢复后全量 <b>36/36 全绿</b>（跑在版本号递增之后）。</td>
+      </tr>
+      <tr>
+        <td>版本号</td>
+        <td><span class="tag accent">2026.09.20.2</span></td>
+        <td>按铁律递增（含触发一次用户端更新检查的副产品）。</td>
+      </tr>
+      <tr>
+        <td>知识库同步</td>
+        <td><span class="tag ok">已写入</span></td>
+        <td><code>pitfalls.md</code> <b>P75</b>（透明 ≠ 白）+ <code>scripts/HDHomeUI.md</code> .27 + <code>activeContext.md</code> + <code>tests/README.md</code>。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2><span class="num">07</span>执行进度</h2>
+
+  <ol>
+    <li><s><b>补仿真页结构</b></s> — <b>不需要</b>：实测 <code>hdhome-ui-page.js</code>:340/348/351 早已给外层与内嵌表<b>同时</b>加 <code>sticky_top</code>（<code>i &lt; 2</code>）。</li>
+    <li><s><b>写静态断言</b></s> — <b>已完成</b>（且修掉了原有的假断言）。</li>
+    <li><s><b>写仿真断言</b></s> — <b>已完成</b>：<code>tests/hdhomeui/sim-hdui-sticky-nested.js</code>。</li>
+    <li><s><b>写真站验收</b></s> — <b>原本就有</b>（<code>verify-hdui-real-page.js</code>:247，86/86 通过）。</li>
+    <li><s><b>反向验证</b></s> — <b>三条断言逐条验过可证伪</b>：① 删背景 ⇒ sim + 静态 + 真站三处皆红；② 内层加金边 ⇒ 红；③ 外层删金边 ⇒ 红。恢复后全量 36/36 全绿。</li>
+    <li><s><b>同步知识库</b></s> — <b>已完成</b>：<code>pitfalls.md</code> P75 / <code>scripts/HDHomeUI.md</code> .27 / <code>activeContext.md</code> / <code>tests/README.md</code>。</li>
+    <li><s><b>版本号</b></s> — <b>已完成</b>：<code>2026.09.20.1 → 2026.09.20.2</code>。</li>
+    <li><b>⏳ 待用户确认（本轮真正的未决项）</b> — 请在 Tampermonkey 里核对 HDHomeUI 的<b>已安装版本</b>并点一次「检查更新」。若已是 <code>2026.09.19.25</code> 及以上<b>仍然</b>看到白底，说明真站当前页面存在样本里没有的结构 —— 请再截一张图（含浏览器控制台 <code>[HDHomeUI]</code> 日志），据此定位第三层。</li>
+    <li><b>⏳ 提交 / 推送</b> — 待你审核后按 <code>my-commit-flow</code> skill 走（本轮未自动提交）。</li>
+  </ol>
+
+  <h2><span class="num">08</span>备选方案与拒绝理由</h2>
+
+  <table>
+    <thead>
+      <tr><th>方案</th><th>做法</th><th>拒绝理由</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>通用后代选择器</td>
+        <td><code>#torrenttable .sticky_top{...}</code> 一次性命中两层</td>
+        <td>扩大打击面 —— meta 格嵌套表若将来出现同名 class 会被误命中；且与「最小作用域」的工程纪律不符。</td>
+      </tr>
+      <tr>
+        <td>JS 遍历修补</td>
+        <td><code>applyStored</code> 里给嵌套 <code>tr.sticky_top</code> 加 <code>style.background</code></td>
+        <td>违反铁律（不重建 DOM、不改 inline style）；CSS 可解的问题不要用 JS。</td>
+      </tr>
+      <tr>
+        <td>不修内层</td>
+        <td>接受视觉白底，靠外层金边承担「置顶」语义</td>
+        <td>用户已实拍报为 bug，置顶行的视觉一致性是基础体验。</td>
+      </tr>
+      <tr>
+        <td>整条规则下沉到 <code>#torrenttable</code> 下</td>
+        <td>把置顶样式从行级下沉到列级（按列选）</td>
+        <td>与现行「每列一个 <code>nth-child</code> 槽位」的排版约定冲突；改动面过大。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2><span class="num">09</span>参考与索引</h2>
+
+  <ul>
+    <li>代码位置：<code>src/HDHomeUI.user.js:762</code>（外层金边）/<code>:770</code>（嵌套背景，已写入 .25）。</li>
+    <li>选择器常量：<code>src/HDHomeUI.user.js:644</code>（<code>TN</code> 定义）。</li>
+    <li>知识库：<code>memory-bank/activeContext.md</code> §2026-09-19 .25（实施记录）/<code>memory-bank/pitfalls.md</code> P65（同源根因）。</li>
+    <li>历史教训：<code>memory-bank/pitfalls.md</code> P49（仿真全绿但真站画错）/<b>P65</b>（嵌套表同 class 漏规则）/<b>P68</b>（行结构逐行校验）。</li>
+    <li>工程约束：<code>memory-bank/scripts/HDHomeUI.md</code> §1（纯样式层铁律）/§3（置顶用 inset 金条而非背景色）。</li>
+    <li>真站验收脚本：<code>tests/hdhomeui/verify-hdui-real-page.js</code>。</li>
+    <li>共享扫描基建：<code>tests/lib/hdui-scan.js</code>（<code>scanWhite</code> / <code>scanNearWhite</code>）。</li>
+  </ul>
+
+  <div class="foot">
+    <span>docs/plans/26-09-20-1658-hdui-sticky-nested-fix.html</span>
+    <span>Plan · HDHomeUI · 2026-09-20</span>
+  </div>
+
+</main>
+</body>
+</html>

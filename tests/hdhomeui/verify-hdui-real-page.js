@@ -244,13 +244,25 @@ const GM_MIN = [
             + icons.tagColored + '/' + icons.tagN + ' 保留底色');
 
         // ④ 置顶行: 内外两层都要有背景(P65)
+        //    外加**三类切分**: 每个 tr.sticky_top 都必须落在 R 或 TN 之一的作用域里。
+        //    ⚠️ 为什么单独加这条: 只查"背景不为透明"能证明"当前这 86 个都盖住了",
+        //       但证明不了"没有第三层" —— 站点若在别处再嵌一层同 class 的表,
+        //       那批元素既不匹配 R 也不匹配 TN, 会重新变成裸奔(而漏白/近白扫描抓不到, P75)。
+        //       真站实测: all=86, byR=43, byTN=43, both=0, neither=0。
         const sticky = await p2.eval([
-            'const rs = Array.prototype.slice.call(document.querySelectorAll("#torrenttable tr.sticky_top"));',
-            'const bad = rs.filter(function (r) { return getComputedStyle(r).backgroundColor === "rgba(0, 0, 0, 0)"; });',
-            'return { n: rs.length, bad: bad.length };'
+            'const all = Array.prototype.slice.call(document.querySelectorAll("#torrenttable tr.sticky_top"));',
+            'const byR = Array.prototype.slice.call(document.querySelectorAll("#torrenttable > tbody > tr.sticky_top"));',
+            'const byTN = Array.prototype.slice.call(document.querySelectorAll("#torrenttable table.torrentname > tbody > tr.sticky_top"));',
+            'const setR = new Set(byR), setTN = new Set(byTN);',
+            'const bad = all.filter(function (r) { return getComputedStyle(r).backgroundColor === "rgba(0, 0, 0, 0)"; });',
+            'const neither = all.filter(function (e) { return !setR.has(e) && !setTN.has(e); });',
+            'return { n: all.length, bad: bad.length, byR: byR.length, byTN: byTN.length, neither: neither.length };'
         ].join('\n'));
         ok(sticky.n === 0 || sticky.bad === 0,
             '置顶行内外两层都有背景(P65): 共 ' + sticky.n + ' 个, 透明 ' + sticky.bad + ' 个');
+        ok(sticky.neither === 0,
+            '每个置顶行都落在 R 或 TN 的作用域内(无第三层嵌套, P65/P75): 共 ' + sticky.n
+            + ' 个 = R ' + sticky.byR + ' + TN ' + sticky.byTN + ', 漏网 ' + sticky.neither + ' 个');
 
         // ⑤ 五档扫描里的四档(UA 界面单独量)
         const white = await scan.scanWhite(p2);
