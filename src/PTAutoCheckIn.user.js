@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.09.19.4
+// @version      2026.10.01.1
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -19,6 +19,7 @@
 // @match        *://*.tieba.baidu.com/*
 // @match        *://*.carpt.net/*
 // @match        *://*.pting.club/*
+// @match        *://*.fengchao.chat/*
 // @match        *://*.hdtime.org/*
 // @match        *://*.hdfans.org/*
 // @match        *://*.hdhome.org/*
@@ -382,7 +383,7 @@ const K = {
             //   明明成功却记 pending 待人工确认), 改 successDetect 轮询按钮文案 5s: 变已签 → success;
             //   5s 仍未变(响应慢/未成功) → 走通用回退后记 failed(不再卡 pending, 语义见 detectSuccess)
             id: 'pting', name: '蜂巢',
-            url: 'https://pting.club/',
+            url: 'https://fengchao.chat/',
             checkInSelector: 'button[data-slot="sidebar-user-check-in"]',
             alreadyCheckedInContent: '已签到',
             successDetect: [
@@ -1578,7 +1579,7 @@ const K = {
     // 与「可签」。站点用两种方式描述其签到入口:
     //   A) 显式 stateSignals(推荐, 载体无关): checked 信号(任一命中=入口呈已签态) +
     //      checkable 信号(任一命中=入口呈可签态, 用于重现判定); checkable 不配 = 反向
-    //      常驻按钮站(入口存在且非已签即可签, 如蜂巢 pting)。
+    //      常驻按钮站(入口存在且非已签即可签, 如蜂巢)。
     //   B) 旧文本字段自动翻译(文本站零改动):
     //      checked   = [{text alreadyCheckedInContent}](精确)
     //      checkable = [{text checkInContent}] 或 null(无 checkInContent → 反向常驻站)
