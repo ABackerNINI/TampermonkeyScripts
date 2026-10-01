@@ -1,6 +1,6 @@
 ---
 name: create-issue
-description: '计划外问题入池: 在 issues 目录生成 HTML 报告(8 类类型 × 便签/标准两档)并在 _index.md 登记类型+简述+链接。USE FOR: 需要把一个暂时不修的问题记成别人能直接开工的记录; 用户说"记个 issue"/"这个问题先记下来"/"创建 issue"/"入池"/"更新 issue 状态"/"issue 修完了"/"issues 索引重建" 时。DO NOT USE FOR: 本次计划内的缺陷 (直接修)、纯答疑、代码评审清单、大改造(走 tasks/ 档案或 docs/plans/ 计划)。判断"该不该现在修"见 scope-guard skill; 本 skill 只负责记。'
+description: '计划外问题入池: 在 issues 目录生成 HTML 报告(8 类类型 × 便签/标准两档)并在 _index.md 登记类型+简述+链接。USE FOR: 需要把一个暂时不修的问题记成别人能直接开工的记录; 用户说"记个 issue"/"这个问题先记下来"/"创建 issue"/"入池"/"更新 issue 状态"/"issue 修完了"/"issues 索引重建" 时。DO NOT USE FOR: 本次计划内的缺陷 (直接修)、纯答疑、代码评审清单、大改造(走 tasks/ 档案或 memory-bank/plans/ 计划)。判断"该不该现在修"见 scope-guard skill; 本 skill 只负责记。'
 user-invocable: true
 ---
 
@@ -32,7 +32,7 @@ user-invocable: true
 
 - `security` —— **不入池**。与 scope-guard 的例外 2 一致: 当场告知用户并修; 确需留痕时用 `bug` + 严重度"高"。
 - `regression` / `compatibility` —— 归 `bug`, 正文首行标注即可。
-- `epic` / `RFC` / 大改造 —— 不进 issues, 走 `memory-bank/tasks/` 档案或 `docs/plans/` 计划。
+- `epic` / `RFC` / 大改造 —— 不进 issues, 走 `memory-bank/tasks/` 档案或 `memory-bank/plans/` 计划。
 
 ## 档位(类型决定, `--tier` 可覆盖)
 
@@ -59,11 +59,15 @@ Get-Date -Format "yy-MM-dd-HHmm"      # PowerShell
 ```bash
 python .agents/skills/create-issue/scripts/new_issue.py <slug> \
   --type docs --title "中文标题" --summary "一句话简述(进索引)" \
-  [--module webui] [--tier light] [--dir memory-bank/issues] [--project 项目名]
+  [--module webui] [--topic 专题] [--tier light] [--dir memory-bank/issues] [--project 项目名]
 ```
 
 - `<slug>`: 小写英文短横线, 建议 `<领域>-<专题>`(只是建议, 分类职责已交给 type)。
 - `--type`: **必填**, 不在 8 类枚举里直接报错。
+- `--topic`: `doc-topic` 跨形态串联主键(默认 = slug)。**多条 issue 属于同一专题时显式指定同一个值**
+  (如 `webui-optimistic-ui` 下挂 3 条), 这样 `commands run kb.docmap` 的专题视图才把它们串成一条线。
+  不传 = 一题一专题。**该 meta 不可省** —— 缺了该 issue 会从专题视图里静默漏掉
+  (守卫 `tests/test_docs_forms.py::test_issue_topics_present` 判红)。
 - 产出 `<issues dir>/<时间>-<类型>-<slug>.html`, 例 `26-09-19-2359-docs-memory-bank-push-rule-drift.html`。
 - 脚本随后**自动重建 `_index.md`** 并打印路径; 文件已存在则报错退出, 不覆盖。
 - `--dir` 不传时按 `memory-bank/issues` → `issues` → `docs/issues` 探测已存在的那个; 都不存在则要求显式指定。
@@ -87,15 +91,15 @@ python .agents/skills/create-issue/scripts/new_issue.py <slug> \
 
 ## 状态机
 
-状态写在报告 HTML 的**封面状态徽标**(`<span class="badge">`)与 `<head>` 的 `<meta name="issue-status">`(**两处一起改**, 索引只读 meta), 取值仅五种:
+状态写在报告 HTML 的**封面状态徽标**(`<span class="badge">`)与 `<head>` 的 `<meta name="issue-status">`(**两处一起改**, 索引只读 meta), 取值仅五种(2026-09-23 起与四形态统一 5 词表, 见 [doc-forms 约定](../../../memory-bank/conventions/doc-forms.md)):
 
 | 状态 | 含义 |
 |---|---|
 | `Open` | 未修, 待排期(新建默认) |
 | `In Progress` | 已被某个计划认领, 正在修 —— **认领人只能是"用户指派"或"用户已批准的计划"** |
-| `Fixed` | 已修并验证(写清验证方式与测试数字) |
-| `WontFix` | 决定不修(必须写明理由) |
-| `Duplicate` | 与既有 issue 重复(写明指向哪一条) |
+| `Done` | 已修并验证(写清验证方式与测试数字) —— 旧词 `Fixed` |
+| `Dropped` | 决定不修(必须写明理由) —— 旧词 `WontFix` |
+| `Superseded` | 与他件重复 / 被取代(写明指向哪一条) —— 旧词 `Duplicate` |
 
 改状态的唯一流程: **改 HTML 的两处状态 → 追加一行状态变更日志 → 重建索引**:
 
@@ -114,7 +118,7 @@ python .agents/skills/create-issue/scripts/gen_issues_index.py --check # 只比�
    没认领就改代码 = 越界, 没认领就置 `In Progress` 同样是越界。用户没指派时, 正确动作是把
    issue 留在 `Open`, 在回复里说明"要不要认领 / 什么时候修", 等一句明确的话。
 2. 开工置 `In Progress`, 先**复验**(防过期原则第 5 条), 再重建索引。
-3. 修完置 `Fixed`, 在报告里补"实际修法 / 验证方式 / 测试数字"; 与"建议修法"不同则保留建议原文并说明改道原因。
+3. 修完置 `Done`, 在报告里补"实际修法 / 验证方式 / 测试数字"; 与"建议修法"不同则保留建议原文并说明改道原因。
 4. 按 `memory-bank` skill 的收尾 DoD 跑测试、回写 `memory-bank/` 主题文档; 需要时同步更新报告正文。
 5. 重建索引, 让 `_index.md` 反映新状态。
 
@@ -127,7 +131,7 @@ python .agents/skills/create-issue/scripts/gen_issues_index.py --check # 只比�
 | issues 目录 | 探测 `memory-bank/issues` → `issues` → `docs/issues` | `--dir <相对仓库根的路径>` |
 | 仓库根 | 向上探测 `.git`(目录或 worktree 的 `.git` 文件) | `--root <路径>` |
 | 项目名 | 模板里不出现项目名 | `--project <名>` 注入封面 kicker |
-| meta 名 | `issue-slug / -stamp / -type / -tier / -status / -title / -summary`(无项目前缀) | 不用改 |
+| meta 名 | `issue-slug / -stamp / -type / -tier / -status / -title / -summary` + `doc-topic`(无项目前缀) | 不用改 |
 | 语言 | 中文模板 | 替换 `assets/*.html` |
 | 类型枚举 | `scripts/_common.py` 的 `TYPES` | 改这一处即可 |
 
@@ -142,4 +146,4 @@ python .agents/skills/create-issue/scripts/gen_issues_index.py --check # 只比�
 - ❌ 文件名 / 时间戳凭记忆编 —— 必然与真实时间不符, 且与别的文件撞序。
 - ❌ 手改 `_index.md` —— 生成物, 重跑脚本即可。
 - ❌ 只改 meta 不改封面徽标(或反之) —— 两处漂移, 人读的和脚本读的不一致。
-- ❌ 把大改造塞进 issues —— 那该是 `tasks/` 档案或 `docs/plans/` 计划。
+- ❌ 把大改造塞进 issues —— 那该是 `tasks/` 档案或 `memory-bank/plans/` 计划。
