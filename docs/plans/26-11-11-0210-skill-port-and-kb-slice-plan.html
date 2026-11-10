@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>自制 skill 移植与 memory-bank 切片化实施计划</title>
+<meta name="doc-type" content="plan">
+<meta name="doc-topic" content="skill-port-kb-slice">
+<meta name="doc-status" content="Open">
+<meta name="doc-added" content="26-11-11-0210">
+<meta name="doc-updated" content="26-11-11-0237">
+<meta name="doc-refs" content="">
+<style>
+  :root {
+    --bg: #0f1214;
+    --ink: #e3e7e5;
+    --dim: #a8b2b0;
+    --faint: #6e7a78;
+    --hair: rgba(255,255,255,.10);
+    --hair-soft: rgba(255,255,255,.05);
+    --accent: #b8a06a;
+    --accent-ink: #d8bf82;
+    --ok: #86b08a;
+    --warn: #d0a35c;
+    --no: #cd8585;
+    --code-bg: #151b1e;
+    --sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --display: "Bahnschrift", "Segoe UI", "Microsoft YaHei", sans-serif;
+    --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--ink); color-scheme: dark; font-family: var(--sans); font-size: 15px; line-height: 1.62; margin: 0; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #2a3336; }
+  .sheet { max-width: 1180px; margin: 0 auto; padding: 52px clamp(18px, 3.4vw, 44px) 96px; }
+  .layout { display: grid; grid-template-columns: minmax(0,1fr) 172px; gap: 48px; align-items: start; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: minmax(0,1fr); } .toc { display: none; } }
+
+  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+  h1 { font-family: var(--display); font-size: 33px; line-height: 1.2; letter-spacing: -.018em; font-weight: 600; margin: 12px 0 8px; }
+  .lede { color: var(--dim); font-size: 16px; margin: 0 0 24px; max-width: 68ch; }
+  .meta { font-family: var(--mono); font-size: 11.5px; color: var(--faint); line-height: 1.95; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); padding: 12px 0; margin-bottom: 8px; }
+  .meta b { color: var(--dim); font-weight: 400; }
+
+  .toc { position: sticky; top: 26px; font-family: var(--mono); font-size: 11px; line-height: 1.9; border-left: 1px solid var(--hair); padding-left: 16px; }
+  .toc .t { color: var(--faint); letter-spacing: .12em; text-transform: uppercase; display: block; margin-bottom: 10px; }
+  .toc a { color: var(--dim); text-decoration: none; display: block; }
+  .toc a:hover { color: var(--accent-ink); }
+
+  h2 { font-family: var(--display); font-size: 21px; font-weight: 600; letter-spacing: -.006em; margin: 56px 0 6px; padding-top: 20px; border-top: 1px solid var(--hair); scroll-margin-top: 24px; }
+  h2 .no { font-family: var(--mono); font-size: 11.5px; color: var(--accent-ink); letter-spacing: .09em; display: block; margin-bottom: 8px; font-weight: 400; }
+  h3 { font-family: var(--display); font-size: 16.5px; font-weight: 600; margin: 30px 0 6px; }
+  h4 { font-size: 14px; font-weight: 600; margin: 20px 0 4px; color: var(--dim); }
+  p { margin: 10px 0; max-width: 76ch; }
+  ul, ol { margin: 8px 0; padding-left: 22px; max-width: 78ch; }
+  li { margin: 5px 0; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 2px; color: var(--accent-ink); }
+  pre { background: var(--code-bg); border: 1px solid var(--hair-soft); padding: 14px 16px; overflow-x: auto; margin: 14px 0; }
+  pre code { background: none; padding: 0; color: var(--ink); font-size: 12.5px; line-height: 1.62; }
+  a { color: var(--accent-ink); text-decoration-color: var(--hair); }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 20px; font-size: 13px; }
+  th { text-align: left; font-weight: 600; color: var(--dim); font-size: 11px; letter-spacing: .08em; padding: 7px 10px; border-bottom: 1px solid var(--hair); vertical-align: bottom; }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--hair-soft); vertical-align: top; }
+  td code, th code { white-space: nowrap; }
+  @media (max-width: 1100px) { td code, th code { white-space: normal; overflow-wrap: anywhere; } }
+  .ok { color: var(--ok); }
+  .warn { color: var(--warn); }
+  .no { color: var(--no); }
+  .dim { color: var(--dim); }
+  .faint { color: var(--faint); }
+  .accent { color: var(--accent-ink); }
+  .aside { border-left: 1px solid var(--hair); padding: 2px 0 2px 15px; color: var(--dim); margin: 16px 0; max-width: 78ch; }
+  .tag { font-family: var(--mono); font-size: 10.5px; color: var(--accent-ink); letter-spacing: .06em; }
+  .rule { height: 1px; background: var(--hair); width: 42%; margin: 34px 0; }
+  .colophon { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--hair); font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.9; }
+  .checkbox { font-family: var(--mono); color: var(--faint); }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<div class="kicker">PLAN · skills / memory-bank · doc-topic: skill-port-kb-slice</div>
+<h1>自制 skill 移植与 memory-bank 切片化实施计划</h1>
+<p class="lede">把 <code>D:/Projects/auto-qb</code> 的自制 skill 体系、命令包、审查骨架与 AGENTS.md 路由移植到 TampermonkeyScripts 并按本项目事实本地化；连带把单文件巨型知识库按 26-11-08 重构口径切片化；纳入 legacy-review4 的方法论与机械面。本篇只回答「搬什么、怎么改、按什么顺序、怎么验」。</p>
+<div class="meta">
+  <b>doc-added</b> 26-11-11-0210 · <b>doc-updated</b> 26-11-11-0237 · <b>doc-status</b> Open · <b>载体</b> 单文件 HTML (dark)<br>
+  <b>来源</b> 2026-11-11 会话：用户发起移植 → 只读调研两项目 skill / 命令包 / 知识库 / 提交历史 → grilling 一轮 4 问拍板范围<br>
+  <b>只读参考仓库</b> D:/Projects/auto-qb (全程只读，不写入、不执行 git 写操作) · <b>本轮基线</b> 本项目 HEAD <code>cb59322</code>，<code>git status --short</code> 为空<br>
+  <b>本轮交付</b> 仅本篇计划文档；未改动任何代码、skill、知识库、配置或 issue 文件
+</div>
+
+<div class="layout">
+<div>
+
+<h2 id="s01"><span class="no">§01</span>目标、范围与本轮边界</h2>
+
+<h3>目标</h3>
+<p>本项目 2026-09-20 曾同步过一次 auto-qb 的 skill（提交 <code>a2abd6a</code>），此后 auto-qb 又经历 11-08「memory-bank 大重构」、11-09/11-10 闸门修复与 legacy-review4 评审，两侧已经分叉。本次目标不是新增几个 skill，而是把本项目停在旧版的体系对齐到 auto-qb 当前版本，并按本仓库事实做本地化；同时把现存的半坏状态一次修好。</p>
+
+<h3>已拍板范围（grilling 一轮 4 问，记录见 §11）</h3>
+<table>
+<tr><th>决策</th><th>用户裁决</th><th>对计划的影响</th></tr>
+<tr><td>KB 本体是否改造</td><td class="accent">连带 KB 切片化</td><td>不止搬 skill：按 26-11-08 重构方案把 <code>pitfalls.md</code> / <code>activeContext.md</code> / <code>progress.md</code> 等拆成目录族，退役多数 <code>_index</code>，重写 README 细路由（§06 / W4）</td></tr>
+<tr><td>legacy-review4 移植什么</td><td class="accent">方法论 + 机械面</td><td>带评审骨架、通用 checklist、<code>review.lane</code> 状态机思想、计划/报告模板；不带 auto-qb 的 findings / 6 个 issue / 终审报告（§07）</td></tr>
+<tr><td>命令包范围</td><td class="accent">完整照搬再裁剪</td><td>10 个包先全量复制到 <code>.commands/</code> 作为对齐基线，再逐包判定保留 / 改造 / 剔除（§05 / W2）</td></tr>
+<tr><td>非自制 skill</td><td class="accent">补 grilling，gitmoji 不动</td><td>用完整版 grilling 替换 7 行 <code>grill-me</code> stub 并补链接；gitmoji 两边逐字相同，保持现状、不写进提交规范（§04 / W6）</td></tr>
+</table>
+
+<h3>本轮边界（铁律 1 / 2 / 7）</h3>
+<ul>
+<li>用户指令为「然后出一个计划」⇒ 属于计划任务，<span class="ok">只输出方案，禁止改动任何代码文件</span>；本轮唯一新建文件是本篇计划文档（由「出一个计划」显式授权）。</li>
+<li>本轮<span class="ok">不</span>入池 issue、<span class="ok">不</span>立档 <code>tasks/</code>、<span class="ok">不</span>认领 issue、<span class="ok">不</span> commit / push；执行 W0–W7 需用户审核后再逐项确认。</li>
+<li>auto-qb 全程只读：只读文件与 <code>git log</code>（读命令），不改其文件、不在其工作区执行任何 git 写操作；也不复制 <code>config.yml</code> / <code>auto-qb-data/</code> / 任何含凭据的文件进本项目。</li>
+<li>本计划不触碰 <code>src/*.user.js</code> ⇒ 按铁律 3，<span class="accent">@version 不递增</span>（skill 脚本与 KB 文档不是用户脚本，不适用脚本头版本号）。</li>
+<li>照搬阶段产生的临时文件只放工作区且未暂存；最终提交清单只含保留项，<code>resources-do-not-track/</code> 永远不出现在暂存清单（铁律 5）。</li>
+</ul>
+
+<h2 id="s02"><span class="no">§02</span>现状盘点（均为 2026-11-11 实测）</h2>
+
+<h3>2.1 半坏状态：skill 描述的目录根本不存在</h3>
+<p>本项目 <code>.agents/skills/memory-bank/SKILL.md</code> 写的是「<code>commands run kb.active</code> 扫 <code>memory-bank/activeContext/</code> 切片」「坑档写进 <code>pitfalls/&lt;类&gt;/</code>」，而实际知识库是单文件；<code>.commands/</code> 目录<span class="no">完全不存在</span>，命令引擎 <code>run.py</code> 虽在却无包可解析。也就是说旧版 skill 的绝大部分动作在本项目当前不可用。这是本次必须一并解决的根因，不是「顺手改」。</p>
+
+<h3>2.2 两侧 skill 对照</h3>
+<table>
+<tr><th>skill</th><th>auto-qb</th><th>本项目</th><th>差异与动作</th></tr>
+<tr><td><code>memory-bank</code></td><td>SKILL.md 18,952 B；<code>scripts/</code> 23 件（含 <code>timekit.py</code> / <code>new_doc.py</code> / <code>nav_*</code> 等）；<code>templates/</code> 7 件；<code>references/</code> 2 件（含 <code>PORTING.md</code>）</td><td>SKILL.md 12,430 B；<code>scripts/</code> 8 件；无 templates / PORTING</td><td>整目录覆盖；新增取时单点、建件命令、HTML 守卫、模板；cap 口径换轨到 8K</td></tr>
+<tr><td><code>commands</code></td><td>SKILL.md 4,806 B（两边逐字相同）；<code>run.py</code> 429 行；<code>.commands/</code> 10 包</td><td>SKILL.md 相同；<code>run.py</code> 380 行；<code>.commands/</code> 无</td><td>引擎脚本取较新版；新建命令包目录（§05）</td></tr>
+<tr><td><code>code-review</code></td><td>SKILL.md 20,888 B，8 节 + 20 条 checklist</td><td class="no">不存在</td><td>新建并本地化（§07）</td></tr>
+<tr><td><code>create-issue</code></td><td>SKILL.md 11,014 B；机械面收编进 <code>kb.new issue</code>，<code>new_issue.py</code> / <code>_index.md</code> 退役</td><td>SKILL.md 10,076 B；自带 <code>new_issue.py</code> / <code>gen_issues_index.py</code> / <code>assets/</code>，维护 <code>_index.md</code></td><td>覆盖；与 AGENTS.md 铁律 6 冲突，须同步改口径（§09 R2）</td></tr>
+<tr><td><code>scope-guard</code></td><td>3,230 B，入池走 <code>commands run kb.new issue</code></td><td>3,256 B，入池走 <code>date</code> + <code>new_issue.py</code> + 索引重建</td><td>正文几乎相同，改「判定之后」一行；LF / CRLF 统一</td></tr>
+<tr><td><code>gitmoji</code></td><td>SKILL.md 7,429 B + reference 4,776 B</td><td class="ok">逐字相同（diff 为空）</td><td>不动</td></tr>
+<tr><td><code>grilling</code></td><td>SKILL.md 2,049 B：design tree / frontier / 子代理查事实</td><td><code>grill-me</code> stub 164 B（指向未安装的 grilling）</td><td>替换为完整版 grilling 并补链接</td></tr>
+<tr><td><code>AGENTS.md</code></td><td>12,427 B，qB 专属（config.yml 红线、dev.run、ship.commit、Review: trailer、8000 上限、14 处 <code>commands run</code>）</td><td>6,173 字符 / 10,895 B，user.js 专属铁律 7 条、<code>docs/plans/</code> HTML 口径、零 <code>commands run</code></td><td>只取路由骨架与会话协议，铁律原样保留，受 8000 字符上限约束（§09 R1）</td></tr>
+</table>
+
+<h3>2.3 知识库体量（字符数，对照目标 cap 8,000）</h3>
+<table>
+<tr><th>文件</th><th>实测字符数</th><th>结构</th><th>切片后目标</th></tr>
+<tr><td><code>pitfalls.md</code></td><td class="warn">78,772</td><td>P1–P79（至少 79 条，84 个标题）</td><td><code>pitfalls/&lt;类&gt;/&lt;主题&gt;.md</code>，唯一生成索引 <code>pitfalls/_index.md</code></td></tr>
+<tr><td><code>activeContext.md</code></td><td class="warn">33,477</td><td>5 个 <code>##</code> 大段、35 处小节</td><td><code>active-context/</code> 时间戳切片 + 长青内容归 README / projectbrief</td></tr>
+<tr><td><code>progress.md</code></td><td class="warn">17,606</td><td>已实现 / 现状 / 待办 / 已知问题 / 发布注意</td><td>按 26-11-08 D9「progress 全灭」：蒸馏、入池、归位</td></tr>
+<tr><td><code>conventions.md</code></td><td class="warn">10,950</td><td>10 节 25 个小标题</td><td><code>conventions/</code> 多件协议单点</td></tr>
+<tr><td><code>README.md</code></td><td>5,156</td><td>核心文件清单 + 快速提醒 12 条</td><td>重写为极简细路由（≤6,000，手写非生成）</td></tr>
+<tr><td><code>projectbrief.md</code> / <code>productContext.md</code> / <code>systemPatterns.md</code> / <code>techContext.md</code></td><td>3,279 / 1,151 / 3,865 / 3,882</td><td>4 件常青件</td><td>蒸馏并入 <code>projectbrief.md</code>（≤8K）+ <code>architecture/</code></td></tr>
+<tr><td><code>scripts/*.md</code>（5 件）</td><td>约 124 KB（PTAutoCheckIn 67,242 B、HDHomeUI 43,567 B）</td><td>各脚本领域知识</td><td>保留为领域知识，按 cap 拆成 <code>scripts/&lt;脚本&gt;/</code> 分包</td></tr>
+<tr><td><code>tasks/</code>（20 档案 + <code>_index.md</code> 9,633 B）</td><td>—</td><td>TASK001–020 编号制</td><td>档案层冻结；<code>_index.md</code> 退役；旧编号转 <code>Legacy-ID</code></td></tr>
+</table>
+
+<h3>2.4 命令包基线</h3>
+<p>auto-qb <code>.commands/</code> 共 10 个顶层包（<code>my-commit-flow/ship</code> 为子包），合计约 50 个文件 / 869 KB，顶层 <code>config.toml</code> 定义 75 个 task（ship 子包另有 2 个）。本项目当前没有任何命令包，提交流水线走 <code>.agents/skills/my-commit-flow/</code> 的 4 个 Python 脚本 + <code>.commit-flow.toml</code> 四个闸门。</p>
+
+<h2 id="s03"><span class="no">§03</span>终态设计</h2>
+
+<h3>3.1 目录树（做到什么程度算成）</h3>
+<pre><code>TampermonkeyScripts/
+├── AGENTS.md                     ≤8000 字符 · 粗路由 + 铁律 1-7 + 提交口径
+├── .agents/skills/               真身（入库）
+│   ├── memory-bank/              SKILL.md + references/(kb-structure, PORTING)
+│   │                            + scripts/(23) + templates/(7)
+│   ├── commands/                 SKILL.md + references + scripts/(6, 取新版)
+│   ├── code-review/              本地化精简版（新建）
+│   ├── create-issue/             SKILL.md（机械面收编后仅剩协议文档）
+│   ├── scope-guard/              SKILL.md（入池命令改一行）
+│   ├── grilling/                 完整版 SKILL.md（替换 grill-me）
+│   ├── gitmoji/                  原样不动
+│   └── my-commit-flow/           退役（提交单点迁至 .commands/my-commit-flow）
+├── .codebuddy/skills/           符号链接农场（.gitignore 已忽略，本机加载入口）
+├── .commands/                   照搬 10 包 → 裁剪后的保留包 + config.toml
+│   ├── my-commit-flow/          提交单点：ship.commit --no-push 本地提交
+│   │   └── ship/                ship 子包（commit / rebase / 闸门）
+│                                + commands / commands.cmd wrapper（生成物，不入库）
+├── memory-bank/
+│   ├── README.md                 手写极简细路由（≤6,000）
+│   ├── projectbrief.md           吸收 productContext + techContext（≤8,000）
+│   ├── architecture/            蒸馏包：userscript 引擎 / 站点建模 / 换肤层 / 测试基建
+│   ├── conventions/             多件协议（含 doc-forms / review / code-style / baseline）
+│   ├── active-context/           YY-MM-DD-HHMM-&lt;slug&gt;.md 切片 + _about.md
+│   ├── pitfalls/&lt;类&gt;/          条目件（三行头）+ 全库唯一生成索引 _index.md
+│   ├── issues/                  报告 HTML（8 类，档位由类型定）
+│   ├── tasks/                   档案层（冻结；_index 退役）
+│   ├── testing/baselines/       测试基线切片
+│   └── scripts/&lt;脚本&gt;/          领域知识分包（按 cap 拆）
+└── docs/plans/                   计划 HTML 落点不变（本项目口径，不迁 memory-bank/plans/）</code></pre>
+
+<h3>3.2 四换轨（照搬 auto-qb 11-08 口径，逐条本地化）</h3>
+<ol>
+<li><b>检索纪律</b>：「读全部 8 个核心文件」→ <code>commands run kb.active</code>（最近）→ <code>memory-bank/README.md</code> 细路由 → <code>grep -rn</code> 兜底；<span class="no">禁止整读目录</span>。AGENTS.md「任务开始前必读 8 文件」整段替换为这条三步。</li>
+<li><b>索引退役</b>：只保留 <code>pitfalls/_index.md</code> 一个生成物（触发词表是「改码前扫陷阱」的唯一载体）；<code>tasks/_index.md</code> 与其它索引退役，记录层靠 grep + <code>kb.nav</code>。</li>
+<li><b>cap 换轨</b>：目标统一 8,000 字符（新建 task / evergreen / pitfall / 索引 / 切片按 auto-qb 表分级）；触顶固定动作「外迁 <code>attachments/</code> → 删死段 → 合并邻近件」，<span class="no">禁止压文案</span>。</li>
+<li><b>取时单点</b>：KB 内任何日期取自 <code>commands run kb.time</code>（UTC+8 naive 墙钟，<code>timekit.py</code>），禁用上下文日期与手工推算；AGENTS.md「计划命名需通过命令取时间」改为指向这条真命令。</li>
+</ol>
+
+<h3>3.3 本项目事实必须保留（不可被 auto-qb 口径覆盖）</h3>
+<p>铁律 1–7（计划不改码 / 等审核再提交 / <code>@version</code> / 知识库同步 / 私有资源与凭据 / 范围守恒 / 请求边界）、单文件 <code>.user.js</code> + 零依赖 Node <code>tests/run-all.js</code>、<code>docs/plans/</code> 计划落点、Gitee <code>develop</code> 主线、中文提交信息（不启用 gitmoji）、<code>resources-do-not-track/</code> 红线、<code>scripts/check_context_caps.py</code> 的 8000 上限闸门。</p>
+
+<h2 id="s04"><span class="no">§04</span>移植清单与本地化映射</h2>
+<table>
+<tr><th>#</th><th>源（auto-qb，只读）</th><th>目标（本项目）</th><th>动作</th><th>本地化要点</th></tr>
+<tr><td>1</td><td><code>.agents/skills/memory-bank/</code> 整目录</td><td>同名路径</td><td class="ok">覆盖</td><td>去掉 SKILL.md 内 <code>my-commit-flow.sync</code> 硬性开工同步（本项目无此命令，铁律 7 也不允许问答轮次写操作）；跨 clone 查重 <code>ls ../auto-qb-*/memory-bank/tasks/</code> 改成只查本 clone；<code>testing/real-machine.md</code>、qB 真机准入、<code>Review:</code> trailer 段落删除；cap 表保留并钉住本项目 AGENTS.md 8,000</td></tr>
+<tr><td>2</td><td>同上 <code>references/PORTING.md</code></td><td>同名路径</td><td class="ok">保留</td><td>原文「不搬 <code>check_context_caps.py</code>」在本项目成立（本项目已有自己的）；补一句本项目差异：<code>docs/plans/</code> 落点、Node 测试、无 uv</td></tr>
+<tr><td>3</td><td><code>.agents/skills/commands/scripts/</code></td><td>同名路径</td><td class="ok">取新版</td><td><code>run.py</code> 429 行版；要求 Python ≥3.11（<code>tomllib</code>）；本机已有 Python（<code>check_context_caps.py</code> 在用）</td></tr>
+<tr><td>4</td><td><code>.commands/</code> 10 包</td><td><code>.commands/</code></td><td class="warn">照搬后裁剪</td><td>见 §05；wrapper 生成物不入库，<code>~/bin</code> 须在 PATH</td></tr>
+<tr><td>5</td><td><code>.agents/skills/code-review/SKILL.md</code></td><td>同名路径</td><td class="ok">新建</td><td>见 §07；20 条 checklist 只保留通用 6 + 文档 4，其余换成本项目面</td></tr>
+<tr><td>6</td><td><code>.agents/skills/create-issue/SKILL.md</code></td><td>同名路径</td><td class="ok">覆盖</td><td>删除本项目 <code>scripts/new_issue.py</code> / <code>gen_issues_index.py</code> / <code>_common.py</code> / <code>assets/</code>，模板统一走 memory-bank skill 的 <code>templates/</code>；同步改铁律 6（§09 R2）</td></tr>
+<tr><td>7</td><td><code>.agents/skills/scope-guard/SKILL.md</code></td><td>同名路径</td><td class="ok">改一行</td><td>入池动作改 <code>commands run kb.new issue</code>；统一换行为 LF</td></tr>
+<tr><td>8</td><td><code>.agents/skills/grilling/SKILL.md</code></td><td>新建 <code>grilling/</code>，移除 <code>grill-me/</code></td><td class="ok">替换</td><td>补 <code>.codebuddy/skills/grilling</code> 链接、摘掉 <code>grill-me</code> 链接（链接不入库）</td></tr>
+<tr><td>9</td><td><code>.agents/skills/gitmoji/</code></td><td>—</td><td class="dim">不动</td><td>两边逐字相同；提交信息维持中文一句话 + 详述</td></tr>
+<tr><td>10</td><td>根 <code>AGENTS.md</code></td><td>根 <code>AGENTS.md</code></td><td class="warn">骨架重写</td><td>只搬「两层路由 / 会话协议 / 请求边界 / 产出口径 / 命令入口」骨架；铁律 1–7、提交口径、私有资源红线原样保留；写完必须 ≤8,000 字符（当前 6,173，余量 1,827）</td></tr>
+<tr><td>11</td><td>根 <code>scripts/check_context_caps.py</code> / <code>sync_agent_skills.py</code></td><td>—</td><td class="dim">不搬</td><td>PORTING.md 明确列为项目专属；本项目两份都在，继续用</td></tr>
+<tr><td>12</td><td><code>memory-bank/conventions/</code> 等 auto-qb 领域文档</td><td>—</td><td class="no">剔除</td><td>全是 qB 事实；本项目 <code>conventions/</code> 由现有 <code>conventions.md</code> 拆分生成</td></tr>
+<tr><td>13</td><td>auto-qb <code>.commands/my-commit-flow/</code>（19 文件 436KB，含 <code>ship</code> 子包）</td><td>同名路径</td><td class="ok">保留并本地化</td><td>替换旧 skill 成为提交单点：私有资源红线改 <code>resources-do-not-track/</code>；闸门改 <code>node tests/run-all.js</code> + <code>scripts/check_context_caps.py</code>；主线 Gitee <code>develop</code>；去掉 uv / pytest / 多 clone rebase / <code>Review:</code> trailer / qB 红线硬编码；保留 <code>commit.py --no-push</code>（本地提交，不 push）</td></tr>
+</table>
+
+<h2 id="s05"><span class="no">§05</span>命令包：完整照搬再裁剪</h2>
+<p>用户选定「11 个包全复制后逐个本地化」这条路 —— 即 10 个顶层包 + <code>my-commit-flow/ship</code> 子包共 11 个 <code>config.toml</code> 单元（下表把父子两包合并成一行）。照搬是<b>手段</b>（先建立可 diff 的对齐基线），裁剪是<b>结果</b>：每包按「有无本项目消费者 / 能否脱离 qB 运行时 / 是否引入第二套口径」三问判定。照搬阶段全部文件仅在未暂存工作区存在，判定后剔除项直接删除，最终暂存清单只含保留项。</p>
+<table>
+<tr><th>包</th><th>规模 / task</th><th>auto-qb 里干什么</th><th>判定</th><th>本地化动作</th></tr>
+<tr><td><code>kb</code></td><td>16 KB / 12</td><td>索引、切片、建件、取时、机检、导航页</td><td class="ok">保留</td><td>去掉 <code>uv run</code> 前缀，改裸 <code>python</code>；<code>&lt;skill-dir:memory-bank&gt;</code> 占位符原样保留（换安装位置零改动）；<code>kb.check</code> 里与 qB 守卫无关的 10 条 --check 全保留</td></tr>
+<tr><td><code>doc</code></td><td>8 KB / 3</td><td><code>links</code> / <code>caps</code> / <code>drift</code></td><td class="ok">保留</td><td><code>doc.caps</code> 改指本项目 <code>scripts/check_context_caps.py</code>；<code>doc.drift</code> 需按本项目命令面重写（原版校验 auto-qb 包路径）</td></tr>
+<tr><td><code>review</code></td><td>212 KB / 10</td><td><code>pack</code> / <code>check</code> / <code>trace</code> / <code>lane.*</code></td><td class="warn">改造后保留</td><td>见 §07；删 <code>src/auto_qb/</code>、<code>config.yml</code> / <code>auto-qb-data/</code> 红线硬编码、多 clone 冻结与 <code>git archive</code>；保留 pack/check 机械面与 lane 状态机</td></tr>
+<tr><td><code>test</code></td><td>44 KB / 9</td><td>pytest 全量 / 快速 / 覆盖率 / Linux CI</td><td class="warn">只留 1 条</td><td><code>test.full</code> 改 <code>node tests/run-all.js</code>；其余 pytest / uv / coverage / WSL 相关全删（本项目零依赖 Node，铁律 8）</td></tr>
+<tr><td><code>my-commit-flow</code> + <code>ship</code></td><td>436 KB / 2 (+2)</td><td>提交、推送、rebase、闸门、ref 三处核对</td><td class="ok">保留并本地化（替换旧 skill）</td><td>退役 <code>.agents/skills/my-commit-flow/</code> 与根 <code>.commit-flow.toml</code>，提交单点落到本命令包；红线改 <code>resources-do-not-track/</code>、闸门改 <code>node tests/run-all.js</code> + <code>scripts/check_context_caps.py</code>、主线 Gitee <code>develop</code>；去掉 uv / pytest / 多 clone rebase / <code>Review:</code> trailer / qB 红线硬编码；保留 <code>commit.py --no-push</code>；AGENTS.md 提交节随之改写（D5）</td></tr>
+<tr><td><code>dev</code></td><td>16 KB / 12</td><td>WEBUI / 真机 / yapf / mypy / playwright</td><td class="no">剔除</td><td>全部指向 qB 真机与 Python 工具链；无本项目消费者</td></tr>
+<tr><td><code>real</code></td><td>16 KB / 12</td><td>真机轨 tests-real runner / seed</td><td class="no">剔除</td><td>同上</td></tr>
+<tr><td><code>mutants</code></td><td>104 KB / 6</td><td>WSL mutmut 变异镜像</td><td class="no">剔除</td><td>同上</td></tr>
+<tr><td><code>release</code></td><td>12 KB / 7</td><td>uv build / CI / tag / 发版页</td><td class="no">剔除</td><td>本项目发版 = 推送 <code>.user.js</code> 经 <code>@downloadURL</code> 更新，无 Python 包发布</td></tr>
+<tr><td><code>env</code></td><td>5 KB / 2</td><td><code>uv sync</code> / 版本号</td><td class="no">剔除</td><td>无 <code>pyproject.toml</code> / <code>uv.lock</code>，本项目无依赖同步动作</td></tr>
+</table>
+<p class="aside">引擎侧：commands skill 的 <code>SKILL.md</code> / <code>howto-add-command.md</code> / <code>wrapper.md</code> 两边逐字相同，无需改；只需取较新 <code>run.py</code>。命令收录纪律照抄 <code>howto-add-command.md</code> 三条判据（重复 / 难拼 / 易错）与「<code>--when</code> / <code>--note</code> 必填」。</p>
+
+<h2 id="s06"><span class="no">§06</span>KB 切片化：映射与守恒</h2>
+
+<h3>6.1 拆分映射（数字为实测字符数）</h3>
+<table>
+<tr><th>现文件</th><th>去向</th><th>内容裁决</th></tr>
+<tr><td><code>pitfalls.md</code> 78,772</td><td><code>pitfalls/&lt;类&gt;/&lt;主题&gt;.md</code> + <code>_about.md</code> + 生成 <code>_index.md</code></td><td>P1–P79 逐条按动作归类；每条补三行头（<code># 标题</code> / <code>&gt; 摘要:</code> / <code>&gt; 触发:</code>）与「触发 / 判别 / 处置」三必填；原句照搬不重写</td></tr>
+<tr><td><code>activeContext.md</code> 33,477</td><td><code>active-context/YY-MM-DD-HHMM-&lt;slug&gt;.md</code></td><td>「当前工作焦点」按专题拆切片；「最近改动时间线」属流水，蒸馏后归 <code>architecture/</code> 与档案；「活跃决策 / 下一步」是长青内容，归 README 路由与 <code>projectbrief.md</code>，切片里不留副本</td></tr>
+<tr><td><code>progress.md</code> 17,606</td><td>按 26-11-08 D9 全灭</td><td>「已实现 / 现状」蒸馏进 <code>architecture/</code> 与 <code>scripts/</code>；「未修 Bug」原句照搬归位到 <code>conventions/known-issues.md</code>，不新建 issue、不立档、不写会话切片（D8）；「待办方向」归 tasks 档案（先 grep 去重，避免重复入池）；「发布注意」并进 conventions</td></tr>
+<tr><td><code>conventions.md</code> 10,950</td><td><code>conventions/</code> 多件</td><td>按主题拆：版本 / 代码风格 / 元数据 / 站点适配 / 测试 / 文档同步 / 制品协议（doc-forms）/ 评审口径 / 私有资源红线，每件 ≤8K</td></tr>
+<tr><td><code>productContext.md</code> + <code>systemPatterns.md</code> + <code>techContext.md</code> 共 8,898</td><td>并入 <code>projectbrief.md</code> + <code>architecture/</code></td><td>蒸馏三动作：外迁 attachments / 删死段 / 合并邻近件；禁止压文案；每包留「细节出处」指针</td></tr>
+<tr><td><code>scripts/*.md</code> 约 124 KB</td><td><code>scripts/&lt;脚本&gt;/</code> 分包</td><td>领域知识保留；PTAutoCheckIn 与 HDHomeUI 两件远超 cap，按主题拆（引擎 / 站点表 / 测试 / UI 主题 / 坑位索引）</td></tr>
+<tr><td><code>tasks/_index.md</code> + TASK001–020</td><td>档案层冻结</td><td><code>_index.md</code> 退役；TASKnnn 保留文件名并补 <code>**Legacy-ID:**</code>，新档按 <code>YY-MM-DD-&lt;领域&gt;-&lt;专题&gt;.md</code> 命名</td></tr>
+</table>
+
+<h3>6.2 五步配方（照抄 <code>references/kb-structure.md</code>）</h3>
+<ol>
+<li><b>量</b>：按 <code>##</code> / <code>###</code> 切段统计字符数与引用处数，对照 cap 定目标件数。</li>
+<li><b>建</b>：建目录族，每件写三行头，<b>原句照搬</b>；不留墓碑 / 存根（git 历史即冷库）。</li>
+<li><b>生成</b>：只有 <code>pitfalls/</code> 跑 <code>gen_kb_index.py</code> 生成 <code>_index.md</code>，<span class="no">不许手写</span>。</li>
+<li><b>接线</b>：改 <code>memory-bank/README.md</code> 细路由 + AGENTS.md 粗路由 + 活文档互引 + skill/DoD 内路径；历史档案 / 计划 HTML 正文一行不改。</li>
+<li><b>守恒核对</b>：迁移前条目清单（md5 + 字节）与迁移后逐条比对，<b>missing 必须为 0</b>，守卫与闸门转绿。</li>
+</ol>
+
+<h3>6.3 分类枚举与三处同步</h3>
+<p>pitfalls 类目按本项目实际坑型定制（W1 逐条归类时定稿）：候选 <code>userscript</code> / <code>site-adapt</code> / <code>css-theme</code> / <code>tests</code> / <code>git</code> / <code>kb</code> / <code>docs</code> / <code>security</code>。新增类必须同步改三处：<code>_common.PITFALL_CLASSES</code>、<code>memory-bank/README.md</code> 路由、该目录 <code>_about.md</code>，少一处守卫即红。</p>
+
+<h3>6.4 历史死链</h3>
+<p>切片后，<code>tasks/TASK*.md</code> 与既有 <code>docs/plans/</code> HTML 里对 <code>pitfalls.md</code> / <code>activeContext.md</code> 的引用会大面积变死链。按 26-11-08 D2「git 历史即冷库」接受：历史件正文零改动，兜底 = <code>grep</code> 文件名 + <code>git log -- &lt;旧路径&gt;</code>；<span class="accent">但活文件（AGENTS.md / README / conventions / skill / 脚本文档）的互引必须全部修正</span>，否则路由会把 agent 带进死路。</p>
+
+<h2 id="s07"><span class="no">§07</span>legacy-review4 方法论落地</h2>
+<p>auto-qb 的 R4 计划（<code>26-11-05-2335</code>，五路线 34 批、findings 475→473、blocker 0、6 个 Open issue、冻结 <code>f0883292</code>）本身是 qB 存量评审，结论一概不搬。可迁移的是它把 code-review skill 适配到存量代码的<b>方法</b>与<b>机械面</b>。</p>
+<table>
+<tr><th>带走</th><th>本地化形态</th></tr>
+<tr><td>评审骨架：分批（≤400 行）/ 只读 reviewer 三件套 / findings 七字段 schema / 引文逐字校验（±3 行，refute 即弃）/ severity 分级 / blocker 必修 / 收口接缝终审（≤200 行）/ 修复循环</td><td><code>.agents/skills/code-review/SKILL.md</code> 精简为本项目版；去掉 <code>Review:</code> trailer 闸门、<code>my-commit-flow.sync</code> 前置齐平、多 clone 三钉中的远端 tip 比对（本项目单 clone，Gitee 主线口径已在 AGENTS.md）</td></tr>
+<tr><td>checklist 通用面 6 条（Goal / Design / 正确性 / Tests / 可读性 / 安全面）+ 文档面 4 条（事实 / 口径 / 可执行 / 反面证据）</td><td>原样保留 10 条；剔除 qB 法则 7–16；补本项目面：脚本头 <code>@version</code> 与 <code>@grant</code> 一致性、零依赖 Node 测试、私有资源与凭据红线、纯样式层不碰站内 DOM、键盘快捷键防误触、<code>@match</code> 最小化、GM API 显式声明、知识库同步</td></tr>
+<tr><td><code>review.lane</code> 状态机：manifest（批次→文件矩阵）/ claim / start / verify / batch / done / smoke，状态单点在机器 JSON，计划 HTML 静态不随执行改版</td><td>落 <code>.commands/review/</code> 精简包：保留「状态单点 + 覆盖守卫 + 快照只读契约」三件；<span class="no">不做</span> git archive 多 clone 冻结、<code>ls-remote</code> tip 钉值、qB 模块路线矩阵</td></tr>
+<tr><td>计划 / 报告制品协议：dark 单文件 HTML、<code>doc-added</code> / <code>doc-updated</code> / <code>doc-status</code> / <code>doc-refs</code> meta、变更记录 R 行、认领链双向声明</td><td>写进 <code>memory-bank/conventions/doc-forms.md</code>；本项目计划仍落 <code>docs/plans/</code>，报告落 <code>memory-bank/reports/</code>，命名前缀取 <code>kb.time stamp</code></td></tr>
+</table>
+<p class="aside">不带走：473 条 findings、6 份 issue HTML、终审报告 <code>26-11-07-0545</code>、route JSON、auto-qb 路径常量、<code>Review-Skip</code> / <code>Review:</code> trailer 口径（后者与本项目「中文首行 + 详述」提交规范冲突，列为执行期判断点，默认不引入）。</p>
+
+<h2 id="s08"><span class="no">§08</span>实施波次 W0–W7</h2>
+<p>串行，依赖不可颠倒：W1 先落 skill（W2 命令包要用 <code>&lt;skill-dir&gt;</code> 解析），W3 先建骨架并让守卫转绿（W4 拆文档时天天要跑 <code>kb.check</code>），W5 最后改口径（写早了会在中间态误导 agent）。每波结束汇报改动并停下，<span class="no">不自动 commit / push</span>。</p>
+<table>
+<tr><th>波次</th><th>内容</th><th>验收判据</th></tr>
+<tr><td><b>W0</b> 基线</td><td>确认 <code>git status --short</code> 为空、记录 HEAD；列出逐路径移植清单交用户确认；auto-qb 只读，不写入其工作区</td><td>清单中无 <code>config.yml</code> / <code>auto-qb-data/</code> / <code>resources-do-not-track/</code>；用户逐项确认后才动手</td></tr>
+<tr><td><b>W1</b> 前置 skill 落盘</td><td>只落 W2/W3 的前置两件：<code>memory-bank</code> 整目录（§04 第 1–2 项）+ <code>commands</code> 引擎新版 <code>run.py</code>（第 3 项）；同步 <code>.codebuddy/skills/</code> 链接（本机执行 <code>sync_agent_skills.py</code>）。其余四个 skill 的本地化版留 W6 一次落盘，避免中间态带着 qB 原文</td><td><code>commands</code> 引擎可 <code>list</code>（此时包尚未建，只验引擎）；<code>&lt;skill-dir:memory-bank&gt;</code> 能解析；<code>python &lt;改动的脚本&gt; --help</code> 冒烟过（.commit-flow.toml 闸门）</td></tr>
+<tr><td><b>W2</b> 命令包</td><td>10 包全量复制到 <code>.commands/</code> → 按 §05 逐包判定 → 改 <code>config.toml</code>（去 uv / pytest / qB 路径）→ 删除剔除包 → <b>移植并本地化 <code>my-commit-flow</code> + <code>ship</code> 命令包（提交单点，D5）</b> → 装 wrapper</td><td><code>commands list</code> 只列保留包且无死 task；<code>commands run kb.time</code> 三行 UTC+8 正常；<code>commands run kb.index</code> 能生成 pitfalls 索引</td></tr>
+<tr><td><b>W3</b> KB 骨架</td><td>建目录族 + 各 <code>_about.md</code>（三行头）；<b>手写</b> <code>memory-bank/README.md</code> 极简路由；跑 <code>kb.index</code>；把 <code>kb.check</code> / <code>doc.links</code> / <code>check_context_caps.py</code> 挂进 <code>.commit-flow.toml</code> 闸门</td><td><code>kb.check</code> 绿、<code>doc.links</code> 绿；<code>kb.time -- check</code> 绿；闸门 <code>match</code> 覆盖 <code>memory-bank/</code> 与 <code>.commands/</code></td></tr>
+<tr><td><b>W4</b> KB 切片化</td><td>按 §06 逐族迁移（建议顺序：pitfalls → conventions → active-context → projectbrief/architecture → progress → scripts）；每族走五步配方并做守恒核对</td><td>missing = 0；每件 ≤cap；<code>kb.check</code> 绿；<code>pitfalls/_index.md</code> 由生成器产出且未手改；活文档互引全通</td></tr>
+<tr><td><b>W5</b> 口径层</td><td>AGENTS.md 骨架重写（保留铁律 1–7 / 提交口径 / 私有资源红线）；改铁律 6 的 <code>_index.md</code> 登记措辞；同步 <code>conventions/</code> 与 <code>memory-bank/README.md</code>；<code>docs/plans/</code> 命名改指 <code>kb.time</code>；<b>退役旧 skill 与 <code>.commit-flow.toml</code>、AGENTS.md 提交节改写（提交单点落到命令包，D5）</b></td><td><code>python scripts/check_context_caps.py</code> 绿（≤8,000）；<code>doc.drift</code> 绿；全文无 <code>activeContext.md</code> / <code>pitfalls.md</code> 活引用</td></tr>
+<tr><td><b>W6</b> 审查体系与其余 skill</td><td>落盘 §04 第 5–8 项的本地化版：<code>code-review</code> 精简版（§07 十条 checklist）、<code>create-issue</code> 机械面收编（删自带脚本与 assets）、<code>scope-guard</code> 改入池一行、<code>grilling</code> 替换 stub；补 <code>.commands/review/</code> 精简包与 <code>conventions/review.md</code>；<code>gitmoji</code> 不动</td><td><code>review.pack</code> / <code>review.check --findings</code> 在样例上跑通；<code>kb.new issue</code> 能产出 8 类报告 HTML；grilling 可由 Skill 加载；无第二套提交 / 入池口径</td></tr>
+<tr><td><b>W7</b> 全量验收</td><td>跑 §10 清单；逐路径核对暂存范围；汇报改动并提示「请审核，确认后再提交」</td><td>全部判据绿；<code>git status --short</code> 只含本计划内路径；无 <code>src/*.user.js</code> 改动（<code>@version</code> 不变）</td></tr>
+</table>
+
+<p class="aside">执行口径（D6 / D7 / 纪律）：首批（提交本篇计划）用原生 <code>git</code>；<code>ship</code> 落地后每步改用 <code>ship.commit --no-push</code> 做本地提交；最终 rebase 后以 ff 合入本地 <code>develop</code>；<b>全程不 push</b>，等待用户显式提交指令。本地分支 <code>feat/skill-port-kb-slice</code> 无远端，子智能体开工<span class="no">不跑</span> <code>my-commit-flow.sync</code>，也不执行任何 fetch / pull / push。</p>
+
+<h2 id="s09"><span class="no">§09</span>冲突与裁决登记</h2>
+<table>
+<tr><th>#</th><th>冲突</th><th>裁决 / 处置</th></tr>
+<tr><td>R1</td><td>AGENTS.md 硬上限 8,000 字符（IDE 注入静默截断），而移植要加路由 / 会话协议 / 命令入口；当前 6,173，余量仅 1,827</td><td>细节全部下沉 <code>memory-bank/README.md</code> 与 <code>conventions/</code>，原位只留指针；每改必跑 <code>scripts/check_context_caps.py</code>；铁律 7 条一条不删</td></tr>
+<tr><td>R2</td><td>铁律 6 明写「<code>_index.md</code> 登记（生成物，重跑脚本更新）」，而新版 create-issue 已退役索引</td><td>W5 同步改 AGENTS.md 铁律 6 与 <code>conventions/</code> 0.4 / 6 节：记录层靠 grep + <code>kb.nav</code>，唯一幸存索引是 <code>pitfalls/_index.md</code>；不同步改就是两套口径</td></tr>
+<tr><td>R3</td><td>铁律 7「问答轮次不得产出计划文档」vs 本轮</td><td>用户显式「然后出一个计划」= 执行任务类且对新建计划文档逐项授权成立；本轮仅产出本篇</td></tr>
+<tr><td>R4</td><td>命令引擎 <code>tomllib</code> 要求 Python ≥3.11；auto-qb 包大量 <code>uv run</code> / pytest / yapf / WSL，与本项目「零依赖 Node」冲突</td><td>skill 脚本用本机裸 <code>python</code>（已有 Python 用于两个项目脚本）；测试类 task 只留 <code>node tests/run-all.js</code> 一条；不引入 <code>package.json</code> / <code>pyproject.toml</code> / uv</td></tr>
+<tr><td>R5</td><td>提交流水线双轨：auto-qb <code>.commands/my-commit-flow</code>（436 KB）vs 本项目现有 skill + <code>.commit-flow.toml</code></td><td><b>替换</b>旧 skill：退役 <code>.agents/skills/my-commit-flow/</code> 与根 <code>.commit-flow.toml</code>，提交单点落到命令包（<code>.commands/my-commit-flow</code> + <code>ship</code>），AGENTS.md 提交节同步改写（D5）；不再剔除命令包避免双轨</td></tr>
+<tr><td>R6</td><td><code>Review:</code> trailer / gitmoji 提交规范 vs 本项目中文提交口径</td><td>默认不引入（用户已定 gitmoji 不动）；评审留痕走档案 / 切片，不进提交信息；若日后要引入须另开任务改 AGENTS.md 提交节</td></tr>
+<tr><td>R7</td><td>auto-qb 含生产配置与运行时数据；本项目有 <code>resources-do-not-track/</code> 凭据红线</td><td>照搬只允许 skill / 命令包 / 文档 / KB 骨架四类；任何 <code>config.yml</code>、<code>auto-qb-data/</code>、含真实凭据的样本一律不复制、不进回复与日志；提交前查 <code>git status --porcelain -uall</code></td></tr>
+<tr><td>R8</td><td>切片造成历史档案 / 既有计划 HTML 大面积死链</td><td>按 D2 接受历史件死链（grep + <code>git log -- &lt;旧路径&gt;</code> 兜底）；活文件互引必修，由 <code>doc.links</code> 盯住</td></tr>
+<tr><td>R9</td><td><code>.codebuddy/skills/</code> 是符号链接农场且已被 <code>.gitignore</code> 忽略</td><td>内容只写 <code>.agents/skills/</code> 一处；链接由本机 <code>sync_agent_skills.py</code> 生成，不进 Git；W1 验收包含「链接齐全且无断链」</td></tr>
+<tr><td>R10</td><td>W4 是纯文档大改（143 KB 拆族），按知识库同步铁律 4 需与代码同次提交</td><td>本轮不改代码 ⇒ 无代码事实可回写；W4 的回写对象就是 KB 自身。提交时按「一次提交只做一件事」分波次提交，逐路径暂存，不混入用户改动</td></tr>
+<tr><td>R11</td><td>本轮执行口径与纪律：本地分支无远端、按波次实施与提交方式待定</td><td>本地分支 <code>feat/skill-port-kb-slice</code> 无远端，开工不跑 <code>my-commit-flow.sync</code> / 不 fetch / pull / push；首批（计划）用原生 <code>git</code> 提交，<code>ship</code> 落地后每步 <code>ship.commit --no-push</code> 本地提交；最终 rebase 后 ff 合入本地 <code>develop</code>，全程不 push，等待用户提交指令（D6 / D7）</td></tr>
+</table>
+
+<h2 id="s10"><span class="no">§10</span>验收清单（W7 逐条勾）</h2>
+<pre><code><span class="checkbox">[ ]</span> commands list                       只列保留包，无 qB 专属 task、无死 <span class="dim">&lt;skill-dir&gt;</span> 解析
+<span class="checkbox">[ ]</span> commands run kb.time               三行输出，UTC+8，与机器时区无关
+<span class="checkbox">[ ]</span> commands run kb.check              索引 == 生成结果 / 日期守卫 / 切片结构全绿
+<span class="checkbox">[ ]</span> commands run doc.links             活文件互引零坏链
+<span class="checkbox">[ ]</span> python scripts/check_context_caps.py   AGENTS.md ≤ 8,000 字符
+<span class="checkbox">[ ]</span> node tests/run-all.js              全量测试绿（本机实测数字只写进 testing/baselines/ 新切片）
+<span class="checkbox">[ ]</span> python &lt;改动的 skill 脚本&gt; --help    逐个冒烟（.commit-flow.toml 闸门）
+<span class="checkbox">[ ]</span> 守恒核对                         迁移前后条目清单逐条比对，missing = 0
+<span class="checkbox">[ ]</span> .codebuddy/skills/                链接齐全、无断链、grilling 可加载
+<span class="checkbox">[ ]</span> git status --short                只含本计划内路径；无 src/、无 resources-do-not-track/、无 config.yml
+<span class="checkbox">[ ]</span> 版本号                           src/*.user.js 零改动 ⇒ @version 不变（铁律 3 不适用）
+<span class="checkbox">[ ]</span> 提交单点                        .commands/my-commit-flow + ship 存在且 ship.commit --no-push 可用；旧 skill 与 .commit-flow.toml 已退役
+<span class="checkbox">[ ]</span> 收尾                              汇报改动 + 「请审核，确认后再提交」；未 commit / push</code></pre>
+
+<h2 id="s11"><span class="no">§11</span>决策记录与变更记录</h2>
+<h3>grilling 一轮（2026-11-11，4 问，全部收敛）</h3>
+<table>
+<tr><th>#</th><th>问题</th><th>推荐</th><th>用户裁决</th></tr>
+<tr><td>Q1</td><td>KB 本体是否连带切片化</td><td>只搬 skill，KB 不动</td><td class="accent">连带 KB 切片化（改选最大档）</td></tr>
+<tr><td>Q2</td><td>legacy-review4 移植什么</td><td>方法论 + 机械面</td><td class="ok">同推荐</td></tr>
+<tr><td>Q3</td><td>命令包范围</td><td>kb + doc 最小集</td><td class="accent">完整照搬再裁剪（改选最大档）</td></tr>
+<tr><td>Q4</td><td>非自制 skill 处理</td><td>补 grilling，gitmoji 不动</td><td class="ok">同推荐</td></tr>
+</table>
+<p class="aside">设计树 frontier 已清空：无待拍板项。执行期判断点（不上升为拍板）见 §08 各波验收列；若 W1 / W2 发现某项依赖与实测不符，停下报告，不临场扩大范围（铁律 6 / 7）。</p>
+
+<h3>本轮审核追加裁决（D5–D8）</h3>
+<table>
+<tr><th>#</th><th>决策</th><th>要点</th></tr>
+<tr><td>D5</td><td>my-commit-flow 移植并本地化</td><td>移植 <code>.commands/my-commit-flow</code> + <code>ship</code> 成为提交单点，<b>替换</b>（非并存）本项目现有 <code>.agents/skills/my-commit-flow/</code> 与根 <code>.commit-flow.toml</code>；AGENTS.md 提交节随之改写</td></tr>
+<tr><td>D6</td><td>分阶段提交方式</td><td>首批（提交计划）用原生 <code>git</code>；<code>ship</code> 落地后每步改用 <code>ship.commit --no-push</code> 本地提交</td></tr>
+<tr><td>D7</td><td>收尾合入</td><td>最终 rebase 后以 ff 合入本地 <code>develop</code>；全程不 push，等待用户显式提交指令</td></tr>
+<tr><td>D8</td><td>过程产物守恒</td><td>不新建 issue、不立档 <code>tasks/</code>、不写 active-context 会话切片；<code>progress.md</code> 未修 Bug 原句归位到 <code>conventions/known-issues.md</code>；改造记录只体现在提交信息与已改的 README / AGENTS 中</td></tr>
+</table>
+<p class="aside">frontier 已清空，无待拍板项；D5–D8 为用户审核后拍板，连同既有 Q1–Q4 一并收敛。</p>
+
+<h3>变更记录</h3>
+<ul>
+<li><span class="tag">R0 · 26-11-11-0210</span> 初版。来源：两项目只读调研（skill 清单 diff、命令包 config、11-08 重构计划、legacy-review4 计划、提交历史、KB 字符数实测）+ grilling 一轮 4 问。要点：7 个 skill 的移植/本地化映射、10 包照搬裁剪表、KB 八族拆分与守恒、R4 方法论取舍、W0–W7 波次、10 条冲突裁决、12 项验收。状态 Open，待用户审核后执行。</li>
+<li><span class="tag">R1 · 26-11-11-0237</span> 用户审核后拍板 D5–D8：补 my-commit-flow 命令包移植并替换旧 skill 成为提交单点（§03 3.1 / §04 第 13 项 / §05 / §09 R5 / §10）；progress.md 未修 Bug 原句归位且不新建 issue / 立档 / 会话切片（§06）；分阶段执行口径（§08）：首批原生 git、其后 <code>ship.commit --no-push</code>、最终 ff 合入本地 develop、全程不 push、本地分支不跑 <code>my-commit-flow.sync</code>；新增 R11 与 D5–D8 决策小表并注明 frontier 清空。doc-updated 与 R1 时间均取本机 Get-Date 命令（Windows，2026-11-11 02:37 +08:00），非上下文日期。</li>
+</ul>
+
+<div class="rule"></div>
+<div class="colophon">
+  计划落点：docs/plans/（本项目口径，单文件 HTML · dark）· 命名前缀取自系统本地时间 2026-11-11 02:10 (UTC+8)<br>
+  参考仓库 D:/Projects/auto-qb 全程只读 · 本计划未改动任何代码 / skill / 知识库 / 配置 / issue 文件<br>
+  执行前请审核；确认后再逐波次实施，提交由用户显式触发。
+</div>
+
+</div>
+<nav class="toc">
+  <span class="t">Contents</span>
+  <a href="#s01">§01 目标与边界</a>
+  <a href="#s02">§02 现状盘点</a>
+  <a href="#s03">§03 终态设计</a>
+  <a href="#s04">§04 移植映射</a>
+  <a href="#s05">§05 命令包裁剪</a>
+  <a href="#s06">§06 KB 切片化</a>
+  <a href="#s07">§07 R4 方法论</a>
+  <a href="#s08">§08 实施波次</a>
+  <a href="#s09">§09 冲突裁决</a>
+  <a href="#s10">§10 验收清单</a>
+  <a href="#s11">§11 决策记录</a>
+</nav>
+</div>
+
+</div>
+</body>
+</html>
