@@ -1,11 +1,11 @@
 # PTAutoCheckIn.user.js — PT 多站点自动签到
 
-> 源文件：`src/PTAutoCheckIn.user.js` ｜ 版本 `2026.09.19.4`(升级时同步更新)
+> 源文件：`src/PTAutoCheckIn.user.js` ｜ 版本 `2026.11.11.1`(升级时同步更新)
 > ⚠️ 状态：**v2 已并入正式版**。原 `src/PTAutoCheckIn-v2.user.js`（v2026.09.15.1）内容已并入 `PTAutoCheckIn.user.js` 并改回 `@name PTAutoCheckIn`（递增版本号）；`-v2` 暂存文件与旧 v1（v2026.08.30.1）均已删除, 生产脚本合并为单一 `PTAutoCheckIn.user.js`。
 
 ## 功能概述
 
-覆盖 28 个站点(含仅检测不自动签的 U2、无按钮访问即签的 MTeam/DigitalCore/HD-Space/Kufirc/凤凰PT/Sportz Bar、Discourse 论坛按钮签到站 NodeLoc、已签后入口变纯文本的 HDHome)+ 百度贴吧(**多吧**, 每个吧为独立签到单元)。双模式：
+覆盖 30 个站点(含仅检测不自动签的 U2、无按钮访问即签的 MTeam/DigitalCore/HD-Space/Kufirc/凤凰PT/Sportz Bar、Discourse 论坛按钮签到站 NodeLoc、已签后入口变纯文本的 HDHome)+ 百度贴吧(**多吧**, 每个吧为独立签到单元)。双模式：
 
 1. **被动模式**：访问匹配站点自动签到(同 v1)。
 2. **主动批量模式**：点击右下角悬浮按钮 → 面板「批量签到」→ **发起页常驻**, 由调度循环依次用 `GM_openInTab` 在**后台标签**打开各站执行签到, 发起页轮询 GM 状态逐个推进, 全部完成后停在发起页弹出完成面板。
@@ -178,7 +178,7 @@ success      -> suspect
 - **失败且冷却中的站**(今日 `failed` + 10min 冷却未过): 整行降透明度 + 左侧琥珀竖条 + 副文案提示「冷却中, 默认不参与批量」; 批量候选**默认排除**此类站。常规「批量签到」按钮**右侧紧贴一个窄 chevron 图标钮**(拆分按钮组, 同色系+细分隔线) → 点击后琥珀色的 **「强制批量签到(n 站)」** 按钮从**按钮行上方浮出**(absolute 浮层不占文档流, 覆盖站点列表底部; 按钮与「批量签到」本体对齐), 浮出钮带详细 tooltip; 点击无视冷却强制重试(点击前仍重写冷却, 再失败进入新一轮冷却)。**全部签到完毕(无失败冷却站)或批量进行中隐藏图标钮**(此时「批量签到」恢复完整圆角); 图标钮 hover/展开态变琥珀色(图标不旋转); 强制按钮 tooltip 说明适用场景与风控风险。**行内重试入口(.28)**: 今日失败站的 badge 悬停变琥珀「↻ 重试」(cursor pointer + 风控 title 提示), 点击 → 前台新标签 `?ptacRetry=<uid>` 单站强制重试(无视冷却、完成不关标签; 一次性剥参 + 30s 跨标签互斥锁防并发; 与批量调度互斥)。
 - 面板数据读 GM 存储, 任何已匹配站打开均为同一份(满足「任意已添加网站查看完成面板」)。
 
-## 已有站点一览(28 站 + 贴吧 6 吧)
+## 已有站点一览(30 站 + 贴吧 6 吧)
 
 > 2026.09.07 实测各站签到链接普遍不再带 `faqlink` class, 故所有 PT 站 `checkInSelector` 一律去掉 class 依赖(仅按 `href*="attendance.php"` 定位); PTTime 保留 `a.fcb`、Cyanbug 保留 `a.nav-btn`(非 faqlink, 实测仍有效)。站点 `url` 同步更新为当前有效入口(大多去掉 `www.` 前缀, 与 `match` 保持一致)。蜂巢为 shadcn/Radix 改版站(签到是按钮不是 attendance 链接), 例外按 `data-slot` 定位, 见下表。
 
@@ -202,7 +202,7 @@ success      -> suspect
 | Cyanbug | cyanbug.net | `a.nav-btn[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | HDBao | hdbao.cc | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 跳页; `attendanceUrl` 直达; `alreadyPageCheck:true` |
 | MuXueGe | pt.muxuege.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 同上 |
-| 蜂巢 | pting.club | `button[data-slot="sidebar-user-check-in"]` | — / `已签到` | 对话框式(改版后已签检测启用, 对话框步骤可选); `successDetect` 按钮变已签 5s |
+| 蜂巢 | fengchao.chat(原 pting.club, 旧域 @match 仍保留) | `button[data-slot="sidebar-user-check-in"]` | — / `已签到` | 对话框式(改版后已签检测启用, 对话框步骤可选); `successDetect` 按钮变已签 5s |
 | MTeam | kp.m-team.cc | —(无按钮, 登录态访问主页 `/index` 即自动签到) | — / — | 显式 `match` 只认 kp 子域 `/index`; `successDetect` func 轮询 antd 卡片「站点数据/站點數據」(16s); 未登录被重定向无卡片 → failed |
 | DigitalCore | digitalcore.club | —(无按钮, 登录态访问首页即自动签到) | — / 导航链接 `a[href="/alltorrents"]`「All Torrents」 | 同 MTeam 隐式签到型: 显式 `match` 限首页(根或 `/index`, 排除详情/种子列表误触发); `successDetect` func 轮询该链接(16s); 未登录重定向无导航 → failed |
 | HD-Space | hd-space.org | —(无按钮, 登录态访问首页即自动签到) | — / 整页文本「Last access:」 | 同 MTeam 隐式签到型: 显式 `match` 限首页根路径; `successDetect` text 轮询「Last access:」(16s); 未登录重定向无该文本 → failed |
@@ -212,6 +212,8 @@ success      -> suspect
 | NodeLoc | nodeloc.com | `button.checkin-button`(no-text 图标钮, 点它签到) | —(按钮无可见文本) / class 含 `checked-in` + title/aria-label「您今天已经签到过了」 | Discourse 论坛: **no-text 按钮无文本 → 引擎文本通道不可用**, 已签判定走 `alreadyCheck` 自定义(class/title 属性), 点击走 function 步骤, 成功走 func `successDetect`(轮询 checked-in 16s); 显式 `match` 限首页根路径; 无 `checkInContent`/`alreadyCheckedInContent`, 但配 `checkInSelector` + `stateSignals`(class/attr 载体: checked=checked-in/含「已经签到过」, checkable=含「每日签到」)→ **P25 重现检测已纳入**(.26 通用化改造, 待实测) |
 | HHCLUB | hhanclub.net | 先点 `img#user-avatar` 展开菜单, 再点 `a[href*="attendance.php"]` | `[签到得憨豆]` / 落地页 `#date-display` 当月 `yyyy-mm` | `alreadyCheck` 自定义函数(动态算当月); **头像点-验-重试函数步骤**(点击后验签到链接可见, 最多3次) + `successDetect` 同页确认(轮询变 attendance.php 且当月日历 8s)双通道; 2026.09.08 修复普通触发偶发失败 |
 | U2 | u2.dmhy.org | `a[href*="showup.php"]` | `立即签到` / `已签到` | **仅检测型** `detectOnly:true`(签到需人工输入验证码 → 不自动点击/不进批量); 未签面板提示「需人工签到」; 按钮文案变已签即判 success(2026.09.08 接入, 待实测) |
+| 青蛙 | qingwapt.com | `a[href*="attendance.php"]` | `[签到得蝌蚪]` / `签到已得` | 标准文案翻转站(2026.11.11 接入): 已签后入口**仍在**(class 变空), 文案变「[签到已得N, 补签卡: M]」 |
+| 拾刻 | ptskit.org | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | 同青蛙(2026.11.11 接入): 已签后入口仍在, 文案变「[签到已得N, 补签卡: M]」 |
 | pt吧 | tieba f?kw=pt | `.button-wrapper.operate-btn.follow-sign` | `签到` / `连签` | `batchDelayMs:3000` |
 | hdsky吧 | tieba f?kw=hdsky | 同上 | 同上 | 同上 |
 | 饥荒吧 | tieba f?kw=饥荒 | 同上 | 同上 | 同上(2026.09.08 .27 接入, 待实测) |
@@ -328,6 +330,14 @@ boot()
     树并把命中结果**重定向**成宿主 `#ptac-root-v2`, 于是"该坐标最上层是不是宿主" = 面板开合;
     探测点取 `innerWidth-60, innerHeight-104`(面板右下角内侧, 避开 FAB/芯片, toast 是 `pointer-events:none`)。
     headless 下切标签页**不一定**派发 window blur(无窗口焦点), 用例会自动退化为同源的 `window` blur 事件。
+
+24. **青蛙 / 拾刻(2026.11.11 接入, 待实测)**: ① 登录态打开 https://www.qingwapt.com/index.php /
+    https://www.ptskit.org/index.php 未签时 → 应自动点击签到链接(`[签到得蝌蚪]` / `[签到得魔力]`)并转绿
+    success; ② 当日已签再访问 → 入口仍在但文案变「[签到已得N, 补签卡: M]」→ 按钮级已签检测直判 success
+    且**无点击**; ③ 10 分钟内刷新 → 冷却跳过但已签检测照常执行; ④ 批量模式正常参与与结算; ⑤ P25 重现
+    检测按文本站自动翻译通道生效(checked=签到已得 / checkable=签到得*)——已签态反复刷新不应误报重现;
+    ⑥ 若实际文案/入口形态与用户提供的 HTML 不符(如落地页不跳回、补签卡文案差异), 按实际页面复查
+    `checkInSelector` 与文案配置。
 
 ## 修改与扩展指南
 

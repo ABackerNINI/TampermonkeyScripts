@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.10.01.1
+// @version      2026.11.11.1
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -35,6 +35,8 @@
 // @match        *://*.sportz247.bar/*
 // @match        *://*.nodeloc.com/*
 // @match        *://*.u2.dmhy.org/*
+// @match        *://*.qingwapt.com/*
+// @match        *://*.ptskit.org/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -796,6 +798,26 @@ const K = {
                     } catch (e) { return false; }
                 }
             }]
+        },
+
+        { // 青蛙/拾刻(2026.11.11 接入): 标准 NexusPHP 按钮文案翻转站 —— 已签后签到入口**仍在**
+          //   (class 由 faqlink 变空), 文案由「[签到得蝌蚪]」/「[签到得魔力]」变为
+          //   「[签到已得N, 补签卡: M]」→ 按钮级已签检测(alreadyCheckedInContent 含于已签文案)
+          //   直接命中, 无需 noButtonMeansCheckedIn; 选择器照旧不依赖 class(faqlink 仅未签态才有)
+            id: 'qingwapt', name: '青蛙',
+            url: 'https://www.qingwapt.com/index.php',
+            checkInSelector: 'a[href*="attendance.php"]',
+            checkInContent: '[签到得蝌蚪]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
+        },
+        {
+            id: 'ptskit', name: '拾刻',
+            url: 'https://www.ptskit.org/index.php',
+            checkInSelector: 'a[href*="attendance.php"]',
+            checkInContent: '[签到得魔力]',
+            alreadyCheckedInContent: '签到已得',
+            steps: [CLICK_CHECK_IN]
         },
 
         // ============ 百度贴吧(多吧 group: 每个吧是独立签到单元) ============
