@@ -65,7 +65,7 @@
 - **规划改动**：参考 `memory-bank/tasks/` 中已登记的待办与方向。
 - **更新记忆库**：被要求「更新记忆库」时，须复查 `memory-bank/` 全部文件，重点更新 `activeContext.md`、`progress.md` 与 `tasks/_index.md`。
 - **计划产出**: 列计划时使用 `delivery-artifact` skill 产出文档, 将计划文档放入 `docs/plans/` 中; **格式一律为单文件 HTML (`.html`), 不使用 Markdown (`.md`)** —— `docs/plans/` 下的计划文档若出现 `.md` 即为违规, 需转为 HTML; 命名统一为"日期-时间-标题", 如 `26-09-17-0906-improve-webui-plan.html`, 意思为"26年9月17日上午9点6分的改进webui计划", 方便检索, 注意需通过命令获取当前准确的日期和时间, 不要靠记忆!
-- **提交 / 推送 (commit + push)** | [my-commit-flow skill](.agents/skills/my-commit-flow/SKILL.md) (口径在本文件「提交 / PR」节) |
+- **提交 / 推送 (commit + push)** | [my-commit-flow 命令包](.commands/my-commit-flow/) 的 `ship.commit` / `ship.push` (口径在本文件「提交 / PR」节) |
 
 ## 记忆库维护规则
 
@@ -77,7 +77,7 @@
 
 ## 提交 / PR
 
-> **步骤、命令与机检脚本一律走 [my-commit-flow skill](.agents/skills/my-commit-flow/SKILL.md)** —— 预检 → 闸门 → 逐路径暂存 → 提交并核 ref 三处 → 推 Gitee → 尝试一次 GitHub 直连 → 查幽灵 diff(脚本: `preflight.py` / `commit.py` / `verify_ref.py` / `push.py`)。**本节只留口径与红线, 不重复命令**。
+> **步骤、命令与机检脚本一律走 [my-commit-flow 命令包](.commands/my-commit-flow/) 的 `ship.commit` / `ship.push`** —— 预检 → 闸门 → 逐路径暂存 → 提交并核 ref 三处 → 推 Gitee → 尝试一次 GitHub 直连 → 查幽灵 diff(ref 三处核对与推送核验已由脚本内置)。**本节只留口径与红线, 不重复命令**。本地分支无 upstream 阶段用 `ship.commit --no-push`: 只做本地提交, 不 push、不开 sync。
 
 - **协作主线**: 日常开发在 `develop`(2026-09-20 由 `dev` 改名), 统一以 **Gitee 的 `develop`** 为准; **交付与否只看 Gitee 上有没有该提交**。GitHub 只作镜像, **允许滞后** —— 不要用 GitHub 的提交状态判断进度(直连不稳定, 会误判成"改动没推上去")。远端旧的 `dev` 分支保留不动。
 - **用户说"提交" = commit + push**, 一次流程走完 —— **触发词只认"提交 / 入库 / 推上去"这类显式指令; "继续 / 接着做 / ok / 你看着办"一律不算** (2026-09-20 用户指定): 没等到触发词就**只 commit 不 push**(或先问一句)。**本条是"提交 / push"口径的单点定义, 优先于 `memory-bank/` 里的历史表述**
@@ -87,6 +87,6 @@
   - 远端先确认指向 Gitee(历史 clone 的 `origin` 可能是 GitHub 镜像);`git pull <remote>` **必须带分支名**, 不带只 fetch 不合并。
   - **push 前再 fetch 一次** —— `git status -sb` 的 ahead/behind 是上次 fetch 的快照, 不会自己刷新。
   - **只暂存本次范围**: 逐路径 `git add <文件...>`, 不用 `-A`; 清单里不得混入用户自己的未提交改动(`想法.md` 高危, `config.yml` 红线)。
-  - 提交前: 全量测试通过; 改过的 Python 先过 `yapf -i`; 用户可见行为变更同步 `README.md` 与 `memory-bank/`。
+  - 提交前: 全量测试通过; 被改的 Python 脚本 `--help` 冒烟; 用户可见行为变更同步 `README.md` 与 `memory-bank/`。
   - **提交后必核 ref 三处**(`HEAD` == `refs/heads/<branch>` == loose/packed-refs), 不要只看 commit 输出 —— 见下节。
   - **提交后必查幽灵 diff**: `git status --short` 看两列 —— `M `(第一列) = 待提交, ` M`(第二列) = 已提交过但工作区又脏。权威判据(两者同时成立才算已提交): `git log --oneline -1 -- <文件>` 有记录 **且** `git diff --quiet -- <文件>` 退出码 0。发现后补一次"格式化, 无行为变化"提交, 不要改写已入库的提交。

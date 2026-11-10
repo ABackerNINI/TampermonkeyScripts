@@ -199,13 +199,15 @@ def review_text(text: str, allow: frozenset[str] = frozenset()) -> MsgReport:
             break
 
     # ---- b1/b2 gitmoji ----
+    # 拍板 D4「gitmoji 不动」= 本项目不强制首行带 gitmoji: 纯中文一句话概述首行直接放行。
+    # b2(自造 emoji)/b4(首行无中文)及乱码/BOM/骨架/残留检查照旧。
     norm = cluster.replace("\ufe0f", "")
     if norm in GITMOJIS:
         pass
     elif cluster and _is_emoji_like(cluster[0]):
         _v("b2", f"首行 emoji {cluster} 不在 gitmoji 标准集 —— 换标准集内的(全集与选法见 gitmoji skill)")
-    else:
-        _v("b1", f"首行不以 gitmoji 开头: {subject.lstrip()[:16]!r}… —— 口径 <gitmoji> <中文一句话概述>(选法见 gitmoji skill)")
+    elif not any("\u4e00" <= c <= "\u9fff" for c in subject):
+        _v("b1", f"首行既无 gitmoji 也无中文: {subject.lstrip()[:16]!r}… —— 口径 <中文一句话概述> 或 <gitmoji> + 概述")
 
     # ---- b4 首行无中文(明细截断展示 —— 超长首行不刷终端, 收口评审实测 5MB 回显) ----
     after = subject[len(cluster):] if cluster else subject
