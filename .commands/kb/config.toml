@@ -1,0 +1,86 @@
+[pack]
+name      = "kb"
+when      = "知识库：索引重建 / 会话切片 / 只校验不写"
+confirmed = true
+
+[tasks."kb.index"]
+run     = ["python <skill-dir:memory-bank>/scripts/gen_all.py"]
+timeout = 120
+pin     = true
+when    = "收尾回写知识库后重建索引（不要手改 _index.md）"
+note    = "生成器的集合单点在 memory-bank skill 的 scripts/gen_all.py(它同时是 sync 自动化解白名单的 --list 来源) —— 集合从此只有一处, 不再在包配置里再列一遍; 2026-09-24 的教训(漏项导致报错文案指到跑完仍红的命令)由 gen_all 的 GENERATORS 单点防住; 2026-11-08 重构后生成集合收缩为 pitfalls 索引一家(D5), 其余族的 _index 已退役不再重建"
+
+[tasks."kb.active"]
+run     = ["python <skill-dir:memory-bank>/scripts/gen_active_recent.py <args>"]
+timeout = 60
+when    = "看会话滚动状态（在办专题切片，按最后活动倒序）"
+note    = "只打印不写文件；默认按字节预算取最近 K 条（AI 工具壳 30KB 内联上限, 超限落盘预览乱码, 见 pitfalls/ops/console-encoding.md）；<args> 可传 --all / -n N 全量/改条数（全量会落盘, 读 *-stdout.log）、--check 只校验（已挂进 kb.check）"
+
+[tasks."kb.baseline"]
+run     = ["python <skill-dir:memory-bank>/scripts/gen_baseline_recent.py <args>"]
+timeout = 60
+when    = "看测试基线 / 最新数字 / 历史基线排障（默认列最近 3 条）"
+note    = "只打印不写文件；<args> 可传 --all 或 -n N 看全量/改条数、--check 只校验（--check 已同时挂进 kb.check）"
+
+[tasks."kb.time"]
+run     = ["python <skill-dir:memory-bank>/scripts/timekit.py <args>"]
+timeout = 30
+when    = "取当前时间戳 (UTC+8 钉死, 与机器时区无关): 无参三行全打; 子命令 date / time / stamp; check 走日期守卫"
+note    = "KB 内任何日期 (文件名前缀 / Added / Updated / 最后活动 / doc-added / doc-updated / 正文) 一律取自它的输出, 禁用模型上下文里的日期与手工推算 —— 这是「时间戳用命令取当前值」那条约定的落地点。生成器/脚本内部取时**不**调它 (各自钉 UTC+8, 见 skill 的 references/PORTING.md)。"
+
+[tasks."kb.check"]
+run     = ["python <skill-dir:memory-bank>/scripts/gen_all.py --check",
+           "python <skill-dir:memory-bank>/scripts/gen_doc_map.py --check",
+           "python <skill-dir:memory-bank>/scripts/gen_active_recent.py --check",
+           "python <skill-dir:memory-bank>/scripts/gen_baseline_recent.py --check",
+           "python <skill-dir:memory-bank>/scripts/check_wording.py --check",
+           "python <skill-dir:memory-bank>/scripts/check_mutation_anchor.py --check",
+           "python <skill-dir:memory-bank>/scripts/check_doc_templates.py --check",
+           "python <skill-dir:memory-bank>/scripts/timekit.py --check",
+           "python <skill-dir:memory-bank>/scripts/check_status_drift.py --check",
+           "python <skill-dir:memory-bank>/scripts/check_html.py --check"]
+timeout = 120
+when    = "改完知识库先自查，或提交前确认索引自洽"
+note    = "--check 只校验不写；要在回写代码**之后**跑，否则改到一半必然红。2026-10-03 起生成物四条收成 `gen_all.py --check`(集合单点, 同 kb.index; 2026-11-08 重构后生成集合收缩为 pitfalls 索引一家); 其余 = gen_doc_map 主键校验(已无物化文件, 2026-09-29 起查孤儿) + active-context/基线切片校验 + 回写措辞守卫(tasks/ 与 active-context/ 不得写「待提交」这类时点相对断言, 2026-10-07 加) + **新增面检查(check_doc_templates: 冻结线之后新建的族文件——命名/头部字段/状态词表/无残留 SLOT, 2026-10-17 P1 加; 存量豁免)** + 常驻锚防流水守卫(check_mutation_anchor: 排期锚只记「包/模块·时间·大致成果·指针」, 台账/逐轮日志写回 = 红, 2026-10-31 加) + timekit 日期守卫(文件名/元数据/正文三层, 2026-10-06 加) + 状态漂移守卫(check_status_drift: issue badge vs meta / status-unreadable 硬拦, 完成断言只提示, 2026-10-31 加; 2026-11-08 重构 W5: progress 判据节反链档随 progress/ 目录退役删除) + HTML 结构守卫(check_html: 闭合标签缺右尖括号静默吞正文类 —— 2026-11-01 两起实测事故, L1 行级正则 + L2 stdlib 解析器残缺名校验双网, script/style 区遮蔽防 JS 字面量误报, 全库 645 件 <2s; 更广的规范级伤害归 kb.html-audit 的 v.Nu 巡检)"
+
+[tasks."kb.html-audit"]
+run     = ["python <skill-dir:memory-bank>/scripts/check_html.py --vnu --all <args>"]
+timeout = 300
+when    = "全库 HTML 规范级巡检(W3C v.Nu): 嵌套违规/未转义尖括号/烂属性等 L1+L2 抓不到的伤害; jar 在 .tools/(gitignored, 缺时自动下载, 需 java)"
+note    = "只报告不拦(存量 error 属债务, 清理走专门会话); 闸门侧另有增量 --strict 行只查本次改动的 HTML(改谁谁达标)"
+
+[tasks."kb.nav"]
+run     = ["python <skill-dir:memory-bank>/scripts/nav_server.py <args>"]
+timeout = 3600
+when    = "人的知识库导航页: 本地服务现算三视图(台账/控制台/卡片墙)浏览; --gen-static 走静态导出"
+note    = "stream 前台长跑: 输出直连终端(timeout 不生效), Ctrl-C 干净停; 启动即开浏览器(--no-open 关); 精简 log: 只留启动行 + 错误/静态映射请求, /api/data 轮询不上屏; 默认绑 127.0.0.1:8765、浏览器开 localhost:8765(127.0.0.1 这个 origin 有历史遗留), 端口被占时报错行内提示 --port; --gen-static [DIR] 不起服务落盘单文件(默认 tmp-analysis/nav/, 已 gitignored); 服务模式零落盘, 数据每请求现算; 顶栏「拉取」按钮 = POST /api/pull 仅快进同步本仓库(ls-remote 取远端真值 + merge --ff-only; 分叉/本地改动重叠/离线一律失败并提示, 绝不 rebase), 成功即刷新数据; 静态导出与 file:// 无服务端故隐藏该按钮"
+
+[tasks."kb.new"]
+run     = ["python <skill-dir:memory-bank>/scripts/new_doc.py <args>"]
+when    = "新建计划/任务档案/issue: 一次逻辑动作 = 一条命令 + 一次填空(时间戳/命名/头部/SLOT/索引全派生; issue 零 SLOT, 切片走 kb.wrap)"
+note    = "传参统一(issue 26-11-08-1131): 专题主键位置参数与 --topic 两形态全族等价, 跨族套形态不再 rc=1 —— 非 issue 族同给异值即拒, issue 缺位置时 --topic 兼作 slug、位置给足时 --topic 仍是 doc-topic 覆盖; 建后必填 SLOT(守卫拦残留); issue 族 2026-11-07 收编(计划 26-11-07-0549 W3, new_issue.py 退役): slug 位置参数 + --type/--title/--summary 必填, --tier/--module/--reporter/--topic 可选, 出厂恒 Open(翻状态走 kb.status), 模板零 SLOT 按档位填正文; --refs 走 D4 双向补链(2026-10-17 P2: 目标件自动反向声明, 只动元数据行, 幂等); 目标已存在即 rc=1; 档案撞名按 slug 查重(含跨 clone ../auto-qb-*/)"
+timeout = 60
+
+[tasks."kb.ref"]
+run     = ["python <skill-dir:memory-bank>/scripts/set_doc_refs.py <args>"]
+when    = "认领链回填一条命令: 声明方原位并值 + 目标自动反向声明 (双向义务机器保证, 人只给值)"
+note    = "拦死两类复发形态: 目标未落盘整笔拒写(先回填后落盘, 复发 6) / 声明方已有重复声明行拒写(另插一行, 复发 8); plans/reports 不作目标(复发 5 收敛法); 幂等, 只动元数据行; <args> = <path> --add <ref>[,<ref>...] [--no-reverse]"
+timeout = 60
+
+[tasks."kb.status"]
+run     = ["python <skill-dir:memory-bank>/scripts/flip_status.py <args>"]
+when    = "翻转文档状态 (计划/报告 doc-status 5 词表 · 档案 **Status:** 4 词表 · issue 徽标+meta 两处): 词表校验/抬时间戳全派生, 终态带提醒"
+note    = "词表单点 import(_common), 别凭记忆写 —— 词表纪律的活体校验挂 kb.check(gen_doc_map --check, 见 pitfalls/kb/doc-status-meta.md); 切片一律拒绝并指路 kb.wrap; issue 已收编(2026-11-07 W4, 计划 26-11-07-0549): badge+meta 两处一起改+追加状态日志行; 同状态翻转幂等(不抬时间戳不追加日志行); 路径三形态(绝对/仓库根相对/mb 相对)都认; 输出带「机械 0」收录断言; 2026-11-08 重构起不再重建索引(改面四族 _index 已退役, D4/D5)"
+timeout = 60
+
+[tasks."kb.bump"]
+run     = ["python <skill-dir:memory-bank>/scripts/bump_doc.py <args>"]
+when    = "文档改版一次落盘: HTML 抬 doc-updated + 变更记录追加 R 行 / 档案抬 Updated / 切片抬最后活动 (note 随参数带入, 不再开一次编辑)"
+note    = "R 行编号 = 段内最大 + 1(只追加, 已有行零触碰; note 自动 HTML 转义); 报告多数无变更记录段 —— 缺段即 fail-fast 指路, 不猜位置硬塞; 进度日志追加仍是 kb.wrap 的活; 输出带「机械 0」收录断言; 2026-11-08 重构起不再重建索引(改面四族 _index 已退役, D4/D5)"
+timeout = 60
+
+[tasks."kb.wrap"]
+run     = ["python <skill-dir:memory-bank>/scripts/wrap_session.py <args>"]
+when    = "收尾机械面: 抬切片最后活动 + 追加 R 行 / 同专题档案 Updated + 进度日志日期行"
+note    = "只做机械面(D6: 蒸馏与判断仍是 agent 的活); 切片不存在则按模板建(零 SLOT, 判断剩余 0); 基线数字不自动化(A4); 2026-11-08 重构起不再重建索引(tasks/_index.md 已退役, D4/D5)"
+timeout = 60

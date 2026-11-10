@@ -1,0 +1,10 @@
+[pack]
+name      = "test"
+when      = "验证代码：全量"
+confirmed = true
+
+[tasks."test.full"]
+run     = ["node tests/run-all.js"]
+timeout = 1800
+pin     = true
+when    = "改完代码要验一遍"
