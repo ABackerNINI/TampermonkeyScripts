@@ -1,0 +1,21 @@
+[pack]
+name      = "ship"
+when      = "提交与推送（闸门 / 暂存 / 核 ref / 推主线）"
+confirmed = true
+
+# 本包没有 scripts_dir → 继承父包的 `.commands/my-commit-flow/scripts`。
+# 触发口径（不变）：用户显式说"提交 / 入库 / 推上去"这类词才算；
+# "继续 / 接着做 / ok / 你看着办"一律不算。
+
+[tasks."ship.commit"]
+script = "commit.py"
+pin    = true
+when   = "用户显式说「提交」：闸门 + 暂存 + 提交 + 内部同步(提交先行, 树净 rebase 恒可自动) + 核 ref + 内联推送，全程静默"
+note   = "零参数 = 全量提交本次改动(红线照拦); 结果行「提交成功 <hash>」, 上面是本次真发生的 HEAD 改写步骤行(同步 rebase / 闸门 amend, 带 旧hash→新hash); 推送未完成(含提交后同步冲突/断网)不改退出码, 补跑 ship.push; 消息缺省读 <root>/.git/COMMIT_MSG_AI.txt(消费即删; 与 HEAD 消息一致的残留入口即删并拒跑); 拒 -A / . / *"
+doc    = "references/pipeline.md"
+
+[tasks."ship.push"]
+script = "push.py"
+when   = "补推 / 单独推送（ship.commit 已默认内联续推）→ 同步核对 + 推主线 + 核对远端 + 镜像(全程静默)"
+note   = "结果行「推送成功 <hash>」, 上面可能带内部同步的步骤行(快进 / rebase 重放); 推主线 20s×3 次重试(全部失败才判失败), 失败行缀「已重试 N 次」; 镜像只给超时(attempts=1)且允许滞后, 成败都不提"
+doc    = "references/pipeline.md"

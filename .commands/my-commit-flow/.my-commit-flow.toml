@@ -1,0 +1,61 @@
+# 提交流水线配置(my-commit-flow) —— 2026-11-11 按本仓库事实本地化。
+# 口径等价迁移自仓库根 .commit-flow.toml; 只保留本包脚本读取的 schema 键(见 references/config.md)。
+# 本仓库: 单文件 .user.js / 纯 Node 零依赖 / 无 package.json; 测试用 tests/run-all.js。
+# 协作主线 Gitee develop, GitHub 只作镜像(与 AGENTS.md 一致)。本分支无 upstream, 提交走 --no-push。
+# 生效值与来源: python .commands/my-commit-flow/scripts/_pipeline.py --show-config
+
+confirmed = true
+
+branch = ""                       # 留空 = 跟当前分支
+
+main_candidates = ["gitee", "github", "origin"]
+main_host_mark  = "gitee.com"     # 主线 URL 特征(Gitee develop 主线)
+mirror          = "github"
+mirror_host_mark = "github.com"   # GitHub 只作镜像
+
+# 出现即 STOP —— 铁律 5: resources-do-not-track/ 里的私有整页与凭据永不入 Git
+red_lines = ["resources-do-not-track/"]
+# 出现需人工确认: 项目数据目录(已 gitignore, 出现在暂存清单即为异常)
+warn_lines = [".workbuddy-ai/", ".codebuddy/"]
+
+# 跨平台风险: Windows 本地全绿不等于 CI(ubuntu)绿
+platform_hints = ["child_process", "spawn", "spawnSync", "fs.rmSync", "process.platform", "path.sep"]
+staged_panic = 200
+each_limit = 99                  # <each:GLOB> 展开条数上限
+
+# ---------------------------------------------------------------------------
+# 闸门: auto = true → 预检真的执行(红了即 STOP); 占位符展开不了同样 STOP。
+# 只保留本项目真实存在的 4 条, 不挂 qB 专属闸门(review.trace / Review: trailer /
+# check_command_drift.py / sync_agent_skills.py / dev.fmt / test.quick /
+# test.pkg.scoped / gen_active_recent --check / check_html --vnu 等)。
+# KB 骨架与接线是 S06 的事, 本步不对 .commands/**/scripts/*.py 做全量 <each:> 冒烟
+# (新增脚本里含无参即真动作的提交/同步脚本, 全跑会有副作用)。
+# ---------------------------------------------------------------------------
+
+[[gates]]
+match   = ["src/", "tests/"]
+run     = ["node tests/run-all.js"]
+note    = "JS 改动: 零依赖全量测试(当前 35 个, 约 5 分钟; 无浏览器时 SKIP 仿真用例)"
+auto    = true
+timeout = 900
+
+[[gates]]
+match   = ["AGENTS.md", "scripts/"]
+run     = ["python scripts/check_context_caps.py"]
+note    = "AGENTS.md 改动: IDE 注入上限 8000 字符; 只改 scripts/ 时等同冒烟"
+auto    = true
+timeout = 60
+
+[[gates]]
+match   = ["memory-bank/"]
+run     = ["git status --short memory-bank/"]
+note    = "知识库改动: 铁律 4 —— 代码改动须与 memory-bank/ 同步且同次提交; 轻量检查, 不挂 kb.check / gen_active_recent / check_html"
+auto    = true
+timeout = 60
+
+[[gates]]
+match   = [".agents/skills/"]
+run     = ["python <each:.agents/skills/**/scripts/*.py|--with-safety> --help"]
+note    = "skill 改动: 被改脚本 --help 冒烟; --with-safety 摘掉无参即真动作的脚本"
+auto    = true
+timeout = 300
