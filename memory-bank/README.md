@@ -1,92 +1,50 @@
-# AI 记忆库（Memory Bank）
+# memory-bank 细路由（过渡版）
 
-本目录是 **TampermonkeyScripts** 项目的 **Memory Bank**——持久化的项目知识库，供 AI 助手与开发者跨会话恢复上下文、理解项目结构、代码约定与各脚本职责。遵循 `.github/instructions/memory-bank.instructions.md` 的 Memory Bank 模式。
+> 本文件是 AI 助手进入知识库的**细路由**：按「要做的动作」选文档。铁律、提交口径、常用命令的**单点在根 `AGENTS.md`**，本文件不复述。
 
-> **AI 助手必读**：每次任务开始先按顺序读完下方「核心文件」清单，再按需查阅深度参考文档。
+## 检索纪律（三步）
 
-## 记忆库结构（文件层级）
+1. `commands run kb.active` —— 先看最近会话滚动状态（在办专题切片，按最后活动倒序）
+2. 回本 README 细路由，按任务选目录 / 文档
+3. 不确定关键词时 `grep -rn "<词>" memory-bank/` 兜底
 
-```mermaid
-flowchart TD
-    PB[projectbrief.md] --> PC[productContext.md]
-    PB --> SP[systemPatterns.md]
-    PB --> TC[techContext.md]
-    PC --> AC[activeContext.md]
-    SP --> AC
-    TC --> AC
-    AC --> P[progress.md]
-    AC --> TF[tasks/ 文件夹]
-```
+**禁止整读整个目录**（含 `pitfalls/`）—— 整读行为一旦回来，目录化就白做了；这是预算纪律，不是格式洁癖。
 
-### 核心文件（每次任务必读）
+## 过渡态声明（重要，别把 agent 带进死路）
 
-| 文件 | 内容 |
-|------|------|
-| [projectbrief.md](./projectbrief.md) | 项目范围、目标与基石（含仓库结构） |
-| [productContext.md](./productContext.md) | 项目为何存在、解决什么问题、如何工作、用户体验目标 |
-| [activeContext.md](./activeContext.md) | **当前工作焦点**、最近改动、下一步、活跃决策 |
-| [systemPatterns.md](./systemPatterns.md) | 系统架构、关键技术决策、设计模式、组件关系 |
-| [techContext.md](./techContext.md) | 技术栈、开发环境、技术约束、依赖 |
-| [progress.md](./progress.md) | 已实现 / 待办 / 现状 / 已知问题 |
-| [tasks/_index.md](./tasks/_index.md) | 任务清单（按状态分类） |
+当前仍是**单文件事实源**：`projectbrief.md` / `productContext.md` / `activeContext.md` / `systemPatterns.md` / `techContext.md` / `progress.md` / `conventions.md` / `pitfalls.md`。
+`pitfalls/` 等目录族将在后续波次（S07–S10）把条目逐条迁入；`pitfalls/` 现在只有 `_about.md` 与生成物 `_index.md`（空索引，属中间态）。
+路由表**同时给出「现在去哪」与「迁入后去哪」**：中间态一律先按「现在去哪」走；「迁入后去哪」只作前瞻，不要去点还不存在的目录。
 
-### 深度参考文档（附加上下文，按需阅读）
+## 路由表（现在去哪 → 迁入后去哪）
 
-| 文档 | 内容 |
-|------|------|
-| [conventions.md](./conventions.md) | 铁律（计划不改码/等审核/版本号/知识库同步/**私有资源与凭据**）、提交信息规范、测试约定、检查清单、开发与发布工作流 |
-| [pitfalls.md](./pitfalls.md) | 已知易错点与坑（含现存 Bug 清单，症状→原因→对策；P32 = 私有网页里的 passkey 泄露） |
-| [tasks/_index.md](./tasks/_index.md) | 任务清单（按状态分类，路线图角色由此承担） |
-| [scripts/PTAutoCheckIn.md](./scripts/PTAutoCheckIn.md) | PT 多站点自动签到（常驻调度批量 + FAB 面板 + 贴吧多吧，站点/单元配置驱动，v2 已并入正式版） |
-| [scripts/BTSchoolHelper.md](./scripts/BTSchoolHelper.md) | BTSchool 种子列表高亮 + 快捷键滚动脚本 |
-| [scripts/BilibiliEnterFullscreen.md](./scripts/BilibiliEnterFullscreen.md) | B 站 Enter 键全屏切换脚本 |
-| [scripts/EnhanceVisitedLinks.md](./scripts/EnhanceVisitedLinks.md) | 全局已访问链接样式增强脚本 |
-| [scripts/HDHomeUI.md](./scripts/HDHomeUI.md) | HDHome 界面主题「胶片墙」（纯样式层保功能，可切回原站默认，结构异常回退默认） |
+| 我要… | 现在去哪（事实源） | 迁入后去哪（S07–S10） |
+|---|---|---|
+| 看项目范围 / 基石 / 仓库结构 | `projectbrief.md` | `architecture/` |
+| 看项目为何存在 / 用户体验目标 | `productContext.md` | `architecture/` |
+| 看当前焦点 / 最近改动 / 下一步 / 活跃决策 | `activeContext.md` | `active-context/`（按 `kb.active` 定位切片） |
+| 看已实现 / 待办 / 现状 / 已知问题 | `progress.md` | `reports/` |
+| 查架构 / 关键技术决策 / 组件关系 | `systemPatterns.md` | `architecture/` |
+| 查技术栈 / 环境 / 依赖 / 约束 | `techContext.md` | `architecture/` |
+| 改码前查坑 / 排障（症状→原因→对策） | `pitfalls.md`（P28 测试 / P32 凭据 / P33·P66·P69 HDHomeUI 等） | `pitfalls/`（按 `_index.md` 选类，再进单个主题文件） |
+| 查铁律 / 约定 / 提交规范 / 检查清单 / 开发发布工作流 | `conventions.md` | `conventions/` |
+| 查某个脚本的职责与用法 | `memory-bank/scripts/<脚本名>.md` | 不变 |
+| 写 / 跑测试 | `tests/README.md` + `node tests/run-all.js` | `testing/baselines/`（基线快照） |
+| 看计划 / 方案 | `docs/plans/` | 不变 |
+| 查任务档案 | `memory-bank/tasks/`（`_index.md` + TASK001–020） | 不变 |
 
-## 如何阅读
+> 表没覆盖的：`grep -rn "<词>" memory-bank/` 兜底，别整读目录。
 
-- **首次接触项目**：先读 `projectbrief.md`，了解项目范围与仓库结构；再按需阅读对应脚本文档。
-- **修改某个脚本**：直接阅读该脚本的文档页（`memory-bank/scripts/*.md`）+ 源文件（`src/*.user.js`）。
-- **动手写代码前**：阅读 `conventions.md`（约定）与 `pitfalls.md`（易错点），避免重踩历史 Bug。
-- **排障/查现状**：优先查 `pitfalls.md` 的症状→原因对照表，其次看脚本内 `[ScriptName]` 日志。
-- **规划改动**：参考 `tasks/_index.md` 中已登记的待办与方向。
-- **新增脚本**：参考 `conventions.md` 第 7 节检查清单，完成后在本文档与知识库中补充登记。
-- **写/跑测试**：读 `tests/README.md`（约定 + 「如何测 userscript」技法 + 现有测试清单 + 待铺的路），运行 `node tests/run-all.js`。
-- **需要真实页面 HTML**：`src/BTSchoolTorrentsTableSample.html` 是 BTSchool 种子表格的真实 HTML 样本，用于验证解析逻辑。
+## 本项目特有落点（别走错）
 
-## 快速提醒
+- **计划**在 `docs/plans/`（HTML 制品），**不在** `memory-bank/plans/`；
+- **脚本文档**在 `memory-bank/scripts/`：`PTAutoCheckIn.md` / `BTSchoolHelper.md` / `BilibiliEnterFullscreen.md` / `EnhanceVisitedLinks.md` / `HDHomeUI.md`，与 `src/*.user.js` 一一对应；
+- **任务档案**在 `memory-bank/tasks/`，TASK001–020 **冻结**（正文零改动，死链靠 `grep` + `git log -- <旧路径>` 兜底）；
+- 脚本速查表、约定、检查清单、测试约定、开发与发布工作流、HDHomeUI 两条铁律等**事实性内容**仍完整保存在 `conventions.md` 与上述脚本文档 / `pitfalls.md`，本文件只做路由、不复述。
 
-1. **协作纪律：计划不改码**——任务为计划/分析时禁止修改代码；实施类修改完成后**等用户审核、不自动提交**（git commit/push 由用户执行）。详见 `conventions.md` 第 0 节。
-2. **铁律：版本号**——`@version YYYY.MM.DD.N`，**修改代码/元数据必须同步递增**并与代码同次提交（纯注释/仅改 `memory-bank/` 文档除外）；详见 `conventions.md` 第 0/1 节。
-3. **铁律：知识库同步**——更新代码/项目文档后**必须同步更新 `memory-bank/` 记忆库**并同次提交；详见 `conventions.md` 第 0.4 / 6 节。
-4. **提交信息规范且详细**——首行概括 + 正文分条；一次提交只做一件事。格式见 `conventions.md` 第 1 节。
-5. **测试纪律**——可设计易测代码，但**不给测试留后门/通道**、**不为通过测试修改生产代码**；详见 `conventions.md` 第 8 节。
-6. **标点**：注释/日志用中文但统一**英文标点**。
-7. **解析易错**：BTSchool 表格用 `tbody > tr:has(> td.rowfollow)` 定位行、`:scope > td` 取列；浮点属性（时魔）不可用整数解析函数。
-8. **自测**：改动后在真实站点页面 F12 看 console；详尽的症状/原因/对策见 `pitfalls.md`。
-9. **铁律：私有资源与凭据**——`resources-do-not-track/`（私有站点另存为的整页网页）**永不被 Git 追踪**，
-   其中的 **passkey / authkey / token / cookie / uid 禁止以任何形式外泄**（不进回复、日志、截图、提交、
-   issue、测试夹具、示例 HTML）；只描述结构、值脱敏为 `***`。详见 `conventions.md` 第 0.5 节、`pitfalls.md` P32。
-10. **HDHomeUI「未知元素不默认屏蔽」铁律（2026-09-20 起）**——站点改版冒出来的东西
-    （**消息弹窗 / 公告条 / 新的种子标签 / 未登记的类别·促销图标**）**一律不许屏蔽**。
-    ⚠️ 屏蔽不止 `display:none` 一种写法：清掉 `background-image` 不补 content（变空白）、
-    只压深背景不管**写死的前景色**（黑字黑底 = 隐形）、`overflow` 裁切、`z-index` 压住、
-    `contain` 改定位基准 —— 全都算，且**元素还在、矩形非零**，只看"存在性"抓不到（P66）。
-    判据必须叠加：**hit-test 命中自身** + **对比度 Δ≥40** + **图标至少一层是内联 SVG**。
-    隐藏类声明走**白名单（deny-by-default）**：白名单外即红，且每条必须写理由
-    （`check/sim-hdui-hide-allowlist` 双层把守）。
-    **未知结构（认不出的列 / 带 colspan 的分组行）一律卸妆**（`E_COLUMN_UNEXPECTED` / `E_ROW_UNKNOWN`），
-    不猜、不进等窗口 —— 因为主题是 nth-child 槽位排版，硬上妆只会把未知内容摆错位或压成一坨（P69）。
-11. **HDHomeUI 换肤铁律（2026-09-19 起）**——它是**纯样式层**：不增删/移动/克隆站内节点、不挂事件、不改 `href`，
-    站内功能靠「功能基线快照 + hit-test」两道仿真断言守住；页面结构不符时**必须提示并回退默认 UI**，
-    禁止带错上妆。主题必须有**可辨识的布局骨架**（不能只换配色），由 `sim-hdui-theme-switch.js` 逐条钉死。
-    **入口必须内嵌**——量 `ul#mainmenu` 末尾空档摆成导航栏的小文字钮 `界面 · <主题名> ▾`，禁用 fixed 悬浮 FAB
-    （`sim-hdui-inline-dock.js` 钉死「position:absolute + 与菜单垂直相交 + 右下角不被占用 + 换主题重摆」），
-    重摆入口不整体重写 `cssText`（会清掉 `--ui-*` 配色变量）。
-    **种子表列分必需/可选**：A / A·GB（`a`/`ave`）是**别的脚本运行时注入**的，属可选列——
-    它没装、没开、或注入得比本脚本晚，页面就只有 10 列。缺可选列返回**成功码 `OK_NO_CALC`** 照常上妆，
-    排版函数在列缺席时必须 `return ''`（不生成 `:nth-child(undefined)`）；列集合变了要重摆一次；
-    补列补到一半（表头插了、行没插完 ⇒ `ROW_CELL_COUNT_MISMATCH`）**先等窗口**再决定要不要弹横幅。
-    判定口诀：**「点重试就好了」= 时序问题，不是结构问题**。由 `sim-hdui-optional-columns.js` 钉死。
-    详见 `scripts/HDHomeUI.md`、`tasks/TASK018-hdhome-ui-themes.md` 与 `pitfalls.md` P33。
-12. **测试**：`tests/` 是开发期测试区（零依赖，无测试框架）——按脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个测试，以退出码表达结果；`node tests/run-all.js` 一次跑完全部。改 PTAutoCheckIn 后必跑 `node tests/ptautocheckin/check-ptac-budget.js`（校验超时预算不变式 + 状态阶梯结构 + 不透明步骤的 `budgetMs` 声明），必须全绿；新增 `function` 步骤/自定义 `alreadyCheck` 时**必须**声明 `budgetMs` / `alreadyCheckBudgetMs`（同步判定写 `0`）。测试约定与「如何测 userscript」技法见 `tests/README.md`，原理见 `pitfalls.md` P28。
+## 一条不能丢的红线
+
+`resources-do-not-track/`（私有站点另存为的整页网页）**永不被 Git 追踪**，其中的 passkey / authkey / token / cookie / uid **禁止以任何形式外泄**（不进回复、日志、截图、提交、issue、测试夹具、示例 HTML）；只描述结构、值一律脱敏为 `***`。详见 `conventions.md` 第 0.5 节与 `pitfalls.md` P32。
+
+---
+铁律（计划不改码 / 版本号 `@version` / 知识库同步）、提交信息规范、常用命令的**单点在根 `AGENTS.md`**；找它们直接看 AGENTS.md，本文件不复述。

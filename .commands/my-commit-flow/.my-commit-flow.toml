@@ -32,7 +32,7 @@ generated_regen_cmd = ""
 
 # ---------------------------------------------------------------------------
 # 闸门: auto = true → 预检真的执行(红了即 STOP); 占位符展开不了同样 STOP。
-# 只保留本项目真实存在的 4 条, 不挂 qB 专属闸门(review.trace / Review: trailer /
+# 只保留本项目真实存在的 5 条, 不挂 qB 专属闸门(review.trace / Review: trailer /
 # check_command_drift.py / sync_agent_skills.py / dev.fmt / test.quick /
 # test.pkg.scoped / gen_active_recent --check / check_html --vnu 等)。
 # KB 骨架与接线是 S06 的事, 本步不对 .commands/**/scripts/*.py 做全量 <each:> 冒烟
@@ -66,3 +66,10 @@ run     = ["python <each:.agents/skills/**/scripts/*.py|--with-safety> --help"]
 note    = "skill 改动: 被改脚本 --help 冒烟; --with-safety 摘掉无参即真动作的脚本"
 auto    = true
 timeout = 300
+
+[[gates]]
+match   = ["memory-bank/", "docs/", "AGENTS.md"]
+run     = ["python <skill-dir:memory-bank>/scripts/check_doc_links.py --quiet"]
+note    = "文档改动: 相对链接坏链机检, 红了即拦; 历史死链按 D2 接受, 全量检查留到 S13"
+auto    = true
+timeout = 180
