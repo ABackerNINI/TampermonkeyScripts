@@ -235,7 +235,7 @@ PT 站大多基于同一套开源代码（NexusPHP 系），但**各站模板与
 
 - 通用签到入口多为 `a.faqlink[href*="attendance.php"]`，按钮文案如 `[签到得魔力]`。
 - 部分站点点击签到会**跳转新页面**（HDBao、慕雪阁），需要多步骤：先点"立即签到"提交表单 → 等待 → 再在新页面点签到。
-- 部分站点使用**对话框签到**（蜂巢 pting.club），需依次点击外层按钮、对话框按钮、关闭按钮。
+- 部分站点使用**对话框签到**（蜂巢 fengchao.chat, 原 pting.club），需依次点击外层按钮、对话框按钮、关闭按钮。
 - BTSchool 站种子表格结构特殊（详见 `scripts/BTSchoolHelper.md`）。
 - 完整站点表与各站入口/特征见 `scripts/PTAutoCheckIn.md`「已有站点一览」。
 
