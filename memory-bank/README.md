@@ -13,7 +13,7 @@
 ## 过渡态声明（重要，别把 agent 带进死路）
 
 当前仍是**单文件事实源**：`projectbrief.md` / `productContext.md` / `activeContext.md` / `systemPatterns.md` / `techContext.md` / `progress.md` / `conventions.md` / `pitfalls.md`。
-`pitfalls/` 等目录族将在后续波次（S07–S10）把条目逐条迁入；`pitfalls/` 现在只有 `_about.md` 与生成物 `_index.md`（空索引，属中间态）。
+`pitfalls/` 目录族按波次逐条迁入：**S07a 已把 P1–P40 按八类切片落盘**（见下方「pitfalls/ 八类细路由」），P41–P79 待 S07b 续作；单文件 `pitfalls.md` 全 79 条**保留不动**，待全部迁完才删并重跑生成器。本批**不生成最终索引**，故 `pitfalls/_index.md` 仍是空索引（中间态，不要手改）。
 路由表**同时给出「现在去哪」与「迁入后去哪」**：中间态一律先按「现在去哪」走；「迁入后去哪」只作前瞻，不要去点还不存在的目录。
 
 ## 路由表（现在去哪 → 迁入后去哪）
@@ -26,7 +26,7 @@
 | 看已实现 / 待办 / 现状 / 已知问题 | `progress.md` | `reports/` |
 | 查架构 / 关键技术决策 / 组件关系 | `systemPatterns.md` | `architecture/` |
 | 查技术栈 / 环境 / 依赖 / 约束 | `techContext.md` | `architecture/` |
-| 改码前查坑 / 排障（症状→原因→对策） | `pitfalls.md`（P28 测试 / P32 凭据 / P33·P66·P69 HDHomeUI 等） | `pitfalls/`（按 `_index.md` 选类，再进单个主题文件） |
+| 改码前查坑 / 排障（症状→原因→对策） | `pitfalls.md`（全 79 条事实源） | `pitfalls/<类>/`（S07a 已落 P1–P40，按下方八类细路由选类再进单文件） |
 | 查铁律 / 约定 / 提交规范 / 检查清单 / 开发发布工作流 | `conventions.md` | `conventions/` |
 | 查某个脚本的职责与用法 | `memory-bank/scripts/<脚本名>.md` | 不变 |
 | 写 / 跑测试 | `tests/README.md` + `node tests/run-all.js` | `testing/baselines/`（基线快照） |
@@ -34,6 +34,23 @@
 | 查任务档案 | `memory-bank/tasks/`（`_index.md` + TASK001–020） | 不变 |
 
 > 表没覆盖的：`grep -rn "<词>" memory-bank/` 兜底，别整读目录。
+
+## pitfalls/ 八类细路由（S07a 落 P1–P40，P41–P79 待 S07b）
+
+按「要做的动作」选类，再进单个主题文件；文件名带 P 编号便于守恒核对。全量 79 条归类清单在 `pitfalls/_about.md`「归类清单」段。
+
+| 类目目录 | 治什么病 | 本批已落条目 |
+|---|---|---|
+| `pitfalls/userscript/` | 脚本引擎 / 元数据 / IIFE / GM API / 事件生命周期 / 通用 JS 陷阱 / 状态机与渲染层 / 预算超时 | P4·P7–P10·P28·P29 |
+| `pitfalls/site-adapt/` | PT 站点签到建模 / 表格与字段解析 / 落地页 / 状态判定 / 页面归属 / favicon | P1–P3·P5·P6·P11·P15·P16·P18·P19·P21–P27·P31 |
+| `pitfalls/css-theme/` | HDHomeUI 换肤 / FAB 皮肤 / CSS 规则 / 布局 / 16px SVG 图标 / 列结构契约 | P17·P33–P40 |
+| `pitfalls/tests/` | 测试基建 / 仿真 / 断言与判据 / 原型派生 / CI 度量 | P14 |
+| `pitfalls/git/` | 提交 / 分支 / 版本号 | P20 |
+| `pitfalls/kb/` | 知识库 / AI 协作纪律 | P13 |
+| `pitfalls/docs/` | 文档漂移 / 约定 / 编码与仓库卫生 | P12 |
+| `pitfalls/security/` | 凭据 / 私有资源 / 仿真站安全审计 | P30·P32 |
+
+> 单文件 `pitfalls.md` 仍是事实源；上表目录只作「迁入后」的按类定位，本批不生成最终 `_index.md`。
 
 ## 本项目特有落点（别走错）
 

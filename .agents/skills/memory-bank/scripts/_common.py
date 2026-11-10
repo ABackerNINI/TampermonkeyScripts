@@ -157,7 +157,7 @@ ISSUE_FILE_RE = re.compile(
 # --------------------------------------------------------------------------- 结构枚举
 
 # pitfalls 的类枚举。**扩类须三处同步**: 本常量 / 新建 `<class>/_about.md` / memory-bank/README.md 细路由。
-PITFALL_CLASSES = ("git", "web-ui", "backend", "testing", "ops", "kb", "docs")
+PITFALL_CLASSES = ("userscript", "site-adapt", "css-theme", "tests", "git", "kb", "docs", "security")
 
 # 主题文件名: 小写英文与数字, 短横线分段 (同款裸名正则见上方 issue 族的 SLUG_RE)
 TOPIC_FILE_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
