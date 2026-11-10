@@ -1,5 +1,9 @@
 """跨形态专题视图查询 CLI (只打印, 不写文件) —— 「一件事的全部材料」入口。
 
+> 注记 (2026-11-08 重构 W3): kb.docmap 视图命令已随 26-11-08 重构退役; 本脚本仅作认领链守卫
+> (gen_doc_map --check, 挂 kb.check 与提交闸门) 与死引用跳过 (RETIRED_REF_ROOTS)。视图打印
+> (无参 / --topic / --all / --forks) 仅存留为只读查询能力, 不再收录为命令。
+
 一行一专题: 列出该专题名下的 issue / 计划 / 报告 / 档案与各自状态。
 2026-09-29 起 `_doc-map.md` 物化视图退役 (写热点 + `index-auto` cap 反复触顶, 复盘见
 pitfalls/kb/cap-counting.md「生成式跨形态视图」条的收口注记), 改为查询时现算 —— 命名沿用
@@ -9,42 +13,68 @@ pitfalls/kb/cap-counting.md「生成式跨形态视图」条的收口注记), �
     plans / reports : `<meta name="doc-topic">` + `doc-status` + `doc-added`
     issues          : `<meta name="doc-topic">` + `issue-status`
     tasks           : `**Topics:**` + `**Status:**` (时间戳取文件名日期)
+    认领链          : HTML `<meta name="doc-refs">` + md `**Refs:**` 行 (仓库根相对路径, 逗号分隔;
+                      --check 校验双向闭环, 2026-10-03 起 —— 单点自 tests/test_docs_forms.py 下沉)
 
 用法 (从仓库根; `<skill-dir>` = 加载 memory-bank skill 时它实际所在的目录):
     python <skill-dir>/scripts/gen_doc_map.py                   默认: 活跃多件专题全行, 完结/单件专题只列名
     python <skill-dir>/scripts/gen_doc_map.py --topic <key>     单专题全行 (出件前先查主键是否已有)
     python <skill-dir>/scripts/gen_doc_map.py --all             全量全行 (等价退役的物化视图, 审计用)
-    python <skill-dir>/scripts/gen_doc_map.py --check           主键纪律: 任一形态缺主键即退码 1 (挂 kb.check)
+    python <skill-dir>/scripts/gen_doc_map.py --check           主键纪律 + 状态词表 + 认领链双向: 任一违规退码 1 (挂 kb.check 与提交闸门)
     python <skill-dir>/scripts/gen_doc_map.py --forks           近似主键提示 (子串包含), 只提示不判红
 
 轮转口径 (「生成器内轮转完结专题」): 状态 ∈ TERMINAL_STATUSES 为完结。默认视图只给**活跃多件
 专题**全行; 全完结专题退成名录, 单件专题永远只列名 (无跨形态材料可对照, 详见各形态 `_index.md`)
 —— 视图大小跟着**活工作**走, 不跟历史总量走。未知 / 缺失状态一律按**活跃**算 (宁多展示不漏活口)。
-⚠ 不生成任何依赖当前时钟的内容; 判新旧读条目自带的时间戳, 不靠脚本。
+WARN: 不生成任何依赖当前时钟的内容; 判新旧读条目自带的时间戳, 不靠脚本。
 """
 from __future__ import annotations
 
 import argparse
+import html
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import find_root, resolve_mb_dir  # noqa: E402
+from _common import DOC_STATUSES, TERMINAL_DOC_STATUSES, find_root, resolve_mb_dir, split_refs  # noqa: E402
 
 FORM_ORDER = ("issue", "plan", "report", "task")
 FORM_CN = {"issue": "issue", "plan": "计划", "report": "报告", "task": "档案"}
-TERMINAL_STATUSES = frozenset({"Done", "Dropped", "Superseded"})
 NO_KEY = "(无主键)"
 META_RE = re.compile(r'<meta name="([a-z-]+)" content="([^"]*)">')
 TITLE_RE = re.compile(r"<title>(.*?)</title>", re.MULTILINE | re.DOTALL)
 TASK_TITLE_RE = re.compile(r"^#\s+(\S+)\s*[—-]\s*(.+?)\s*$", re.MULTILINE)
 TASK_TOPICS_RE = re.compile(r"^\*\*Topics:\*\*\s*(.+)$", re.MULTILINE)
 TASK_STATUS_RE = re.compile(r"\*\*Status:\*\*\s*(In Progress|Open|Done|Dropped)")
+KEBAB_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 TASK_UPDATED_RE = re.compile(r"\*\*Updated:\*\*\s*(\d{4}-\d{2}-\d{2})")
 STAMP_RE = re.compile(r"^(\d\d-\d\d-\d\d)-(\d{4})-")
-NAME_WRAP = 4000  # 名录折行宽度, 只影响换行 —— 零信息损失 (150→400→4000 三轮收口, 见 git 历史)
+HTML_REFS_RE = re.compile(r'<meta name="doc-refs" content="([^"]*)">')
+# `\s*` 会跨行: 空 **Refs:** 行(旧模板默认形态)后随的下一行标题被吞成 ref, 认领链机检误红
+# (issue 26-11-06-0415) —— 只吃同行空白 `[^\S\n]`(含 \r, CRLF 不受影响), 空行即视为未声明。
+TASK_REFS_RE = re.compile(r"^\*\*Refs:\*\*[^\S\n]*(.+)$", re.MULTILINE)
+# refs 多目标的唯一合法分隔符是英文逗号; 这些视觉分隔符常见误用, 命中即进报错提示 (issue 26-10-03-0746)
+VISUAL_SEP_RE = re.compile(r"[·、;；|｜]")
+NAME_WRAP = 4000  # 名录折行宽度, 只影响换行 —— 零信息损失 (150→400→4000 三轮收口, 见 git 历史; 折行以专题名为原子, 2026-10-18 修名称被撕断)
+
+# 2026-11-08 重构移除的路径根 (memory-bank 相对; 计划 26-11-08-1625 §01 移除层 + D2「git 历史即冷库」)。
+# 历史件(issues/plans/reports/tasks)的 doc-refs/Refs 指向这些根的引用**不修**(D2: 历史件正文零改动),
+# 认领链校验按「已知死亡」跳过 —— 不算闸门问题 (计划 §07 R1: kb.nav 对这些 ref 显示 dead 属预期)。
+# 兜底不变: 目标字符串仍在 refs 里, 排障用 grep 文件名 + `git log -- <旧路径>`。
+RETIRED_REF_ROOTS = (
+    "progress/",
+    "activeContext/",
+    "checklists/",
+    "config-reference/",
+    "modules/",
+    "rule-system/",
+    "systemPatterns/",
+    "archive/",
+    "productContext.md",
+    "techContext.md",
+)
 
 
 def _utf8_stdout() -> None:
@@ -69,10 +99,17 @@ def _task_stamp(name: str, updated: str) -> str:
 
 
 def _date_stamp(stamp: str) -> str:
-    """展示戳截到日期精度 (2026-09-28 口径, 见 pitfalls/kb/cap-counting.md「两个出口」处置①):
+    """展示戳截到日期精度 (2026-09-28 口径, 见 pitfalls/kb/cap-counting.md「两个出口」处置 1):
     与任务档案行本就一致; 时分仍留在链接指向的文件名里, 零信息损失。
     只在确为 `NN-NN-NN-NNNN` 形态时截断, 异常格式原样保留。"""
     return stamp[:8] if re.fullmatch(r"\d{2}-\d{2}-\d{2}-\d{4}", stamp or "") else stamp
+
+
+def _refs_of(path: Path) -> list[str]:
+    """声明引用 (仓库根相对路径列表): HTML 读 `doc-refs` meta, md (档案 / 会话切片) 读 `**Refs:**` 行。"""
+    text = path.read_text(encoding="utf-8")
+    m = HTML_REFS_RE.search(text) if path.suffix == ".html" else TASK_REFS_RE.search(text)
+    return split_refs(m.group(1)) if m else []
 
 
 def collect(mb: Path) -> list[dict]:
@@ -88,8 +125,9 @@ def collect(mb: Path) -> list[dict]:
                     "topic": meta.get("doc-topic", ""),
                     "status": meta.get("doc-status", ""),
                     "stamp": _date_stamp(meta.get("doc-added", "")) or _stamp_of(path.name),
-                    "title": title.group(1).strip() if title else path.stem,
+                    "title": html.unescape(title.group(1)).strip() if title else path.stem,
                     "link": f"{kind}/{path.name}",
+                    "refs": split_refs(meta.get("doc-refs", "")),
                 }
             )
     for path in sorted((mb / "issues").glob("*.html")):
@@ -100,8 +138,9 @@ def collect(mb: Path) -> list[dict]:
                 "topic": meta.get("doc-topic", ""),
                 "status": meta.get("issue-status", ""),
                 "stamp": meta.get("issue-stamp", "") or _stamp_of(path.name),
-                "title": meta.get("issue-title", path.stem),
+                "title": html.unescape(meta.get("issue-title", path.stem)),
                 "link": f"issues/{path.name}",
+                "refs": split_refs(meta.get("doc-refs", "")),
             }
         )
     for path in sorted((mb / "tasks").glob("*.md")):
@@ -111,6 +150,7 @@ def collect(mb: Path) -> list[dict]:
         topics = TASK_TOPICS_RE.search(text)
         status = TASK_STATUS_RE.search(text)
         updated = TASK_UPDATED_RE.search(text)
+        refs = TASK_REFS_RE.search(text)
         title = TASK_TITLE_RE.search(text)
         items.append(
             {
@@ -121,6 +161,7 @@ def collect(mb: Path) -> list[dict]:
                                      updated.group(1) if updated else ""),
                 "title": title.group(2) if title else path.stem,
                 "link": f"tasks/{path.name}",
+                "refs": split_refs(refs.group(1)) if refs else [],
             }
         )
     return items
@@ -135,7 +176,7 @@ def group_by_topic(items: list[dict]) -> dict[str, list[dict]]:
 
 def is_live(group: list[dict]) -> bool:
     """专题是否活跃: 有任一条目未完结 (未知 / 缺失状态按活跃算, 宁可多展示)。"""
-    return any(i["status"] not in TERMINAL_STATUSES for i in group)
+    return any(i["status"] not in TERMINAL_DOC_STATUSES for i in group)
 
 
 def _segments(group: list[dict]) -> str:
@@ -148,13 +189,24 @@ def _topic_sort(groups: dict[str, list[dict]]) -> list[str]:
 
 
 def _name_list(names: list[str]) -> list[str]:
+    """名录折行: 以整个专题名为原子单位打包, 含空格的复合键不得从中间拆断。
+
+    旧实现先整串 join 再按 NAME_WRAP 字节位 rfind 折行: 边界恰好落在键内空格时,
+    键被撕成两行 (如 "topic-alpha," / "topic-beta") —— `topic in live_text` 判定与
+    --topic 跳转同时失效, 且随名录长度增长随机触发 (2026-10-18 新增单件专题名后复现,
+    修法 = 折行只发生在名与名之间, 单名超宽独占一行也不拆)。
+    """
     out = []
-    line = " ".join(names)
-    while line:
-        cut = line.rfind(" ", 0, NAME_WRAP)
-        cut = cut if cut > 0 else min(len(line), NAME_WRAP)
-        out.append(f"- {line[:cut]}")
-        line = line[cut:].lstrip(" ·")
+    line = ""
+    for name in names:
+        candidate = f"{line} {name}" if line else name
+        if line and len(candidate) > NAME_WRAP:
+            out.append(f"- {line}")
+            line = name
+        else:
+            line = candidate
+    if line:
+        out.append(f"- {line}")
     return out
 
 
@@ -171,7 +223,7 @@ def render_live(items: list[dict]) -> str:
     out = [
         "# 跨形态专题视图 (查询时现算)",
         "",
-        "> `kb.docmap` [--topic <key> | --all | --check | --forks]; 完结 (Done/Dropped/Superseded) 与单件专题只列名,",
+        "> 本脚本 [--topic <key> | --all | --check | --forks]; 完结 (Done/Dropped/Superseded) 与单件专题只列名,",
         "> 全行见 --topic / --all; 协议见 [doc-forms.md](conventions/doc-forms.md)。",
         "",
         f"## 活跃专题 ({len(live_multi)})",
@@ -193,7 +245,7 @@ def render_all(items: list[dict]) -> str:
     out = [
         "# 文档形态总览 (按专题, 全量)",
         "",
-        "> `kb.docmap --all` —— 等价退役的 `_doc-map.md`; 协议见 [doc-forms.md](conventions/doc-forms.md)。",
+        "> 本脚本 --all —— 等价退役的 `_doc-map.md`; 协议见 [doc-forms.md](conventions/doc-forms.md)。",
         "",
         f"## 跨形态专题 (≥2 件) · {len(multi)}",
         "",
@@ -232,6 +284,138 @@ def check_topics(items: list[dict]) -> int:
     return 0
 
 
+def check_topic_key_shape(items: list[dict]) -> int:
+    """主键形态纪律: 专题键只能是**单个** kebab (`^[a-z0-9]+(-[a-z0-9]+)*$`), 逗号复合键判红。
+
+    存量档案按 `**Refs:**` 的逗号习惯在 `**Topics:**` 行写多专题时, `TASK_TOPICS_RE` 整串捕获为
+    单一复合键 —— `--topic <单专题名>` 检索不到、跨形态视图按复合键分组、名录出现异形键
+    (issue 26-10-18-0858; 坑档 pitfalls/kb/doc-topics-comma-composite.md)。2026-10-18 用户拍板
+    **维持单主键口径**(不拆键): doc-forms 明令 Topics/doc-topic 单 kebab, 多对多关系走 `**Refs:**`
+    双向链; 存量 8 份同轮回归。本机检把该口径沉到提交闸门 (与认领链 2026-10-03、状态词表 2026-10-16
+    同款路径: 校验只活在 pytest 时, 纯文档轮会漏)。tasks 的 `**Topics:**` 与四形态 `doc-topic`
+    同一正则; 缺主键 (空值) 归 check_topics 管, 本函数只判**形态**。
+    """
+    bad = [
+        f"{i['form']}: {i['link']} → topic={i['topic']!r}"
+        for i in items if i["topic"] and not KEBAB_RE.fullmatch(i["topic"])
+    ]
+    if bad:
+        sys.stderr.write(
+            "专题主键只能是单个 kebab(英文小写+数字+连字符) —— 逗号写多专题会被整串当成单一复合键, "
+            "单专题名检索不到(见 memory-bank/conventions/doc-forms.md「主键形态」与 "
+            "pitfalls/kb/doc-topics-comma-composite.md); 多对多关系用 **Refs:** 双向链表达:\n"
+        )
+        for b in bad:
+            sys.stderr.write(f"  {b}\n")
+        return 1
+    print("主键形态 OK: 全部专题键为单 kebab")
+    return 0
+
+
+def check_status_vocabulary(items: list[dict]) -> int:
+    """状态词表校验: `doc-status` / `issue-status` 不在 5 词表 (`_common.DOC_STATUSES`) 即退码 1。
+
+    2026-10-16 自 pitfalls/kb/doc-status-meta.md 的教训**下沉到提交闸门**: 机检若只活在 pytest,
+    纯文档轮 (`test.quick` 闸门 match 只盯 `src/` `tests/`) 会一路绿灯入库 (与 2026-10-03 认领链
+    下沉同款)。tasks 的 `**Status:**` 是**另一张 4 词表**, 不在此校验范围; 空值 (缺 meta) 由别的
+    守卫管, 跳过。(原索引静默漏收之害随 2026-11-08 重构索引退役而消失, 本校验仍在: 词表纪律
+    与 nav 数据源仍依赖单点 5 词表。)
+    """
+    bad = [
+        f"{i['form']}: {i['link']} → status={i['status']!r}"
+        for i in items if i["form"] in ("plan", "report", "issue") and i["status"] and i["status"] not in DOC_STATUSES
+    ]
+    if bad:
+        sys.stderr.write(
+            f"doc-status / issue-status 不在 5 词表 ({' / '.join(DOC_STATUSES)}) 内 —— "
+            "单点 _common.DOC_STATUSES (见 pitfalls/kb/doc-status-meta.md):\n"
+        )
+        for b in bad:
+            sys.stderr.write(f"  {b}\n")
+        return 1
+    print("状态词表 OK: doc-status / issue-status 全部在 5 词表内")
+    return 0
+
+
+HTML_DOCREFS_ANCHOR = '<meta name="doc-refs"'
+MD_REFS_LINE_RE = re.compile(r"^\*\*Refs:\*\*", re.MULTILINE)
+
+
+def check_duplicate_declarations(mb: Path) -> list[str]:
+    """重复声明检测 (复发 8 根因的机检, 2026-10-31): 解析器 (search / dict(findall))
+
+    只读第一个声明, 多余行静默塌缩 —— 「翻状态时另插一行 doc-refs meta, 模板空值赢过新插行」
+    就是这样静默失效的。HTML 多行 `doc-refs` meta / md 多行 `**Refs:**` 都判红; 病根在
+    声明方: 原位改值 (kb.ref / set_html_meta / md_set_refs 都只动已有声明行), 删多余行。
+    """
+    problems: list[str] = []
+    for path in sorted(mb.rglob("*.html")):
+        n = path.read_text(encoding="utf-8").count(HTML_DOCREFS_ANCHOR)
+        if n > 1:
+            problems.append(
+                f"{path.relative_to(mb.parent).as_posix()}: {n} 行 doc-refs meta —— 解析器只读第一条"
+                "(空值/旧值赢过新插行, 复发 8 形态); 病根在声明方: 原位改值, 删多余行"
+            )
+    for path in sorted(mb.rglob("*.md")):
+        n = len(MD_REFS_LINE_RE.findall(path.read_text(encoding="utf-8")))
+        if n > 1:
+            problems.append(
+                f"{path.relative_to(mb.parent).as_posix()}: {n} 行 **Refs:** —— 解析器只读第一行;"
+                "段内引用改正文提及, 声明只留头部一行"
+            )
+    return problems
+
+
+def _is_retired_ref(ref: str, mb_rel: str) -> bool:
+    """ref 指向 2026-11-08 重构移除的路径根 → 已知死亡 (判据见 RETIRED_REF_ROOTS)。"""
+    rel = ref[len(mb_rel) + 1:] if ref.startswith(f"{mb_rel}/") else ref
+    return rel.startswith(RETIRED_REF_ROOTS)
+
+
+def check_claim_chain(items: list[dict], root: Path, mb: Path) -> list[str]:
+    """认领链双向校验: 声明了 `doc-refs` / `**Refs:**` 的件, 目标必须存在且反向声明本件。
+
+    2026-10-03 自 tests/test_docs_forms.py::test_claim_chain_is_bidirectional 下沉 (单点在本脚本,
+    pytest 同函数复验) —— 机检只活在 pytest 时, 纯文档轮 (test.quick 闸门 match 只盯 src/tests)
+    的单向链一路绿灯入库 (657366c3, 见 issues/26-10-03-0521), 卡死其它 clone 的 test.quick;
+    下沉后提交闸门 (memory-bank/ → 本脚本 --check) 全轮次覆盖。声明方 = 四形态全量
+    (pytest 旧实现漏扫 issue 声明方, 一并补齐)。只校验**声明过引用**的件, 未声明天然豁免。
+    """
+    problems: list[str] = []
+    checked = 0
+    mb_rel = mb.relative_to(root).as_posix()
+    for item in items:
+        refs = item["refs"]
+        if not refs:
+            continue
+        checked += 1
+        self_rel = f"{mb_rel}/{item['link']}"
+        for ref in refs:
+            target = root / ref
+            if not target.exists():
+                # 归档回退 (2026-10-31 R3 体积轮, 计划 26-10-31-0534): baselines 老切片外迁进
+                # testing/baselines/attachments/ 后, 声明方的 doc-refs/Refs 仍写原顶层路径
+                # (冻结 HTML 与 tasks 档案按存根策略不改写), 存在性按归档位置解析 ——
+                # 纪律不放松: 目标仍必须真实存在, 反向声明照常校验。
+                if ref.startswith(f"{mb_rel}/testing/baselines/"):
+                    archived = root / f"{mb_rel}/testing/baselines/attachments" / ref.rsplit("/", 1)[1]
+                    if archived.is_file():
+                        target = archived
+            if not target.exists() and _is_retired_ref(ref, mb_rel):
+                # 2026-11-08 重构: 目标在已退役根下 —— 历史件不修(D2), 按「已知死亡」跳过 (见 RETIRED_REF_ROOTS)。
+                continue
+            if not target.exists():
+                hint = ""
+                if VISUAL_SEP_RE.search(ref):
+                    hint = " (ref 内含视觉分隔符 —— 多目标须英文逗号分隔, 整串被当成了单一路径)"
+                problems.append(f"{self_rel}: 引用的目标不存在 → {ref}{hint}")
+            elif self_rel not in _refs_of(target):
+                problems.append(f"{self_rel} → {ref}: 目标未反向声明本件 (认领链单向)")
+    if not checked:
+        problems.append("没有任何件声明引用 —— 认领链守阵失去校验对象")
+    return problems
+
+
 def find_forks(groups: dict[str, list[dict]]) -> list[str]:
     """近似主键 (子串包含, 如 webui-hr-popup 与 -t1/t2/t3): 疑似分叉, 只提示不判红。"""
     names = [t for t in groups if t != NO_KEY]
@@ -243,7 +427,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--topic", help="只看一个专题的全行 (未知键退码 1 并列出现有键)")
     parser.add_argument("--all", action="store_true", help="全量全行 (等价退役的 _doc-map.md)")
-    parser.add_argument("--check", action="store_true", help="主键纪律: 缺 doc-topic/Topics 即退码 1 (闸门/守卫用)")
+    parser.add_argument("--check", action="store_true", help="主键纪律 + 认领链双向: 缺 doc-topic/Topics 或单向链即退码 1 (闸门/守卫用)")
     parser.add_argument("--forks", action="store_true", help="近似主键提示 (stderr), 只提示不判红")
     parser.add_argument("--root", help="仓库根 (默认向上找 .git)")
     parser.add_argument("--mb-dir", help="memory-bank 目录 (默认 <root>/memory-bank)")
@@ -261,7 +445,31 @@ def main() -> int:
             sys.stderr.write("[fork] 无近似主键\n")
 
     if args.check:
-        return check_topics(items)
+        rc = check_topics(items)
+        if check_topic_key_shape(items):
+            rc = 1
+        if check_status_vocabulary(items):
+            rc = 1
+        problems = check_claim_chain(items, root, mb)
+        if problems:
+            sys.stderr.write(
+                "认领链不闭环 (声明 doc-refs / **Refs:** 的件, 目标必须存在且反向声明; refs 多目标一律"
+                "英文逗号分隔; 协议见 memory-bank/conventions/doc-forms.md「认领链」):\n"
+            )
+            for p in problems:
+                sys.stderr.write(f"  {p}\n")
+            rc = 1
+        else:
+            print("认领链 OK: 声明引用的件全部双向闭环")
+        dups = check_duplicate_declarations(mb)
+        if dups:
+            sys.stderr.write("重复声明 (解析器只读第一个声明, 多余行静默塌缩 —— 复发 8 形态):\n")
+            for p in dups:
+                sys.stderr.write(f"  {p}\n")
+            rc = 1
+        elif rc == 0:
+            print("重复声明 OK: 无多行 doc-refs meta / 多行 **Refs:**")
+        return rc
     if args.topic:
         return render_topic(items, args.topic)
     if args.all:

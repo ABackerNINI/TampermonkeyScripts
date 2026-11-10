@@ -1,0 +1,537 @@
+#!/usr/bin/env python3
+"""`kb.new` —— 按族注册表新建文档制品 (计划 memory-bank/plans/26-10-17-0527 P1/P3)。
+
+设计轴: **一次逻辑动作 = 一条命令 + 一次填空, 一切派生面零手写** —— 时间戳(timekit 单点)、
+文件名(含查重)、头部字段全量、HTML 族 dark CSS、骨架段落 + SLOT 标记、建后重建该族索引,
+全部由本命令派生; agent 只剩「替换 SLOT 标记」一次编辑。
+
+族注册表(`_common.FAMILIES`)是命名 / 模板 / 词表 / 索引动作的**单点**: 本命令与
+`check_doc_templates`(守卫) import 同一份, 不造第二套规范。
+
+判据与边界 (计划 §03 / §05):
+- 目标文件已存在即 rc=1 拒绝 (幂等); 档案族撞名 = 同专题已存在, 提示「追加不新建」并给路径
+  (同 clone 按 slug 忽略日期前缀比对 + 跨 clone `../auto-qb-*/memory-bank/tasks/` 只读 ls)
+- `--refs` **D4 反向认领自动补链 (P2 交付)**: 目标件**自动补/并** `doc-refs` meta (HTML) 或
+  `**Refs:**` 行 (md) —— 只动元数据行, 合并为英文逗号列表, 幂等; 杀「单向链闸门红」整类问题。
+  目标必须存在且在 memory-bank 内 (fail-fast; 生成物 `_` 前缀文件不作目标)
+- `slice` 族不由本命令建 (拍板: 切片统一由 `kb.wrap` 收尾处理) —— 传了即拒绝并指路
+- **P3 二期族** (计划 §04): pitfall (`--class` 7 类枚举 + `--triggers`, 头部零 SLOT 契约 ——
+  触发词是路由判断不可派生, 走参数, 裁定 A7 参数分支) / report (出厂即 Done 终态) /
+  baseline (`--total` 由 test.full 实测誊写, 裁定 A4 —— 命令不编造数字)
+  (2026-11-08 重构 W3: progress 族注册已删 —— progress/ 目录全灭 (D9), `kb.new progress` 不再合法)
+- **issue 族** (计划 26-11-07-0549 W3, D4 翻案收编 —— new_issue.py 退役): slug 为位置参数,
+  `--type`/`--summary` 必填, `--tier` (默认随 `--type` 经 `TIER_BY_TYPE` 推导) / `--module` /
+  `--reporter` / `--topic` 可选 (topic 默认 = slug, doc-topic 主键)。模板按档位选
+  (`FamilySpec.template_by_tier`), 模板零 SLOT —— 剩余人工 = 按档位填正文 (NEXT_STEP 文案口径
+  沿用退役的 new_issue.py)。**不提供 --status**: 出厂恒 Open (spec.default_status), 翻状态走
+  kb.status (W4 收编); `--dir`/`--project`/`--at` 等可移植性参数随 new_issue.py 一并退役 (D2)
+- **传参统一** (issue 26-11-08-1131, 2026-11-09): 专题主键**位置参数与 --topic 两形态全族等价**,
+  跨族套形态不再 rc=1 —— 非 issue 族位置参数 = 专题主键 (同给异值即拒 fail-fast, 同值幂等);
+  issue 族位置 slug 为正, 缺位置时 --topic 兼作 slug
+- 建后末尾固定输出「剩余人工 N 项(判断 a · 条件 b · **机械 0**)」契约 (§5.4 收录断言)
+
+用法 (从仓库根; `<skill-dir>` = 加载 memory-bank skill 时它实际所在的目录):
+    python <skill-dir>/scripts/new_doc.py plan [<topic>] --title ".." [--refs p1,p2]
+    python <skill-dir>/scripts/new_doc.py task [<topic>] --title ".." [--refs p1,p2]   # <topic> = <领域>-<专题>
+    python <skill-dir>/scripts/new_doc.py issue <slug> --type <8 类之一> --title ".." --summary ".." [--tier light|standard] [--module ".."] [--reporter ".."] [--topic <kebab>] [--refs p1,p2]
+    python <skill-dir>/scripts/new_doc.py report [<topic>] --title ".." [--refs p1,p2]
+    python <skill-dir>/scripts/new_doc.py pitfall [<slug>] --class <7 类之一> --title ".." --triggers "词, 词"
+    python <skill-dir>/scripts/new_doc.py baseline [<slug>] --title ".." --total "3498 passed + 4 skipped(根)"
+    python <skill-dir>/scripts/new_doc.py --root <dir> --mb-dir <dir> <family> ...   # 覆盖探测
+传参统一 (issue 26-11-08-1131): 专题主键**位置参数与 --topic 两形态全族等价**, 跨族套形态不再 rc=1
+—— 非 issue 族同给异值即拒 (fail-fast); issue 族位置 slug 为正, 缺位置时 --topic 兼作 slug,
+给足位置时 --topic 是 doc-topic 覆盖 (既有合法形态)。
+退出码: 0 成功 / 1 拒绝或校验失败 (原因与下一步打在输出里)
+"""
+
+from __future__ import annotations
+
+import argparse
+import html
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import timekit  # noqa: E402  (时间单点: UTC+8 naive 墙钟, 与 kb.time 同源)
+from _common import (  # noqa: E402
+    FAMILIES,
+    PITFALL_CLASSES,
+    SKILL_DIR,
+    SLUG_RE,
+    SLOT_RE,
+    TASK_DOMAINS,
+    TIER_BY_TYPE,
+    TIERS,
+    TYPES,
+    find_root,
+    html_meta,
+    html_set_refs,
+    match_domain,
+    md_field,
+    md_set_refs,
+    rebuild_index,
+    rel_posix,
+    resolve_doc_path,
+    resolve_mb_dir,
+    split_refs,
+)
+
+TASK_DATE_PREFIX_RE = re.compile(r"^\d{2}-\d{2}-\d{2}-")
+
+
+def _fail(msg: str) -> int:
+    sys.stderr.write(f"[STOP] {msg}\n")
+    return 1
+
+
+def _utf8_stdout() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+def _html_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _sibling_tasks_dirs(root: Path) -> list[Path]:
+    """跨 clone 的 tasks/ 目录 (`../auto-qb-*/memory-bank/tasks/`, 只读 ls; 排除自己)。"""
+    out: list[Path] = []
+    try:
+        siblings = sorted(root.parent.glob("auto-qb-*"))
+    except OSError:
+        return out
+    for sib in siblings:
+        if sib.resolve() == root.resolve():
+            continue
+        tasks = sib / "memory-bank" / "tasks"
+        if tasks.is_dir():
+            out.append(tasks)
+    return out
+
+
+def _check_duplicate(topic: str, mb: Path, root: Path) -> str | None:
+    """档案族查重: 本 clone + 跨 clone 按 slug(忽略日期前缀)比对。命中返回拒绝原因。"""
+    hits: list[str] = []
+    for tasks_dir in [mb / "tasks", *_sibling_tasks_dirs(root)]:
+        for path in sorted(tasks_dir.glob("*.md")):
+            if path.name.startswith("_"):
+                continue
+            if TASK_DATE_PREFIX_RE.sub("", path.stem) == topic:
+                hits.append(path.as_posix())
+    if hits:
+        where = hits[0]
+        more = f" 等 {len(hits)} 处" if len(hits) > 1 else ""
+        return (f"同专题档案已存在: {where}{more} —— 追加不新建; "
+                "续作请直接编辑该档案 (收尾的进度日志行由 kb.wrap 追加)")
+    return None
+
+
+def _render(spec, values: dict[str, str], template: str | None = None) -> str:
+    """渲染模板 (`templates/<template 或 spec.template>`, @@KEY@@ 占位符)。
+
+    `template` 显式指定 > `spec.template` —— issue 族按档位选模板用
+    (`spec.template_by_tier`, W3; 其余族不传即走注册表单值)。
+    """
+    text = (SKILL_DIR / "templates" / (template or spec.template)).read_text(encoding="utf-8")
+    for key, value in values.items():
+        text = text.replace(f"@@{key}@@", value)
+    return text
+
+
+def _resolve_refs(raw: str, root: Path, mb: Path) -> tuple[list[str], list[Path]] | str:
+    """`--refs` 解析 (D4): 目标必须存在、在 memory-bank 内、不是生成物 (`_` 前缀)。
+
+    返回 (规范化仓库根相对 refs, 目标路径); 失败返回错误消息字符串 (调用方 rc=1)。
+    接受绝对 / 仓库根相对 / mb 相对三形态 (docmap 输出 mb 相对, 照抄最自然)。
+    """
+    refs: list[str] = []
+    targets: list[Path] = []
+    for raw_ref in split_refs(raw):
+        path = resolve_doc_path(raw_ref, root, mb)
+        if not path.is_file():
+            return f"refs 目标不存在: {raw_ref} (三形态都不命中) —— 先建好目标件再建本件"
+        try:
+            path.resolve().relative_to(mb.resolve())
+        except ValueError:
+            return f"refs 目标不在 memory-bank 下: {raw_ref} —— 认领链只串库内件"
+        if path.name.startswith("_"):
+            return f"refs 目标不能是生成物 (`_` 前缀的索引/about): {raw_ref}"
+        rel = rel_posix(path, root)
+        if rel not in refs:
+            refs.append(rel)
+            targets.append(path)
+    return refs, targets
+
+
+def _chain_refs(rendered: str, refs: list[str], ext: str) -> str:
+    """本件自己的正向声明: HTML 写 `doc-refs` meta, md 写 `**Refs:**` 行 (只动元数据行)。"""
+    set_refs = html_set_refs if ext == ".html" else md_set_refs
+    for rel in refs:
+        rendered = set_refs(rendered, rel)
+    return rendered
+
+
+def _reverse_chain(targets: list[Path], self_rel: str, root: Path) -> list[str]:
+    """D4 反向补链: 在目标件补/并对本件的反向声明 (只动元数据行, 幂等)。
+
+    返回每份目标的处置说明 (新插入 / 已合并 / 已声明幂等)。I/O 失败抛给调用方 —— 本件已建,
+    链断了必须让人知道 (gen_doc_map --check 会红), 处置: 手工补那一条反向行。
+    """
+    lines: list[str] = []
+    for target in targets:
+        text = target.read_text(encoding="utf-8")
+        is_html = target.suffix == ".html"
+        new_text = html_set_refs(text, self_rel) if is_html else md_set_refs(text, self_rel)
+        if new_text == text:
+            how = "已声明 (幂等)"
+        else:
+            value = html_meta(new_text, "doc-refs") if is_html else md_field(new_text, "Refs")
+            total = len(split_refs(value or ""))
+            how = f"反向声明已并入 (共 {total} 条)" if total > 1 else "新插入反向声明"
+            target.write_text(new_text, encoding="utf-8", newline="\n")
+        lines.append(f"{rel_posix(target, root)} ({how})")
+    return lines
+
+
+def _rebuild_index(spec, root: Path, mb: Path) -> list[Path]:
+    """建后重建**该族受影响的那份索引** —— 单点 `_common.rebuild_index` (kb.status / kb.bump 共用)。"""
+    return rebuild_index(root, mb, spec.index_script)
+
+
+# issue 族的「下一步」文案 (W3 收编; 文案口径沿用退役的 new_issue.py 的 NEXT_STEP, 一字未改)
+ISSUE_NEXT_STEP = {
+    "light": "下一步: 填「现象一句话 / 位置(grep 锚点)」, 建议可留待定 —— 预算 ≤ 2 分钟, 然后回到主线。",
+    "standard": "下一步: 填「现象 / 证据 / 影响面 / 定位锚点」; 根因与建议修法默认待查 —— 预算 ≤ 10 分钟, 然后回到主线。",
+}
+
+
+def _print_remaining(family: str, slots: list[str], tier: str = "") -> None:
+    """§5.4 输出契约: 三分类清单 + 「机械 0」收录断言。"""
+    slot_text = " / ".join(slots) if slots else "(无)"
+    if family == "plan":
+        print("剩余人工 2 项(判断 1 · 条件 1 · 机械 0)")
+        print(f"【判断】SLOT: {slot_text} (一次编辑填完)")
+        print('【条件】立档阈值命中 → commands run kb.new task --title ".." --topic <领域>-<专题>')
+    elif family == "task":
+        print("剩余人工 1 项(判断 1 · 条件 0 · 机械 0)")
+        print(f"【判断】SLOT: {slot_text} (一次编辑填完; Summary 已由 --title 预填, 可精修)")
+    elif family == "issue":
+        # 模板零 SLOT (W2 单栏版式沿用): 剩余人工 = 按档位填正文 —— new_issue.py 的 NEXT_STEP 口径。
+        # 计数按实际 slots 派生 (评审 RB2): 「按档位填正文」恒 1 项 + 模板每格 SLOT 另计 ——
+        # 现模板零 SLOT → 判断 1, 输出不变; 未来模板掺占位时计数上浮, 不静默少报。
+        judged = len(slots) + 1
+        print(f"剩余人工 {judged} 项(判断 {judged} · 条件 0 · 机械 0)")
+        print(f"【判断】按档位填正文 (模板零 SLOT): {ISSUE_NEXT_STEP[tier]}")
+    else:  # P3 二期族: pitfall / report / baseline (计划 §04, §5.3 口径)
+        hints = {
+            "pitfall": "条目按「触发/判别/处置」三必填写 (守阵/复发选填); "
+                       "触发词已由 --triggers 填入三行头 (裁定 A7 参数分支, 头部零 SLOT)",
+            "report": "报告出厂即 Done (快照完成即终态); 改版直接编辑正文 —— "
+                      "kb.bump 对无变更记录段的件 fail-fast 指路",
+            "baseline":
+                "--total 已由 test.full 实测誊写 (裁定 A4, 命令不编造数字); "
+                "裸数字只写基线切片这一处 (口径与差值口径见 testing/baseline.md, 不重复口径样板)",
+        }
+        print("剩余人工 1 项(判断 1 · 条件 0 · 机械 0)")
+        print(f"【判断】SLOT: {slot_text} (一次编辑填完)")
+        print(f"【可选】{hints[family]}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    _utf8_stdout()
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument(
+        "family",
+        choices=sorted(FAMILIES),
+        help="文档族 (plan / task / issue / pitfall / report / baseline; slice 走 kb.wrap)",
+    )
+    parser.add_argument(
+        "slug",
+        nargs="?",
+        default="",
+        help="主键位置参数 (全族接受, 与 --topic 两形态等价, issue 26-11-08-1131): "
+        "issue 族 = slug (文件名第三段兼 doc-topic 默认主键, 例: webui-cols-drift); "
+        "其余族 = 专题主键 —— 同给异值即拒 (fail-fast)",
+    )
+    parser.add_argument("--title", required=True, help="制品标题 (档案族的 Summary 预填, 裁定 A1)")
+    parser.add_argument(
+        "--topic",
+        default="",
+        help="专题主键 (与位置参数两形态等价): plan/report=kebab; task=<领域>-<专题>; 其余族=<slug>; "
+        "issue 族可选 (doc-topic 覆盖, 默认 = slug; 缺位置参数时兼作 slug)",
+    )
+    parser.add_argument(
+        "--type",
+        default="",
+        help=f"issue 族问题类型 (必填; 8 类枚举单点 _common.TYPES: {' / '.join(TYPES)}; 进文件名第二段与 meta)",
+    )
+    parser.add_argument(
+        "--summary",
+        default="",
+        help="issue 族一句话简述 (必填; 进 issues 索引行)",
+    )
+    parser.add_argument(
+        "--tier",
+        default=None,
+        choices=TIERS,
+        help="issue 族档位 (默认由 --type 经 TIER_BY_TYPE 推导; 显式指定可覆盖, 如 test 失败用例用 standard)",
+    )
+    parser.add_argument(
+        "--module",
+        default="未分类",
+        help="issue 族涉及模块/领域 (默认「未分类」)",
+    )
+    parser.add_argument(
+        "--reporter",
+        default="未署名",
+        help="issue 族发现者 (worktree / agent / 会话; 默认「未署名」)",
+    )
+    parser.add_argument(
+        "--refs",
+        default="",
+        help="引用目标 (英文逗号分隔; 绝对/仓库根相对/mb 相对三形态) —— D4 自动双向补链: "
+        "本件写 doc-refs / **Refs:**, 目标件反向声明本件 (只动元数据行, 幂等)"
+    )
+    parser.add_argument(
+        "--class",
+        dest="doc_class",
+        default="",
+        help=f"坑档类 (7 类枚举之一, 单点 _common.PITFALL_CLASSES: {' / '.join(PITFALL_CLASSES)}; 仅 pitfall 族)",
+    )
+    parser.add_argument(
+        "--triggers",
+        default="",
+        help="触发词 (英文逗号分隔) —— 三行头族的 `> 触发:` 行: 路由判断不可派生, 走参数 "
+        "(裁定 A7 参数分支; 头部区零 SLOT 契约); 仅 pitfall 族",
+    )
+    parser.add_argument(
+        "--total",
+        default="",
+        help='基线数字 (test.full 实测输出誊写, 如 "3498 passed + 4 skipped(根)"; 仅 baseline 族, 裁定 A4)',
+    )
+    parser.add_argument("--root", help="仓库根 (默认向上找 .git)")
+    parser.add_argument("--mb-dir", help="memory-bank 目录 (默认 <root>/memory-bank)")
+    args = parser.parse_args(argv)
+
+    family = args.family
+    spec = FAMILIES[family]
+
+    if family == "slice":
+        return _fail(
+            "slice 族不由 kb.new 建 (拍板: 切片统一由 kb.wrap 收尾处理) —— "
+            '用 commands run kb.wrap --topic <slug> --did ".." (不存在则按模板建, 存在则抬最后活动)'
+        )
+
+    root = Path(args.root).resolve() if args.root else find_root()
+    mb = resolve_mb_dir(root, args.mb_dir)
+
+    # --- 取时 (timekit 单点) 与命名校验 (fail-fast: 之后假定命名合法)
+    moment = timekit.now()
+    tier = ""  # 档位选模板族 (issue) 的推导档位; 其余族空串
+    if family == "issue":
+        # W3 (计划 26-11-07-0549): issue 族参数校验 —— slug 位置参数 + --type/--summary 必填
+        # 传参统一 (issue 26-11-08-1131): 位置缺省时 --topic 兼作 slug (文件名第三段 = doc-topic,
+        # 与默认主键口径一致); 位置给足时 --topic 仍是 doc-topic 覆盖 (既有合法形态, 守阵钉住)
+        if not args.slug and args.topic:
+            args.slug = args.topic
+        if not args.slug:
+            return _fail(
+                "issue 族必须带 <slug> (位置参数; 缺位置时也可用 --topic 兼作) "
+                "(小写英文短横线, 例: webui-cols-drift) —— 文件名第三段兼 doc-topic 默认主键"
+            )
+        if not SLUG_RE.match(args.slug):
+            return _fail(f"slug 不合规: {args.slug!r} (要求小写英文短横线, 例 webui-cols-drift)")
+        if args.topic and not SLUG_RE.match(args.topic):
+            return _fail(f"--topic 必须是 kebab (小写英文数字 + 短横线): {args.topic!r}")
+        if not args.type:
+            return _fail(f"issue 族必须带 --type (8 类枚举单点 _common.TYPES: {' / '.join(TYPES)})")
+        if args.type not in spec.type_enum:
+            return _fail(
+                f"--type 必须是 8 类之一 ({' / '.join(TYPES)}): 现为 {args.type!r} —— "
+                "扩类型先改 _common.TYPES (命名正则/索引校验/文件名中段全部跟着走)"
+            )
+        if not args.summary:
+            return _fail("issue 族必须带 --summary (一句话简述, 进 issues 索引行)")
+        # .get 而非 []: 扩 TYPES 未同步 TIER_BY_TYPE 时走 _fail (守阵: 注册表测试的
+        # set(TYPES) <= set(TIER_BY_TYPE)), 不裸 KeyError —— 增删类型只改 TYPES 一处的
+        # 单点声明要求映射表跟着走, 缺了这里宁可当场指路
+        tier = args.tier or TIER_BY_TYPE.get(args.type, "")
+        if not tier:
+            return _fail(
+                f"类型 {args.type!r} 在 TIER_BY_TYPE 无默认档位 —— 扩 TYPES 时须同步补 TIER_BY_TYPE "
+                "(否则档位推不出, 模板选不了; 修完重跑本命令)"
+            )
+    else:
+        # 传参统一 (issue 26-11-08-1131): 专题主键位置参数与 --topic 两形态等价 (跨族套形态不再 rc=1)
+        # —— 同给异值即拒 (fail-fast: 主键不可歧义), 同值幂等放行
+        if args.slug and args.topic and args.slug != args.topic:
+            return _fail(
+                f"{family} 族位置参数与 --topic 同时给出且值不同, 专题主键不可歧义: "
+                f"{args.slug!r} vs {args.topic!r} —— 二选一 (两形态等价)"
+            )
+        args.topic = args.topic or args.slug
+        if not args.topic:
+            return _fail(f"{family} 族必须带专题主键 (位置参数或 --topic 均可)")
+        if not SLUG_RE.match(args.topic):
+            return _fail(f"专题主键必须是 kebab (小写英文数字 + 短横线): {args.topic!r}")
+
+    # --- P3 二期族参数校验 (fail-fast, 之后假定输入合法)
+    if family == "pitfall":
+        if not args.doc_class:
+            return _fail(f"pitfall 族必须带 --class (坑档目录第二段; 7 类枚举单点: {' / '.join(PITFALL_CLASSES)})")
+        if args.doc_class not in PITFALL_CLASSES:
+            return _fail(
+                f"--class 必须是 7 类之一 ({' / '.join(PITFALL_CLASSES)}): 现为 {args.doc_class!r} —— "
+                "扩类先改 _common.PITFALL_CLASSES (三处同步: 常量/目录/README 细路由)"
+            )
+        if not args.triggers:
+            return _fail(
+                "pitfall 族必须带 --triggers (触发词是路由判断不可派生, 走参数 —— 裁定 A7 参数分支; "
+                "头部区零 SLOT 契约: 三行头的 `> 触发:` 行由命令填, 不留 SLOT)"
+            )
+    if family == "baseline" and not args.total:
+        return _fail(
+            'baseline 族必须带 --total (test.full 实测输出誊写, 如 "3498 passed + 4 skipped(根)"; '
+            "裁定 A4: 命令不编造数字 —— 未跑过的不交付)"
+        )
+
+    template_name: str | None = None  # 分级族 (issue) 按档位选出的模板名; 其余族走 spec.template
+
+    if family == "plan":
+        filename = f"{moment.strftime('%y-%m-%d-%H%M')}-plan-{args.topic}.html"
+        values = {
+            "TITLE": _html_escape(args.title),
+            "TOPIC": _html_escape(args.topic),
+            "STAMP": moment.strftime("%y-%m-%d-%H%M"),
+        }
+    elif family == "task":
+        # 领域段 = 最长前缀匹配 (`_common.match_domain` 单点): 枚举含短横线项
+        # (`memory-bank`), 首段切分会让它永远不可达 (P1 缺陷, P2 补)
+        domain = match_domain(args.topic)
+        if domain is None:
+            return _fail(
+                f"专题主键首段必须是领域枚举之一 ({', '.join(TASK_DOMAINS)}): "
+                f"现为 {args.topic.split('-', 1)[0]!r} (位置参数或 --topic 传入均可)"
+            )
+        filename = f"{moment.strftime('%y-%m-%d')}-{args.topic}.md"
+        values = {
+            "STEM": Path(filename).stem,
+            "TITLE": args.title,
+            "DATE": moment.strftime("%Y-%m-%d"),
+            "TOPIC": args.topic,
+        }
+    elif family == "issue":
+        # W3 建件收编: 模板按档位选 (spec.template_by_tier), 零 SLOT; 出厂恒 Open (spec.default_status)。
+        # doc-topic 主键默认 = slug (一题一专题); 多条 issue 共用一专题时显式 --topic 覆盖。
+        # 不设 --project (D2 可移植性参数随 new_issue.py 退役): 模板占位恒替换为空串。
+        stamp = moment.strftime(timekit.STAMP_FMT)
+        filename = f"{stamp}-{args.type}-{args.slug}{spec.ext}"
+        raw = {
+            "SLUG": args.slug,
+            "STAMP": stamp,
+            "DATE": moment.strftime(timekit.TIME_FMT),
+            "TITLE": args.title,
+            "SUMMARY": args.summary,
+            "MODULE": args.module,
+            "STATUS": spec.default_status,
+            "REPORTER": args.reporter,
+            "TYPE": args.type,
+            "TIER": tier,
+            "TOPIC": args.topic or args.slug,
+            "PROJECT": "",
+        }
+        # 统一转义 (quote=True, 沿用 new_issue.py 口径): meta 的 content 不被引号截断
+        values = {key: html.escape(value, quote=True) for key, value in raw.items()}
+        template_name = spec.template_by_tier[tier]
+    elif family == "pitfall":
+        filename = f"{args.topic}.md"
+        values = {"TITLE": args.title, "TRIGGERS": args.triggers}
+    elif family == "report":
+        filename = f"{moment.strftime('%y-%m-%d-%H%M')}-report-{args.topic}.html"
+        values = {
+            "TITLE": _html_escape(args.title),
+            "TOPIC": _html_escape(args.topic),
+            "STAMP": moment.strftime("%y-%m-%d-%H%M"),
+        }
+    elif family == "baseline":
+        filename = f"{moment.strftime('%y-%m-%d-%H%M')}-{args.topic}.md"
+        values = {
+            "TOTAL": args.total,
+            "TITLE": args.title,
+            "TIME": moment.strftime("%Y-%m-%d %H:%M"),  # `> 基线时间:` 排序键 (回退用文件名前缀)
+        }
+    else:  # pragma: no cover - FAMILIES 增族时同步这里 (progress 族已随 2026-11-08 重构删除)
+        return _fail(f"未知族: {family}")
+
+    # --- 派生不变量守卫: 拼出的文件名必须合族命名正则 (单点 `_common` 与 check_doc_templates
+    # 同源)。SLUG_RE/领域枚举是主闸, 这里防的是「建件端正则与守卫端正则各自演化」的失配 ——
+    # 建件时就红, 不等建完进了检查面才发现建出来的件守卫自拒。
+    if not spec.naming_re.match(filename):
+        return _fail(f"派生文件名不合 {family} 族命名正则 ({spec.naming_re.pattern}): {filename}")
+
+    # --- 目标路径 (坑档带 `--class` 第二段子目录; 其余族单段)
+    if family == "pitfall":
+        target = mb / spec.dir / args.doc_class / filename
+    else:
+        target = mb / spec.dir / filename
+    if target.exists():
+        return _fail(f"目标文件已存在: {rel_posix(target, root)} —— 幂等拒绝; 改版请直接编辑该文件")
+
+    if family == "task":
+        dup = _check_duplicate(args.topic, mb, root)
+        if dup:
+            return _fail(dup)
+
+    # --- D4 反向认领: 先解析 refs (fail-fast, 不落半文件), 本件正向声明写进渲染结果
+    ref_targets: list[Path] = []
+    if args.refs:
+        resolved = _resolve_refs(args.refs, root, mb)
+        if isinstance(resolved, str):
+            return _fail(resolved)
+        refs, ref_targets = resolved
+
+    # --- 渲染后一次落盘 (渲染失败即停, 不落半文件)
+    try:
+        rendered = _render(spec, values, template_name)
+    except OSError as exc:
+        return _fail(f"读模板失败: {exc}")
+    if ref_targets:
+        rendered = _chain_refs(rendered, refs, spec.ext)
+
+    slots = [s.strip() for s in SLOT_RE.findall(rendered)]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(rendered, encoding="utf-8", newline="\n")
+
+    if family == "issue":
+        print(f"已建 {rel_posix(target, root)} (模板零 SLOT; 正文 TODO 按档位填写)")
+    else:
+        print(f"已建 {rel_posix(target, root)} ({len(slots)} 处 SLOT 待填)")
+
+    # --- D4 反向补链: 目标件补/并对本件的反向声明 (只动元数据行, 幂等)
+    if ref_targets:
+        chained = _reverse_chain(ref_targets, rel_posix(target, root), root)
+        for line in chained:
+            print(f"已双向补链 {line}")
+
+    # --- 建后重建该族索引 (2026-11-08 重构 W3: 仅 pitfall 族仍有索引面 = gen_kb_index;
+    #     plan/task/issue/report/baseline 的 index_script 已让位为空串 → 空表, 不再重建)
+    try:
+        rebuilt = _rebuild_index(spec, root, mb)
+    except ValueError as exc:
+        # 防御: 生成器对库内异常数据抛 ValueError —— 文件已建, 失败不能断在静默
+        sys.stderr.write(f"[STOP] 文件已建, 但索引重建失败: {exc}\n"
+                         "处置后运行 commands run kb.index 重建索引\n")
+        return 1
+    if rebuilt:
+        print("已重建索引: " + ", ".join(rel_posix(p, root) for p in rebuilt))
+
+    print()
+    _print_remaining(family, slots, tier)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

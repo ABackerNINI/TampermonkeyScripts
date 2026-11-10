@@ -1,0 +1,2145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+<title>MB 导航 · memory-bank 四工位 (台账 / 控制台 / 卡片墙)</title>
+<!--
+  memory-bank 四工位导航页壳 (计划 26-10-04-0952 S2)。三视图合并: A 台账 / B 控制台 / C 卡片墙,
+  移植自 tmp-analysis/nav-design/ 三套已验证原型, 交互设计未改。
+  数据接入: http 模式 fetch /api/data (30s 轮询); 静态模式由 nav_server.py --gen-static 把
+  下方唯一的数据注入位替换为 JSON (检测注入完成即不走 fetch)。链接前缀按协议自适应。
+  搜索索引 (2026-11-03): navSearchText() 单点 = 标题 / 专题 / issue 摘要 + 文件路径两种形态
+  (link 本身含 basename, 另加 memory-bank/<link>); 台账 / 控制台频道 / 卡片墙共用, 正文不入索引
+  (体积口径), 匹配统一小写并把反斜杠归一成 "/"。
+  置顶区交互 (2026-11-03): 标题行内置折叠按钮 #pzToggle (原生 button, aria-expanded / aria-controls,
+  箭头方向反映状态), 折叠态落 mb-nav-pin-collapsed 且只藏表格主体 pzBody —— 标题行与展开入口始终可见;
+  置顶条目单击与主表**共用** openRowDetail() 单点 (同一 renderDrawer, 双区同 link 同亮), 不再单开原文。
+  搜索被排除匹配提示 (2026-11-06): 搜索词非空且存在被勾选/隐藏挡住的匹配项时, 搜索框下浮现
+  #ghint 一行 (总数锚定 + 按原因分计, 组名可点勾回; 隐藏件独占一桶); 口径按活动视图, 见 ghintData()。
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e1114;
+    --paper: #12161b;
+    --paper-2: #171d24;
+    --paper-3: #1c242e;
+    /* --chrome = **抬起的 chrome 面**底色 (2026-10-05 加): 台账列标题行 (#v-ledger thead th)
+       与置顶专区表头 (#v-ledger .pinzone thead th) 共用。在 --paper-3 之上再亮一档, 与
+       --paper / --bg 拉开**可测**的明度差。
+       **不要**把它并回 --paper / --paper-3 —— 表头与数据行同色正是"与其余部分难区分"的成因。
+       顶栏 (.topbar) 曾短暂用过它, 已按用户要求撤销 (见 .topbar 处注释), 现仍走 --paper。 */
+    --chrome: #2b3947;
+    --ink: #dde3e8;
+    --dim: #98a3ad;
+    --faint: #6b7681;
+    --hair: rgba(255,255,255,.07);
+    --hair-2: rgba(255,255,255,.14);
+    --cyan: #56c8d7;
+    --cyan-soft: rgba(86,200,215,.12);
+    /* 多选专用靛蓝族 (2026-10-31 验收反馈): 与单击预览的 cyan 分家 —— 同色相只差明度的两态
+       实测混淆 (auto-qb views.css R10-07 同款坑), 真值取自 auto-qb galaxy 主题 --sel-* 族 */
+    --msel-bar: #97a3f5;
+    --msel-bg: rgba(151,163,245,.16);
+    --msel-line: rgba(151,163,245,.5);
+    --amber: #e2a55a;
+    --amber-soft: rgba(226,165,90,.12);
+    --green: #7fc79a;
+    --green-soft: rgba(127,199,154,.12);
+    --green-dim: #7ba98c;
+    --mut: #76828d;
+    --rose: #c7a3c9;
+    --rose-soft: rgba(199,163,201,.09);
+    --sand: #cdb992;
+    --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --disp: "Bahnschrift", "Segoe UI", "Microsoft YaHei", sans-serif;
+    --mono: "Cascadia Mono", "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 13.5px; line-height: 1.55;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: #2a333d; border-radius: 4px; }
+  ::selection { background: #24424a; color: #fff; }
+
+  /* ============ 顶栏 (三视图共有) ============
+     底色 = --paper, 与台账左侧栏 / 工具栏 / 控制台面板同色 —— 这是**用户拍板保持的现状**, 别"顺手"改。
+     2026-10-05 曾改过一轮 (底色换 --chrome + 下缘 cyan 缝), 用户随后澄清当轮反馈的"标题栏"指的是
+     **台账列标题行**而非顶栏, 遂按范围守恒撤销本轮顶栏改动、回到原样。
+     已知的实测事实 (留着免得下次重新发现, 但**未经用户要求不要动**): 顶栏与侧栏 / 工具栏逐通道差
+     **0**, 与表格区 --bg 只差 **7** —— 按本仓判据 (同视图内两两 RGB 最大通道差 <20 即"分不出")
+     两条都不合格, 整块 chrome 连成一片、只剩一条 hairline。真要修时的口径见
+     pitfalls/web-ui/layout-css.md「顶栏 / 表头 / 状态栏底色与相邻面同色」条 (专用令牌 + 抬明度)。 */
+  .topbar {
+    display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 52px;
+    border-bottom: 1px solid var(--hair-2); background: var(--paper);
+    flex: none; position: relative; z-index: 20;
+  }
+  .brand { font-family: var(--disp); font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--cyan); white-space: nowrap; }
+  .brand .sep { color: var(--faint); }
+  .brand small { color: var(--faint); letter-spacing: .12em; margin-left: 10px; font-size: 10px; }
+  .gsearch { position: relative; flex: 0 1 400px; }
+  .gsearch input {
+    width: 100%; background: var(--paper-2); border: 1px solid var(--hair); color: var(--ink);
+    border-radius: 5px; padding: 7px 26px 7px 30px; font: 12.5px var(--sans); outline: none;
+  }
+  .gsearch input:focus { border-color: var(--cyan); }
+  .gsearch input::placeholder { color: var(--faint); }
+  .gsearch > svg { position: absolute; left: 9px; top: 8px; width: 13px; height: 13px; stroke: var(--faint); }
+  /* 只钉直接子代放大镜 —— 后代选择器会把 #gclear 里的 × 也钉成 absolute, flex 居中失效 (实测居中漂移) */
+  /* 清词按钮: 有词才显形 (syncGclear 同步); [hidden] 兜底必写 —— flex display 会盖掉 UA 的 hidden */
+  .gclear {
+    position: absolute; right: 6px; top: 8px; width: 17px; height: 17px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none; border-radius: 4px; color: var(--faint); cursor: pointer;
+  }
+  .gclear:hover { color: var(--ink); background: var(--paper); }
+  /* 搜索被排除匹配项提示行 (task 26-11-06-memory-bank-kb-nav-search-ghint): 悬浮在搜索框正下方
+     (与搜索高度绑定, 不推挤下方内容), 单行溢出省略 + title 全文; 组名 .gtag 可点勾回,
+     「N项隐藏」(.ghid) 不可点 (恢复走台账隐藏区)。不设 display → [hidden] UA 兜底不被盖
+     (同 #gclear 口径)。z 序: .topbar 自带 z-20 上下文, 浮层压过下方视图内容。 */
+  .ghint {
+    position: absolute; top: calc(100% + 5px); left: 0; max-width: 100%;
+    background: var(--paper-3); border: 1px solid var(--hair-2); border-radius: 6px;
+    padding: 3px 9px; font-size: 11px; line-height: 1.6; color: var(--dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 25;
+  }
+  .ghint b { color: var(--ink); }
+  .ghint .gsep { color: var(--faint); margin: 0 4px; }
+  .ghint .gtag {
+    background: transparent; border: none; padding: 0; font: inherit; cursor: pointer;
+    color: var(--cyan); text-decoration: underline dotted; text-underline-offset: 2px;
+  }
+  .ghint .gtag:hover { color: var(--ink); }
+  .ghint .ghid { color: var(--faint); }
+  .gclear[hidden] { display: none; }
+  .gclear svg { width: 10px; height: 10px; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .seg { display: flex; border: 1px solid var(--hair-2); border-radius: 6px; overflow: hidden; flex: none; }
+  .seg button {
+    background: var(--paper-2); color: var(--dim); border: none; padding: 6px 16px;
+    font: 12.5px var(--sans); cursor: pointer; border-right: 1px solid var(--hair);
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button:hover { color: var(--ink); }
+  .seg button.on { background: var(--cyan-soft); color: var(--cyan); }
+  .readout { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; }
+  .readout b { color: var(--cyan); font-weight: 600; }
+
+  /* ============ 顶栏: 拉取 (仅快进同步本仓库) ============ */
+  /* [hidden] 兜底必写: .pullbtn 的 display 会盖掉 UA 的 [hidden]{display:none} (静态/file 模式要隐藏) */
+  .pullbtn[hidden] { display: none; }
+  .pullbtn {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    background: var(--paper-2); color: var(--dim); border: 1px solid var(--hair-2);
+    border-radius: 6px; padding: 6px 14px; font: 12.5px var(--sans); cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .pullbtn:hover { color: var(--ink); border-color: var(--cyan); }
+  .pullbtn:disabled { opacity: .55; cursor: default; }
+  .pullbtn svg { width: 13px; height: 13px; display: block; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .pullbtn.busy svg { animation: pullspin .9s linear infinite; }
+  .pullbtn.ok { color: var(--green); border-color: rgba(127,199,154,.45); }
+  .pullbtn.err { color: var(--amber); border-color: rgba(226,165,90,.45); }
+  @keyframes pullspin { to { transform: rotate(360deg); } }
+
+  /* ============ 视图容器 ============ */
+  .views { flex: 1; min-height: 0; position: relative; }
+  .view { display: none; height: 100%; }
+  #v-ledger.on { display: grid; grid-template-columns: 224px 1fr; }
+  #v-console.on { display: flex; flex-direction: column; }
+  #v-cards.on { display: block; overflow-y: auto; }
+
+  /* ============ 共用: 状态色 / 形态色 / 徽章 ============ */
+  .st-Open { color: var(--cyan); }
+  .st-InProgress { color: var(--amber); }
+  .st-Done { color: var(--green-dim); }
+  .st-Dropped, .st-Superseded { color: var(--mut); }
+  .st-none { color: var(--faint); }
+  .fc-issue { color: var(--rose); }
+  .fc-plan { color: var(--cyan); }
+  .fc-report { color: var(--green-dim); }
+  .fc-task { color: var(--amber); }
+  .c-open { background: var(--cyan); } .c-ip { background: var(--amber); } .c-done { background: #3d5947; }
+  .c-drop { background: #39434d; } .c-sup { background: #2c3844; } .c-none { background: #2a333d; }
+  .chip {
+    display: inline-block; font-size: 10.5px; font-family: var(--disp); letter-spacing: .05em;
+    padding: 1px 7px; border-radius: 8px; border: 1px solid var(--hair-2); color: var(--dim); white-space: nowrap;
+  }
+  /* 状态徽章: 底色 + 文字色都写在状态选择器上。
+     WARN: 文字色必须落在这里 —— 与 .chip 同特异性 (0,1,0), 而 .chip{color:var(--dim)} 在文档里更靠后,
+       只靠上面 .st-* 那条会被它盖掉 (2026-10-05 实测: 五个状态 chip 文字全掉成 --dim 灰, 状态色白给)。
+     底色分三层, 台账 chip 与控制台 rs 同一套: Open / In Progress 实底(待关注) > Done 弱绿底(已收口)
+       > Dropped / Superseded 无底(出局)。
+     WARN: Open(cyan) 与 Done(绿) 的令牌同亮度, 同样 12% 透明度时实测底色 #16272b / #1b2624 肉眼不可分 ——
+       光换色相没用, 必须同时拉开**明度**与**底/边/字三条通道**; 反之 Done 压得太暗又会与无底的
+       Dropped / Superseded 撞车, 所以 Done 取中间档 (.14), 靠"有底 vs 无底"与出局态分开。 */
+  .chip.st-Open { color: var(--cyan); border-color: rgba(86,200,215,.55); background: rgba(86,200,215,.24); }
+  .chip.st-InProgress { color: var(--amber); border-color: rgba(226,165,90,.5); background: rgba(226,165,90,.16); }
+  .chip.st-Done { color: var(--green-dim); border-color: rgba(127,199,154,.3); background: rgba(127,199,154,.14); }
+  .chip.st-Dropped, .chip.st-Superseded { color: var(--mut); border-color: var(--hair-2); background: transparent; }
+  .fbadge {
+    display: inline-block; font-family: var(--disp); font-size: 10px; letter-spacing: .1em;
+    padding: 1px 0; width: 100%; text-align: center; border-radius: 2px;
+    background: var(--paper-2); border: 1px solid var(--hair-2); color: var(--dim);
+  }
+  .fbadge.fc-issue { color: var(--rose); border-color: #453b47; background: var(--rose-soft); }
+  .fbadge.fc-plan { color: var(--cyan); border-color: #33455c; background: var(--cyan-soft); }
+  .fbadge.fc-report { color: var(--green-dim); border-color: #3a4a38; background: var(--green-soft); }
+  .fbadge.fc-task { color: var(--amber); border-color: #4b3f2c; background: var(--amber-soft); }
+
+  /* ============ 视图 A: 台账 ============ */
+  #v-ledger aside {
+    border-right: 1px solid var(--hair-2); background: var(--paper);
+    padding: 16px 0 12px; overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .fgroup { padding: 13px 18px 4px; }
+  .fgroup .fl {
+    font-family: var(--disp); font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 7px;
+  }
+  .frow { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; user-select: none; color: var(--dim); }
+  .frow:hover { color: var(--ink); }
+  .frow .box {
+    width: 11px; height: 11px; border: 1px solid var(--hair-2); border-radius: 2px;
+    flex: none; position: relative; transition: background .12s, border-color .12s;
+  }
+  .frow.on { color: var(--ink); }
+  .frow.on .box { background: var(--cyan); border-color: var(--cyan); }
+  .frow.on .box::after {
+    content: ""; position: absolute; inset: 2px; background: var(--bg);
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+  }
+  .frow .nm { flex: 1; font-size: 12.5px; }
+  .frow .ct { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+  .frow.sw .box { border-radius: 6px; }
+  .src-note { margin-top: auto; padding-top: 18px; }
+  .src-note .note { color: var(--faint); font-size: 11px; line-height: 1.7; }
+  .src-note .mono { font-family: var(--mono); font-size: 10.5px; }
+  #v-ledger main { display: flex; flex-direction: column; overflow: hidden; }
+  .toolbar {
+    display: flex; align-items: center; gap: 14px; padding: 11px 20px;
+    border-bottom: 1px solid var(--hair-2); background: var(--paper); flex: none;
+  }
+  .sort { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: 11.5px; }
+  .sort select {
+    background: var(--paper-2); color: var(--ink); border: 1px solid var(--hair);
+    border-radius: 4px; padding: 4px 6px; font: 12px var(--sans); outline: none;
+  }
+  .count { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+  .count b { color: var(--cyan); font-weight: 600; }
+  .toolbar .hint { margin-left: auto; color: var(--faint); font-size: 11px; }
+  /* scrollbar-gutter: stable —— 与置顶专区 (.pinzone) 同款, 两侧预留等宽滚动条槽,
+     否则主表有滚动条 / 专区没有时内容宽度差 9px, 两张表的栏就错位 (栏对齐的硬前提) */
+  .ledgerwrap { overflow: auto; flex: 1; scrollbar-gutter: stable; }
+  /* table-layout: fixed —— 列宽只认首行 (thead th) 的 width, 不随内容伸缩; 置顶专区克隆主表
+     thead, 于是两表列宽同源、逐栏对齐 (auto 布局下两表各按自身内容算宽, 永远对不齐)。
+     min-width 兜底: 窗口过窄时固定列 (合计 514px) 会把标题栏压没, 改让表格保持 720px 由
+     容器横向滚动 (窄屏下两表各自横滚, 属可接受降级; 宽屏无影响) */
+  #v-ledger table { width: 100%; min-width: 720px; border-collapse: collapse; table-layout: fixed; }
+  /* 列标题行 (时间戳 / 形态 / 状态 / 标题 …) 的底色走 --chrome, 不用 --bg ——
+     --bg 与数据行**完全同色** (2026-10-05 用户报「标题栏颜色与其余部分难区分」, 实测逐通道差 **0**),
+     表头于是读不出"这是一行表头", 只剩一条 hairline。--paper-3 也不够: 与数据行差 26 过了判据,
+     但与紧挨其上的 .toolbar (--paper) 只差 19 (<20) ⇒ 表头会看着像工具栏的延伸, 变成"几乎一样
+     但不是"的观感。--chrome 同时满足两条轴: 与数据行差 39 / 与工具栏差 32。
+     WARN: 表头文字随底色从 --faint 抬到 --dim —— 10px 大字距的标签在 --chrome 上对比度只有 2.97:1
+       (原 --bg 上是 4.09:1), 抬到 --dim 后 5.36:1。
+     WARN: sticky 底色必须**不透明** (数据行从它下面滚过), --chrome 是不透明值, 别换成带 alpha 的。
+     置顶专区表头 (.pinzone thead th) 是克隆本行 thead 来的, 底色另有一条规则显式对齐到同一枚
+     --chrome (见下方 .pinzone thead th 注释) —— 两个同款表头必须长得一样。 */
+  #v-ledger thead th {
+    position: sticky; top: 0; z-index: 2; background: var(--chrome);
+    font-family: var(--disp); font-weight: 600; font-size: 10px; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--dim); text-align: left;
+    padding: 9px 10px; border-bottom: 1px solid var(--hair-2); white-space: nowrap;
+  }
+  #v-ledger thead th.num { text-align: right; }
+  #v-ledger tbody td { padding: 7px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  #v-ledger tbody tr { cursor: pointer; }
+  #v-ledger tbody tr:hover { background: var(--paper-2); }
+  #v-ledger tbody tr.sel { background: var(--cyan-soft); box-shadow: inset 2px 0 0 var(--cyan); }
+  td.idx { font-family: var(--mono); font-size: 10.5px; color: var(--faint); text-align: right; width: 34px; padding-top: 9px; }
+  td.stamp { font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; width: 96px; }
+  td.formc { width: 46px; }
+  td.statc { width: 84px; }
+  td.topic { width: 200px; }
+  td.refs { width: 54px; text-align: right; font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+  /* 固定列宽下专题键不再撑列, 超长改省略号 (否则会溢出到相邻栏) */
+  td.topic code { display: inline-block; max-width: 100%; vertical-align: bottom; font-family: var(--mono); font-size: 10.5px; color: var(--dim); background: var(--paper-2); border: 1px solid var(--hair); border-radius: 3px; padding: 1px 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .title-cell b { font-weight: 500; font-size: 13px; }
+  .title-cell .sm { color: var(--faint); font-size: 11.5px; margin-top: 1px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .chain { color: var(--faint); }
+  .chain.has { color: var(--cyan); }
+
+  /* ============ 视图 A: 置顶 (pin) 专区 + 右键菜单 ============ */
+  /* 置顶专区 = 与主表**同栏**的详细列表, 只是置顶展示 + 强调 (2026-10-05 用户定调)。
+     横向 padding 归零, 让专区表格与主表左缘对齐; 左侧 accent 用 inset 阴影而非 border,
+     因为 border 会占掉内容宽度 3px, 两张表就错 3px (scrollbar-gutter 同理, 见 .ledgerwrap) */
+  .pinzone {
+    flex: none; background: var(--paper-2); border-bottom: 1px solid var(--hair-2);
+    max-height: 42vh; overflow-y: auto; scrollbar-gutter: stable;
+    box-shadow: inset 3px 0 0 var(--cyan);
+  }
+  .pinzone[hidden] { display: none; }
+  .pzhead {
+    position: sticky; top: 0; z-index: 3; height: 28px;
+    display: flex; align-items: center; gap: 8px; padding: 0 20px;
+    background: var(--paper-2); border-bottom: 1px solid var(--hair);
+    font-family: var(--disp); font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--cyan);
+  }
+  .pzhead b { font-weight: 600; }
+  .pzhead .pzhint {
+    margin-left: auto; font-family: var(--sans); font-size: 11px;
+    letter-spacing: 0; text-transform: none; color: var(--faint);
+  }
+  /* 置顶区折叠按钮: 标题行内置, 箭头朝下 = 展开 / 朝右 = 收起 (类 collapsed 驱动旋转);
+     原生 button, 回车 / 空格触发 (不另写键位处理)。只用类 + aria + [hidden], 见 applyPinCollapse */
+  .pztoggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; padding: 0; flex: none;
+    border: none; background: none; cursor: pointer; color: var(--cyan); border-radius: 3px;
+  }
+  .pztoggle:hover { background: var(--cyan-soft); }
+  .pztoggle:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+  .pztoggle svg {
+    width: 13px; height: 13px; display: block; fill: none; stroke: currentColor;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    transition: transform .15s ease;
+  }
+  .pinzone.collapsed .pztoggle svg { transform: rotate(-90deg); }
+  /* 专区表头: 跟着 .pzhead (高 28px) 之下粘住。底色跟主表表头同一枚 --chrome (2026-10-05 对齐) ——
+     原先用 --paper-3 是想"与主表表头的 bg 区分", 但那让两个**同款表头**长得不一样; 现在两处一致,
+     纵向由 .pinzone 的 border-bottom 分隔。顺带把专区表头从 --paper-2 的专区底上抬起来
+     (--paper-3 叠 --paper-2 只差 10, 与置顶行的淡 cyan 底更是只差 2 —— 等于没有表头)。 */
+  #v-ledger .pinzone thead th, #v-ledger .hidzone thead th { position: sticky; top: 28px; z-index: 2; background: var(--chrome); }
+  /* 置顶行强调: 淡 cyan 底 + 悬停加深; 列序/列宽与主表完全一致 (守阵 test_pin_zone_reuses_ledger_columns) */
+  #v-ledger tbody tr.pin-row { background: rgba(86,200,215,.05); }
+  #v-ledger tbody tr.pin-row:hover { background: var(--cyan-soft); }
+  /* 多选行 (Ctrl/Shift 手势, 计划 26-10-31-0143): 写在 .pin-row 之后 —— 同特异性靠源序,
+     专区行被多选时 msel 底色要盖过 pin-row 的强调底, 否则专区里看不出选中。
+     WARN: 色相**分家** (2026-10-31 验收反馈, 照 auto-qb views.css R10-07 同款坑型): 首版 msel 用
+     cyan 降透明度, 与单击预览 tr.sel 满亮 cyan 只差明度 —— 实测"容易搞混"。现 msel 走专用
+     靛蓝族 (--msel-*) 满亮度左条 (多选 = 批量目标, 该是最醒目态), 与 sel 的 cyan 彻底分家。 */
+  #v-ledger tbody tr.msel { background: var(--msel-bg); box-shadow: inset 2px 0 0 var(--msel-bar); }
+  /* sel+msel 同框 = 多选视觉优先: 预览对象由右侧抽屉表明, 左条这格让给批量目标态 */
+  #v-ledger tbody tr.sel.msel { background: var(--msel-bg); box-shadow: inset 2px 0 0 var(--msel-bar); }
+  /* # 栏里的实心图钉标记 (静态, 与标题栏的可点图钉区分) */
+  .pinzone .pin-mark { display: inline-block; line-height: 0; color: var(--cyan); }
+  .pinzone .pin-mark svg { width: 12px; height: 12px; fill: currentColor; stroke: currentColor; stroke-width: 1.6; }
+  .pinbtn {
+    display: inline-flex; align-items: center; justify-content: center; vertical-align: -2px;
+    width: 18px; height: 18px; margin-right: 5px; padding: 0; flex: none;
+    border: none; background: none; cursor: pointer; color: var(--faint); border-radius: 3px;
+  }
+  .pinbtn:hover { color: var(--cyan); background: var(--cyan-soft); }
+  .pinbtn.on { color: var(--cyan); }
+  .pinbtn svg {
+    width: 13px; height: 13px; display: block; fill: none; stroke: currentColor;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .pinbtn.on svg { fill: currentColor; }
+
+  /* ============ 视图 A: 隐藏 (hide) 专区 + 工具栏开关 ============ */
+  /* 隐藏区与置顶专区同构 (克隆主表 thead + 复用 ledgerCells), 但三处刻意不同:
+     1. 默认折叠 —— 点工具栏「隐藏区」按钮才展开 (需求: 点击按钮才能查看);
+     2. 停在主表**下方** (管理区不与内容区抢位置), 分隔用上缘 border-top;
+     3. 强调色走 amber (隐藏 = 暂离视野), 与 pin 的 cyan 区分。 */
+  .hidzone {
+    flex: none; background: var(--paper-2); border-top: 1px solid var(--hair-2);
+    max-height: 42vh; overflow-y: auto; scrollbar-gutter: stable;
+    box-shadow: inset 3px 0 0 var(--amber);
+  }
+  .hidzone[hidden] { display: none; }
+  .hzhead {
+    position: sticky; top: 0; z-index: 3; height: 28px;
+    display: flex; align-items: center; gap: 8px; padding: 0 20px;
+    background: var(--paper-2); border-bottom: 1px solid var(--hair);
+    font-family: var(--disp); font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--amber);
+  }
+  .hzhead b { font-weight: 600; }
+  .hzhead .hzhint {
+    margin-left: auto; font-family: var(--sans); font-size: 11px;
+    letter-spacing: 0; text-transform: none; color: var(--faint);
+  }
+  .hzrestore {
+    border: 1px solid var(--hair-2); background: none; color: var(--dim);
+    border-radius: 4px; padding: 2px 9px; font: 11px var(--sans); cursor: pointer; flex: none;
+  }
+  .hzrestore:hover { color: var(--amber); border-color: rgba(226,165,90,.45); }
+  /* 隐藏行淡 amber 底 (思路同置顶行); # 栏里的恢复按钮是可点交互, 不是 pin-mark 那种静态标记 */
+  #v-ledger tbody tr.hid-row { background: rgba(226,165,90,.05); }
+  #v-ledger tbody tr.hid-row:hover { background: rgba(226,165,90,.12); }
+  .unhidebtn {
+    display: inline-flex; align-items: center; justify-content: center; vertical-align: -2px;
+    width: 18px; height: 18px; padding: 0; flex: none;
+    border: none; background: none; cursor: pointer; color: var(--faint); border-radius: 3px;
+  }
+  .unhidebtn:hover { color: var(--amber); background: var(--amber-soft); }
+  .unhidebtn svg {
+    width: 13px; height: 13px; display: block; fill: none; stroke: currentColor;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  }
+  /* 工具栏「隐藏区」开关: 有隐藏条目才出现 (renderHiddenZone 控制), on = 专区展开中。
+     [hidden] 兜底必写 (同 .pullbtn): 本规则的 display 会盖掉 UA 的 [hidden]{display:none} */
+  .hidebtn[hidden] { display: none; }
+  .hidebtn {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    background: var(--paper-2); color: var(--dim); border: 1px solid var(--hair-2);
+    border-radius: 6px; padding: 5px 12px; font: 12px var(--sans); cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .hidebtn:hover { color: var(--ink); border-color: var(--amber); }
+  .hidebtn.on { color: var(--amber); border-color: rgba(226,165,90,.45); }
+  /* ============ 顶栏: 多选计数 chip (计划 26-10-31-0143) ============ */
+  /* [hidden] 兜底必写 (同 .pullbtn / .hidebtn): 本规则的 display 会盖掉 UA 的 [hidden]{display:none} */
+  .mselchip[hidden] { display: none; }
+  .mselchip {
+    display: inline-flex; align-items: center; gap: 5px; flex: none;
+    background: var(--msel-bg); color: var(--msel-bar); border: 1px solid var(--msel-line);
+    border-radius: 6px; padding: 5px 12px; font: 12px var(--sans); cursor: pointer;
+  }
+  .mselchip b { font-weight: 600; }
+  .mselchip:hover { color: var(--ink); border-color: var(--msel-bar); }
+  .ctxmenu {
+    position: fixed; z-index: 40; min-width: 168px; padding: 5px;
+    background: var(--paper-3); border: 1px solid var(--hair-2); border-radius: 6px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+  .ctxmenu[hidden] { display: none; }
+  .ctxitem {
+    display: block; width: 100%; text-align: left; border: none; background: none;
+    color: var(--ink); font: 12.5px var(--sans); padding: 7px 10px; border-radius: 4px; cursor: pointer;
+  }
+  .ctxitem:hover { background: var(--cyan-soft); color: var(--cyan); }
+  /* 批量菜单计数后缀 (拍板 D12): 「动词 + 灰色 N」—— 用户点动作前就能看到作用面是 N 件 (防误伤) */
+  .ctxitem .n { color: var(--faint); font-size: 11px; margin-left: 7px; }
+
+  /* ============ 视图 A: 详情抽屉 ============ */
+  .drawer {
+    position: fixed; top: 0; right: -430px; width: 420px; height: 100%; z-index: 30;
+    background: var(--paper); border-left: 1px solid var(--hair-2);
+    transition: right .22s cubic-bezier(.16,1,.3,1); display: flex; flex-direction: column;
+    box-shadow: -18px 0 40px rgba(0,0,0,.35);
+  }
+  .drawer.open { right: 0; }
+  .drawer .dhead { padding: 18px 20px 14px; border-bottom: 1px solid var(--hair-2); }
+  .drawer .dhead .form-line { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; flex-wrap: wrap; }
+  .drawer h2 { font-family: var(--disp); font-size: 16.5px; font-weight: 600; line-height: 1.4; margin: 0; }
+  .drawer .dbody { overflow-y: auto; flex: 1; padding: 14px 20px 24px; }
+  .dsec { margin-bottom: 20px; }
+  .dsec .dlabel {
+    font-family: var(--disp); font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid var(--hair);
+  }
+  .kv { display: grid; grid-template-columns: 74px 1fr; gap: 4px 10px; font-size: 12.5px; }
+  .kv .k { color: var(--faint); }
+  .kv .v { color: var(--ink); }
+  .kv .v.mono { font-family: var(--mono); font-size: 11.5px; }
+  .rel { display: block; padding: 6px 9px; border: 1px solid var(--hair); border-radius: 5px; margin-bottom: 5px; text-decoration: none; color: var(--ink); background: var(--paper-2); }
+  .rel:hover { border-color: var(--cyan); background: var(--cyan-soft); }
+  .rel .r1 { display: flex; gap: 7px; align-items: center; }
+  .rel .rt { font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rel .r2 { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 2px; }
+  .rel.rev { border-left: 2px solid var(--amber); }
+  .rel.fwd { border-left: 2px solid var(--cyan); }
+  .rel.same { border-left: 2px solid var(--mut); }
+  .none { color: var(--faint); font-size: 12px; font-style: italic; }
+  .openbtn {
+    display: block; text-align: center; padding: 8px; border: 1px solid var(--cyan);
+    color: var(--cyan); border-radius: 5px; text-decoration: none; font-size: 12.5px; margin-top: 4px;
+  }
+  .openbtn:hover { background: var(--cyan-soft); }
+  .dclose {
+    position: absolute; top: 14px; right: 14px; width: 24px; height: 24px; border: 1px solid var(--hair-2);
+    border-radius: 4px; background: none; color: var(--dim); cursor: pointer; font-size: 12px; line-height: 1;
+    font-family: var(--mono);
+  }
+  .dclose:hover { color: var(--ink); border-color: var(--cyan); }
+
+  /* ============ 视图 B: 控制台 ============ */
+  #v-console {
+    background-image:
+      linear-gradient(rgba(86,200,215,.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(86,200,215,.02) 1px, transparent 1px);
+    background-size: 34px 34px, 34px 34px;
+  }
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 14px 22px 6px; flex: none; }
+  .tile { border: 1px solid var(--hair); background: var(--paper); padding: 12px 14px 11px; position: relative; }
+  .tile .tl { font-family: var(--mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); display: flex; justify-content: space-between; }
+  .tile .tv { font-family: var(--mono); font-size: 26px; font-weight: 600; color: var(--ink); margin: 4px 0 8px; }
+  .tile .tv small { font-size: 11px; color: var(--faint); font-weight: 400; margin-left: 6px; }
+  .segbar { display: flex; height: 5px; gap: 2px; }
+  .segbar i { display: block; }
+  .seglegend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-family: var(--mono); font-size: 9.5px; color: var(--faint); }
+  .seglegend s { text-decoration: none; display: inline-block; width: 7px; height: 7px; margin-right: 4px; vertical-align: -1px; }
+  .deck { flex: 1; display: grid; grid-template-columns: 330px 1fr; gap: 14px; padding: 12px 22px 18px; min-height: 0; }
+  .chan { border: 1px solid var(--hair); background: var(--paper); display: flex; flex-direction: column; min-height: 0; }
+  .chan .chd { padding: 12px 14px 10px; border-bottom: 1px solid var(--hair); flex: none; }
+  .chd .ct { font-family: var(--mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); margin-bottom: 9px; display: flex; justify-content: space-between; }
+  .chd input {
+    width: 100%; background: var(--bg); border: 1px solid var(--hair); color: var(--ink);
+    font: 12px var(--mono); padding: 7px 9px; outline: none;
+  }
+  .chd input:focus { border-color: var(--cyan); }
+  .chlist { overflow-y: auto; flex: 1; }
+  .ch { padding: 8px 14px 7px; border-bottom: 1px solid var(--hair); cursor: pointer; border-left: 2px solid transparent; }
+  .ch:hover { background: var(--paper-2); }
+  .ch.on { background: var(--cyan-soft); border-left-color: var(--cyan); }
+  .ch .c1 { display: flex; align-items: center; gap: 7px; }
+  .ch .ck { font-family: var(--mono); font-size: 11.5px; color: var(--ink); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ch .cdot { width: 5px; height: 5px; border-radius: 50%; flex: none; }
+  .ch .cdot.live { background: var(--cyan); box-shadow: 0 0 5px rgba(86,200,215,.7); }
+  .ch .cdot.done { background: #39434d; }
+  .ch .c2 { display: flex; gap: 9px; margin-top: 3px; font-family: var(--mono); font-size: 9.5px; color: var(--faint); }
+  .ch .c2 b { font-weight: 400; }
+  .scope { border: 1px solid var(--hair); background: var(--paper); min-height: 0; display: flex; flex-direction: column; }
+  .scope .shd { padding: 13px 18px 11px; border-bottom: 1px solid var(--hair); flex: none; display: flex; align-items: baseline; gap: 14px; }
+  .shd .sk { font-family: var(--mono); font-size: 16px; color: var(--cyan); letter-spacing: .02em; word-break: break-all; }
+  .shd .sn { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+  .shd .sl { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+  .scope .sbody { overflow-y: auto; flex: 1; padding: 10px 18px 18px; }
+  .empty { color: var(--faint); font-family: var(--mono); font-size: 11px; padding: 30px 0; text-align: center; letter-spacing: .1em; }
+  .row { border: 1px solid var(--hair); background: var(--paper-2); margin-bottom: 8px; }
+  .row-head { display: flex; align-items: center; gap: 12px; padding: 9px 12px; cursor: pointer; }
+  .row-head:hover { background: rgba(86,200,215,.05); }
+  .row-head .arrow { font-family: var(--mono); color: var(--faint); font-size: 10px; width: 10px; flex: none; transition: transform .15s; display: inline-block; }
+  .row.open .arrow { transform: rotate(90deg); color: var(--cyan); }
+  .row.open { border-color: var(--hair-2); }
+  .rf { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; padding: 2px 7px; border: 1px solid var(--hair-2); flex: none; }
+  .rs { font-family: var(--mono); font-size: 9.5px; padding: 2px 7px; flex: none; letter-spacing: .06em; border-radius: 2px; }
+  /* 控制台状态条: 与台账 chip 同一套三层底色 (文字色由 .st-* 给, 这里只定底)。 */
+  .rs.st-Open { background: rgba(86,200,215,.24); }
+  .rs.st-InProgress { background: rgba(226,165,90,.16); }
+  .rs.st-Done { background: rgba(127,199,154,.14); }
+  .rs.st-Dropped, .rs.st-Superseded { background: transparent; }
+  .row-head .rstamp { font-family: var(--mono); font-size: 10px; color: var(--faint); flex: none; }
+  .row-head .rtitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+  .row-head .rchain { font-family: var(--mono); font-size: 9.5px; color: var(--faint); flex: none; }
+  .row-head .rchain.has { color: var(--amber); }
+  .row-body { display: none; padding: 4px 12px 12px 34px; }
+  .row.open .row-body { display: block; }
+  .rmeta { font-family: var(--mono); font-size: 10.5px; color: var(--dim); display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 8px; }
+  .rsummary { color: var(--dim); font-size: 12px; margin: 2px 0 10px; max-width: 90ch; }
+  .sublabel { font-family: var(--mono); font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); margin: 10px 0 6px; }
+  .refline { display: flex; align-items: center; gap: 9px; padding: 5px 9px; border: 1px solid var(--hair); border-left: 2px solid var(--cyan); background: var(--bg); margin-bottom: 4px; text-decoration: none; color: var(--ink); }
+  .refline.rev { border-left-color: var(--amber); }
+  .refline:hover { border-color: var(--hair-2); background: var(--paper-2); }
+  .refline .rft { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+  .refline .rfs { font-family: var(--mono); font-size: 9.5px; color: var(--faint); flex: none; }
+  .refnone { color: var(--faint); font-family: var(--mono); font-size: 10px; }
+  .openlink {
+    display: inline-block; margin-top: 9px; font-family: var(--mono); font-size: 10.5px; color: var(--cyan);
+    text-decoration: none; border: 1px solid var(--hair-2); padding: 4px 10px;
+  }
+  .openlink:hover { border-color: var(--cyan); background: var(--cyan-soft); }
+
+  /* ============ 视图 C: 卡片墙 ============ */
+  .cwrap { max-width: 1340px; margin: 0 auto; padding: 26px 32px 60px; }
+  .cnote { color: var(--dim); font-size: 13px; max-width: 78ch; margin-bottom: 4px; }
+  .cnote .mono { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 16px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill {
+    border: 1px solid var(--hair); background: var(--paper); color: var(--dim);
+    border-radius: 999px; padding: 4px 13px; font-size: 12px; cursor: pointer; user-select: none;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .pill:hover { color: var(--ink); border-color: var(--faint); }
+  .pill.on { color: var(--green); border-color: rgba(127,199,154,.45); background: var(--green-soft); }
+  .pill.on.f-issue { color: var(--rose); border-color: rgba(199,163,201,.45); background: var(--rose-soft); }
+  .pill.on.f-plan { color: var(--cyan); border-color: rgba(86,200,215,.45); background: var(--cyan-soft); }
+  .pill.on.f-report { color: var(--sand); border-color: rgba(205,185,146,.45); background: rgba(205,185,146,.12); }
+  .pill.on.f-task { color: var(--amber); border-color: rgba(226,165,90,.45); background: var(--amber-soft); }
+  .stat { margin-left: auto; color: var(--faint); font-size: 12px; }
+  .stat b { color: var(--ink); font-weight: 600; }
+  .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-top: 22px; }
+  .tcard {
+    background: var(--paper); border: 1px solid var(--hair); border-radius: 12px;
+    padding: 18px 18px 12px; box-shadow: 0 3px 16px rgba(0,0,0,.18);
+    transition: transform .16s ease, border-color .16s;
+    display: flex; flex-direction: column;
+  }
+  .tcard:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.16); }
+  .tc-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+  .tc-key { font-family: var(--mono); font-size: 13.5px; font-weight: 600; color: var(--ink); word-break: break-all; line-height: 1.45; flex: 1; }
+  .tc-live {
+    flex: none; font-family: var(--disp); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+    padding: 2px 9px; border-radius: 999px; margin-top: 2px;
+  }
+  .tc-live.on { color: var(--green); background: var(--green-soft); }
+  .tc-live.off { color: var(--mut); background: rgba(118,130,141,.1); }
+  .tc-forms { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+  .fchip { font-size: 11px; padding: 1px 9px; border-radius: 999px; }
+  .fchip.fc-issue { color: var(--rose); background: var(--rose-soft); }
+  .fchip.fc-plan { color: var(--cyan); background: var(--cyan-soft); }
+  .fchip.fc-report { color: var(--sand); background: rgba(205,185,146,.12); }
+  .fchip.fc-task { color: var(--amber); background: var(--amber-soft); }
+  .items { margin-top: 6px; display: flex; flex-direction: column; }
+  .it {
+    display: flex; align-items: baseline; gap: 9px; padding: 6px 8px; margin: 0 -8px;
+    border-radius: 8px; text-decoration: none; color: var(--ink);
+  }
+  .it:hover { background: var(--paper-3); }
+  .it .if { flex: none; width: 30px; font-size: 10.5px; text-align: center; }
+  .it .it-t { flex: 1; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .it .it-s { flex: none; font-size: 10.5px; color: var(--faint); }
+  .it.st-Open .it-s, .it.st-none .it-s { color: var(--green); }
+  .it.st-InProgress .it-s { color: var(--sand); }
+  .more {
+    border: none; background: none; color: var(--faint); font: 12px var(--sans);
+    padding: 7px 8px; margin: 2px -8px 0; text-align: left; cursor: pointer; border-radius: 8px;
+  }
+  .more:hover { color: var(--green); background: var(--paper-3); }
+  .empty-wall { grid-column: 1 / -1; text-align: center; color: var(--faint); padding: 70px 0; font-size: 13px; }
+
+  /* ============ 错误 / 提示浮层 ============ */
+  .overlay {
+    position: fixed; inset: 0; z-index: 50; background: rgba(10,13,16,.82);
+    display: flex; align-items: center; justify-content: center; padding: 30px;
+  }
+  .overlay[hidden] { display: none; }
+  .obox { max-width: 560px; background: var(--paper); border: 1px solid var(--hair-2); border-left: 3px solid var(--amber); border-radius: 8px; padding: 20px 24px; }
+  .obox .ot { font-family: var(--disp); font-size: 15px; font-weight: 600; margin-bottom: 8px; color: var(--amber); }
+  .obox .om { color: var(--ink); font-size: 13px; margin-bottom: 8px; }
+  .obox .oh { color: var(--dim); font-size: 12px; }
+  .obox .oh code, .obox .om code { font-family: var(--mono); font-size: 11px; background: var(--paper-2); border: 1px solid var(--hair); border-radius: 3px; padding: 1px 5px; color: var(--cyan); }
+
+  @media (max-width: 1100px) {
+    #v-ledger.on { grid-template-columns: 190px 1fr; }
+    td.topic { width: 130px; }
+    .deck { grid-template-columns: 1fr; }
+    .chan { max-height: 300px; }
+    .strip { grid-template-columns: repeat(2, 1fr); }
+  }
+  /* ============ 关系图 (组件在 nav_graph.js; 这里只放外观) ============
+     零依赖手写 SVG: 壳的守阵禁一切 http(s) 资源引用, 静态导出件还要 file:// 能用 —— 引图形库两条一起破。
+     配色不走 CSS 令牌而是组件内的 hex: SVG presentation attribute 不认 var() (只能写 inline style),
+     逐个属性写 style 反而更难读, 所以颜色单点在 nav_graph.js 顶部。 */
+  .mg { font-size: 11.5px; }
+  .mgbar { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; flex-wrap: wrap; }
+  .mgscope, .mgact {
+    background: var(--paper-3); color: var(--dim); border: 1px solid var(--hair-2); border-radius: 5px;
+    padding: 2px 8px; font-size: 11px; cursor: pointer; font-family: var(--sans);
+  }
+  .mgscope:hover, .mgact:hover { border-color: var(--cyan); color: var(--cyan); }
+  .mgscope.on, .mgact.on { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-soft); }
+  .mghint { color: var(--faint); font-size: 10.5px; margin-left: 2px; }
+  .mgcanvas {
+    background: radial-gradient(65% 65% at 50% 45%, #141a21, var(--bg));
+    border: 1px solid var(--hair); border-radius: 6px; overflow: hidden;
+  }
+  .mgcanvas svg { display: block; margin: 0 auto; }
+  .mglegend { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 6px; color: var(--faint); font-size: 10px; font-family: var(--mono); }
+  .mglegend span { display: inline-flex; align-items: center; gap: 4px; }
+  .mglegend i { width: 8px; height: 8px; border-radius: 50%; display: block; }
+  .mglegend i.hollow { background: none; border: 1px dashed var(--faint); }
+  .mglegend i.line { width: 16px; height: 0; border-radius: 0; border-top: 2px solid var(--cyan); }
+  .mglegend i.line.dash { border-top-style: dashed; border-color: var(--amber); }
+  .mgtip {
+    position: fixed; z-index: 60; pointer-events: none; background: #0b0e11; border: 1px solid var(--hair-2);
+    border-radius: 7px; padding: 6px 9px; max-width: 300px; opacity: 0; transition: opacity .1s;
+    box-shadow: 0 10px 26px rgba(0,0,0,.55); font-family: var(--sans);
+  }
+  .mgtip b { display: block; font-size: 11.5px; font-weight: 600; margin-bottom: 1px; }
+  .mgtip .p { font-family: var(--mono); font-size: 10px; color: var(--faint); word-break: break-all; }
+  .mgtip .m { font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+  /* 全屏层: 抽屉只有 420px, 全库泳道在那里没法读 —— 展开后同一组件换大画布渲染 */
+  .gstage { position: fixed; inset: 0; z-index: 70; background: rgba(8,10,12,.86); display: flex; align-items: center; justify-content: center; }
+  .gstage[hidden] { display: none; }
+  .gsbox {
+    width: min(1440px, 94vw); height: min(920px, 90vh); background: var(--paper);
+    border: 1px solid var(--hair-2); border-radius: 10px; display: flex; flex-direction: column;
+    box-shadow: 0 30px 80px rgba(0,0,0,.6);
+  }
+  .gshead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--hair-2); }
+  .gshead b { font-family: var(--disp); font-size: 13px; }
+  .gshead .t { color: var(--dim); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gshead button { background: var(--paper-3); color: var(--ink); border: 1px solid var(--hair-2); border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+  .gshead button:hover { border-color: var(--cyan); color: var(--cyan); }
+  .gsbody { flex: 1; overflow: auto; padding: 12px 16px 20px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">MB<span class="sep">//</span>NAV <small>memory-bank 四工位导航</small></div>
+  <div class="gsearch">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="gq" type="text" placeholder="搜索标题 / 专题 / 摘要…">
+    <button class="gclear" id="gclear" hidden title="清空搜索词" aria-label="清空搜索词">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg>
+    </button>
+    <!-- 搜索被排除匹配项提示 (task 26-11-06-memory-bank-kb-nav-search-ghint):
+         有被勾选/隐藏挡住的匹配项才现算浮现, renderGhint 单点渲染 -->
+    <div class="ghint" id="ghint" hidden></div>
+  </div>
+  <div class="seg" id="seg">
+    <button data-view="ledger" class="on">台账</button>
+    <button data-view="console">控制台</button>
+    <button data-view="cards">卡片墙</button>
+  </div>
+  <!-- 多选计数 chip (计划 26-10-31-0143): 有选中才出现 (syncMultiChip 控制), 点击清空 (Esc 同款) -->
+  <button class="mselchip" id="mselChip" hidden title="清空多选 (Esc 亦可)">已选 <b>0</b> 件</button>
+  <div class="readout" id="readout">载入中…</div>
+  <!-- 拉取: 仅快进同步本仓库 (POST /api/pull); 静态导出 / file:// 下无服务端, 由 boot() 隐藏 -->
+  <button class="pullbtn" id="pullBtn" title="仅快进同步本仓库 (拉取主线远端最新, 不自动 rebase / merge)">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    <span id="pullLabel">拉取</span>
+  </button>
+</header>
+
+<div class="views">
+
+  <!-- 视图 A: 台账 (过滤轨 + 排序表格 + 详情抽屉) -->
+  <div class="view on" id="v-ledger">
+    <aside>
+      <div class="fgroup" id="fgForm"><div class="fl">形态</div></div>
+      <div class="fgroup" id="fgStatus"><div class="fl">状态</div></div>
+      <div class="fgroup" id="fgType"><div class="fl">Issue 类型</div></div>
+      <div class="fgroup" id="fgLive"><div class="fl">关联</div></div>
+      <div class="fgroup src-note">
+        <div class="fl">数据源</div>
+        <div class="note">
+          扫描器 <span class="mono">gen_doc_map.collect()</span><br>
+          状态单点 = 各件 <span class="mono">doc-*</span> / <span class="mono">issue-*</span> meta<br>
+          关联 = <span class="mono">doc-topic</span> + <span class="mono">doc-refs</span> 认领链
+        </div>
+      </div>
+    </aside>
+    <main>
+      <div class="toolbar">
+        <div class="sort">排序
+          <select id="sort">
+            <option value="updated">更新时间 新-旧</option>
+            <option value="stamp">创建时间 新-旧</option>
+            <option value="form">形态 issue-task</option>
+            <option value="status">状态 活跃-完结</option>
+            <option value="topic">专题 A-Z</option>
+          </select>
+        </div>
+        <div class="count" id="aCount"></div>
+        <div class="hint">点击行看关联 · 链 = doc-refs 声明数</div>
+        <!-- 隐藏区开关: 有隐藏条目才出现 (renderHiddenZone 控制 hidden 属性), 点击展开 / 收起底部隐藏区 -->
+        <button class="hidebtn" id="hidBtn" hidden title="展开 / 收起隐藏区 (隐藏的条目只在这里可见)">隐藏区</button>
+      </div>
+      <div class="pinzone" id="pinZone" hidden></div>
+      <div class="ledgerwrap">
+        <!-- 列宽/列序单点 (守阵 test_pin_zone_reuses_ledger_columns): 全壳只有这一处表头;
+             置顶专区在 renderPinZone 里**克隆本 thead**, 两表逐栏对齐靠它 —— 别在别处再写一份列定义 -->
+        <table>
+          <thead><tr>
+            <th class="num" style="width:34px">#</th><th style="width:96px">时间戳</th><th style="width:46px">形态</th>
+            <th style="width:84px">状态</th><th style="width:72px">类型</th><th>标题</th><th style="width:200px">专题</th><th style="width:54px; text-align:right">链</th>
+          </tr></thead>
+          <tbody id="aRows"></tbody>
+        </table>
+      </div>
+      <!-- 隐藏区: 默认折叠, 点 #hidBtn 展开; 列定义克隆主表 thead + 行复用 ledgerCells (同 pin 专区口径) -->
+      <div class="hidzone" id="hidZone" hidden></div>
+    </main>
+  </div>
+
+  <!-- 视图 B: 控制台 (四工位统计带 + 专题频道 + readout 行内展开) -->
+  <section class="view" id="v-console">
+    <div class="strip" id="strip"></div>
+    <div class="deck">
+      <div class="chan">
+        <div class="chd">
+          <div class="ct"><span>TOPIC CHANNELS</span><span id="chCount"></span></div>
+          <input id="cq" type="text" placeholder="过滤专题键… (Esc 清空)">
+        </div>
+        <div class="chlist" id="chlist"></div>
+      </div>
+      <div class="scope">
+        <div class="shd" id="shd"></div>
+        <div class="sbody" id="sbody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 视图 C: 卡片墙 (专题卡片 + 药丸过滤 + 还有 n 件展开) -->
+  <section class="view" id="v-cards">
+    <div class="cwrap">
+      <div class="cnote">
+        四工位材料按 <span class="mono">doc-topic</span> 归组 · 状态读自各件 meta 单点 · 认领链来自 <span class="mono">doc-refs</span>。
+        点击条目直达原文;「还有 n 件」展开同专题其余材料。
+      </div>
+      <div class="controls">
+        <div class="pills" id="cFormPills"></div>
+        <div class="pills" id="cStatusPills"></div>
+        <div class="pill on" id="cLiveOnly">仅活跃专题</div>
+        <div class="stat" id="cStat"></div>
+      </div>
+      <div class="wall" id="wall"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- 详情抽屉 (视图 A) -->
+<div class="drawer" id="drawer">
+  <button class="dclose" id="dclose" title="关闭">x</button>
+  <div class="dhead">
+    <div class="form-line" id="dFormLine"></div>
+    <h2 id="dTitle"></h2>
+  </div>
+  <div class="dbody" id="dBody"></div>
+</div>
+
+<!-- 错误 / 提示浮层 -->
+<div class="overlay" id="overlay" hidden>
+  <div class="obox">
+    <div class="ot" id="oTitle">数据不可用</div>
+    <div class="om" id="oMsg"></div>
+    <div class="oh" id="oHint"></div>
+  </div>
+</div>
+
+<!-- 右键菜单 (台账行): 跟随光标, 点空白 / Esc / 滚动 / 切视图即收 -->
+<div class="ctxmenu" id="ctxMenu" hidden></div>
+
+<!-- 全屏关系图层: 抽屉 420px 放不下全库泳道, 展开后同一组件换大画布 (Esc / 关闭按钮退出) -->
+<div class="gstage" id="gStage" hidden>
+  <div class="gsbox">
+    <div class="gshead">
+      <b>RELATION GRAPH</b><span class="t" id="gsTitle"></span>
+      <button id="gsClose" type="button" title="关闭 (Esc)">关闭</button>
+    </div>
+    <div class="gsbody" id="gsHost"></div>
+  </div>
+</div>
+
+<!-- 数据注入位: --gen-static 把下方唯一的占位字面量替换为 JSON (application/json 块不执行,
+     http 模式壳里是占位符原样, 静态件里是可 JSON.parse 的数据) -->
+<script id="nav-data" type="application/json">__DATA__</script>
+
+<!-- 关系图组件 (2026-11-07 拆分): 服务模式由 /nav_graph.js 路由发货; --gen-static 时这一行被
+     gen_static 替换成该文件的内联内容 —— 静态导出件必须仍是单文件, file:// 拉不到同级 js。 -->
+<script src="nav_graph.js"></script>
+
+<script>
+"use strict";
+
+/* ---- 数据注入: nav-data 块被 --gen-static 替换为 JSON; 拼接写法避免文件里出现第二个占位字面量 ---- */
+const TOKEN = "__" + "DATA" + "__";
+const INLINE = (document.getElementById("nav-data").textContent || "").trim();
+const STATIC_MODE = INLINE !== "" && INLINE !== TOKEN;
+const MB = location.protocol === "file:" ? "../../memory-bank/" : "/memory-bank/";
+const POLL_MS = 30000;
+
+const FORM_CN = { issue: "问题", plan: "计划", report: "报告", task: "档案" };
+const FORM_ORD = ["issue", "plan", "report", "task"];
+const KNOWN_ST = ["Open", "In Progress", "Done", "Dropped", "Superseded"];
+const NO_ST = "(无状态)";
+const NO_KEY = "(无主键)";
+const ST_TXT = { "Open": "待办", "In Progress": "进行", "Done": "完结", "Dropped": "弃置", "Superseded": "被代" };
+const TYPES = ["bug", "perf", "docs", "test", "refactor", "feat", "chore", "question"];
+const ACTIVE_ST = new Set(["Open", "In Progress"]);
+const VIEW_KEY = "mb-nav-view";
+const PINS_KEY = "mb-nav-pins";
+const PIN_COLLAPSE_KEY = "mb-nav-pin-collapsed";   // 置顶区折叠态 (纯前端偏好, 同 PINS_KEY): "1" = 收起
+const HIDDEN_KEY = "mb-nav-hidden";   // 隐藏条目 (纯前端偏好, 同 pin): 隐藏区数据落点
+const FILTERS_KEY = "mb-nav-filters";   // 筛选器 / 选择类状态 (纯前端偏好, 刷新后不丢)
+/* 排序键 (2026-11-10 用户要求加更新时间序): updated = doc-updated (数据层 enrich, md 档案回落
+   stamp), 默认档; stamp = 条目戳 (doc-added / issue-stamp / 文件名前缀) 即创建时间。 */
+const SORT_KEYS = ["updated", "stamp", "form", "status", "topic"];
+const PULL_HEADER = "X-Nav-Action";   // 拉取的 CSRF 自定义头: 跨站 fetch 带它会先发 OPTIONS 预检, 服务不答即被浏览器拦下
+/* 图钉图标 (内联 SVG, 无外链图标库): 空心 = 未 pin; 实心由 .pinbtn.on 的 CSS fill 控制 */
+const PIN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+/* 恢复 (unhide) 图标 = 逆时针回转, 内联 SVG 同图钉口径 */
+const UNHIDE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+/* 折叠箭头 (置顶区标题行): 朝下 = 展开; 收起态靠 CSS 旋转 -90 度朝右 (状态可见) */
+const CHEV_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+
+let DATA = null;
+let byLink = new Map();      // link -> item
+let groups = new Map();      // topicKey -> items[]
+let topicInfo = new Map();   // topicKey -> {topic, live, forms}
+let statusList = KNOWN_ST.slice();
+let statusSeeded = new Set();   // 已自动入选过的状态值台账 —— 见 derive(): 只自动入选一次
+
+/* 全局状态 (跨视图共享, 30s 轮询重渲染时保持) */
+const S = {
+  view: "ledger",
+  q: "",
+  /* A 台账 */
+  aForms: new Set(FORM_ORD), aStatuses: new Set(KNOWN_ST), aTypes: new Set(TYPES),
+  aLive: false, aChain: false, sort: "updated", sel: null,
+  /* 多选 (Ctrl/Shift 手势, 计划 26-10-31-0143): 纯会话态不落盘 (同 sel 口径) —— multi = link
+     数组 (入栈序), multiAnchor = Shift 扩段锚点 (普通/Ctrl 点击落锚, Shift 不动锚点, 可从同一
+     起点多次扩段 —— auto-qb selection.js 法则 2)。derive() 绝不触碰 (同 pin 坑型, 否则 30s
+     轮询会洗掉选区); 切视图即清空 (拍板 D5, setView)。 */
+  multi: [], multiAnchor: null,
+  /* 置顶 (pin): 纯前端偏好, 数组顺序即置顶序 (最近 pin 的在前)。只在 boot() 装载一次,
+     derive() 永不触碰 —— 否则 30s 轮询会把 pin 洗掉 (坑见 pitfalls/web-ui/poll-reseed-filter.md)。 */
+  pins: [],
+  /* 置顶区折叠态: 纯前端偏好, 落 PIN_COLLAPSE_KEY (同 PINS_KEY 口径) —— 只在 boot() 装载一次,
+     derive() 不碰; 收起时只藏表格主体, 标题行与展开入口始终可见 (2026-11-03 用户要求)。 */
+  pinCollapsed: false,
+  /* 隐藏 (hide): 纯前端偏好, 同 pin —— 只在 boot() 装载一次, derive() 只读 (把隐藏条目挡在
+     各视图之外) 绝不写, 否则 30s 轮询会洗掉用户的隐藏 (坑见 pitfalls/web-ui/poll-reseed-filter.md)。
+     showHidden = 隐藏区展开开关, 会话态不落盘 (需求口径: 点按钮才能查看)。 */
+  hidden: [], showHidden: false,
+  /* 关系图档位 (纯会话态, 不落 localStorage —— 同 sel/multi 口径): 抽屉每 30s 轮询都会重挂组件,
+     状态存在组件闭包里必然被洗回默认, 所以提到壳侧回填 (坑型同 pitfalls/web-ui/poll-reseed-filter.md) */
+  graph: { scope: "local", steps: 1, showFrag: false },
+  /* B 控制台 */
+  selTopic: null, cq: "", openRows: new Set(),
+  /* C 卡片墙 */
+  cForms: new Set(FORM_ORD), cStatuses: new Set(KNOWN_ST), cLive: true, expanded: new Set(),
+};
+
+/* ---- 工具 ---- */
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = s == null ? "" : String(s);
+  return d.innerHTML.replace(/"/g, "&quot;");
+}
+const stOf = i => i.status || NO_ST;
+const stCls = s => ({ "Open": "st-Open", "In Progress": "st-InProgress", "Done": "st-Done", "Dropped": "st-Dropped", "Superseded": "st-Superseded" })[s] || "st-none";
+const stBar = s => ({ "Open": "c-open", "In Progress": "c-ip", "Done": "c-done", "Dropped": "c-drop", "Superseded": "c-sup" })[s] || "c-none";
+const refKey = r => String(r).replace(/^memory-bank\//, "");
+const $ = id => document.getElementById(id);
+
+/* ---- 置顶 (pin): 纯前端偏好, 落 localStorage (与 VIEW_KEY 同款); 读写一律 try/catch 兜底 ---- */
+function loadPins() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(PINS_KEY) || "[]");
+    return Array.isArray(arr) ? arr.filter(x => typeof x === "string") : [];
+  } catch (e) { return []; }
+}
+function savePins() { try { localStorage.setItem(PINS_KEY, JSON.stringify(S.pins)); } catch (e) { /* file:// 下静默降级为会话内存态 */ } }
+/* 置顶区折叠态: 与 PINS_KEY 同款纯前端偏好, 读写一律 try/catch 兜底 (file:// 下降级为会话内存态);
+   装载点全壳唯一 (boot), derive 不碰 —— 否则 30s 轮询会把用户收起的置顶区又展开 */
+function loadPinCollapsed() {
+  try { return localStorage.getItem(PIN_COLLAPSE_KEY) === "1"; } catch (e) { return false; }
+}
+function savePinCollapsed() { try { localStorage.setItem(PIN_COLLAPSE_KEY, S.pinCollapsed ? "1" : "0"); } catch (e) { /* 静默降级 */ } }
+/* 折叠应用单点: 渲染末尾与按钮点击共用; 只动类 / aria-expanded / [hidden], **不整表重渲染**
+   —— 重建 innerHTML 会把焦点从按钮丢回 body, 键盘用户点完就掉了焦点; 箭头方向由 .collapsed 类驱动 */
+function applyPinCollapse() {
+  const zone = $("pinZone"), btn = $("pzToggle"), body = $("pzBody");
+  if (!zone) return;
+  zone.classList.toggle("collapsed", !!S.pinCollapsed);
+  if (btn) btn.setAttribute("aria-expanded", S.pinCollapsed ? "false" : "true");
+  if (body) body.hidden = !!S.pinCollapsed;
+}
+function togglePinCollapsed() {
+  S.pinCollapsed = !S.pinCollapsed;
+  savePinCollapsed();
+  applyPinCollapse();
+}
+const isPinned = link => S.pins.includes(link);
+function togglePin(link) {
+  const at = S.pins.indexOf(link);
+  if (at >= 0) S.pins.splice(at, 1); else S.pins.unshift(link);
+  savePins();
+  renderLedger();
+}
+/* 专区条目: 按置顶序取 DATA 中仍存在者, 过滤失效 link (件被删 / 改名) 与重复;
+   隐藏中的件不进置顶专区 —— 「隐藏」= 从所有内容视图退场, 恢复后 pin 关系原样回来 */
+function pinZoneItems() {
+  const seen = new Set();
+  return S.pins.map(l => byLink.get(l)).filter(x => {
+    if (!x || seen.has(x.link) || isHidden(x.link)) return false;
+    seen.add(x.link);
+    return true;
+  });
+}
+
+/* ---- 隐藏 (hide): 纯前端偏好, 落 localStorage (与 PINS_KEY 同款); 读写一律 try/catch 兜底。
+   隐藏条目从三视图全部退场, 只进台账底部的隐藏区 (点工具栏按钮展开), 可随时恢复。 ---- */
+function loadHidden() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]");
+    return Array.isArray(arr) ? arr.filter(x => typeof x === "string") : [];
+  } catch (e) { return []; }
+}
+function saveHidden() { try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(S.hidden)); } catch (e) { /* file:// 下静默降级为会话内存态 */ } }
+const isHidden = link => S.hidden.includes(link);
+function toggleHide(link) {
+  const at = S.hidden.indexOf(link);
+  if (at >= 0) S.hidden.splice(at, 1); else S.hidden.push(link);
+  saveHidden();
+  renderLedger();
+}
+/* 隐藏区条目: 按隐藏先后取 DATA 中仍存在者, 过滤失效 link 与重复 (口径同 pinZoneItems) */
+function hiddenZoneItems() {
+  const seen = new Set();
+  return S.hidden.map(l => byLink.get(l)).filter(x => {
+    if (!x || seen.has(x.link)) return false;
+    seen.add(x.link);
+    return true;
+  });
+}
+
+/* ---- 多选 (计划 26-10-31-0143, 拍板 D1-D13): 主表 + 置顶专区 Ctrl/Shift 手势, link 为键 ----
+   交互口径照 auto-qb webui selection.js: 普通单击不选中不清多选 (拍板 D3); Ctrl = 切换;
+   Shift = 锚点->该行在 aFiltered 可见序里的区间**并入** (去重合并, 锚点不动, 可从同一起点
+   多次扩段)。选区跨区同亮 (置顶件双向显示, 同 link 两处行都挂 msel)。 */
+const isMultiSel = link => S.multi.includes(link);
+const multiSet = () => new Set(S.multi);
+
+/* chip 单点同步: 显隐 + 计数 —— S.multi 的每个写入口都调它, chip 不在渲染循环里自己算 */
+function syncMultiChip() {
+  const chip = $("mselChip");
+  if (!chip) return;
+  chip.hidden = !S.multi.length;
+  const b = chip.querySelector("b");
+  if (b) b.textContent = String(S.multi.length);
+}
+
+function toggleMulti(link) {
+  const at = S.multi.indexOf(link);
+  if (at >= 0) S.multi.splice(at, 1); else S.multi.unshift(link);
+  S.multiAnchor = link;   /* 普通/Ctrl 点击落锚点; Shift 手势不写 (法则 2) */
+  syncMultiChip();
+  renderLedger();
+}
+
+/* Shift 扩段: 锚点失效兜底 = 被点行自身 (auto-qb _selAnchor 兜底链同款), 区间并入 */
+function shiftMulti(link) {
+  const list = aFiltered().map(i => i.link);
+  let a = list.indexOf(S.multiAnchor);
+  if (a < 0) a = list.indexOf(link);
+  const b = list.indexOf(link);
+  if (a < 0 || b < 0) return;
+  const [lo, hi] = a <= b ? [a, b] : [b, a];
+  const set = new Set(S.multi);
+  for (const l of list.slice(lo, hi + 1)) set.add(l);
+  S.multi = [...set];
+  syncMultiChip();
+  renderLedger();
+}
+
+/* 清空多选: Esc 退栈末档 / 顶栏 chip 点击 (拍板 D9/D10)。切视图清空不走这里 (setView 内联,
+   那时 S.view 已换、renderLedger 会渲染错视图)。 */
+function clearMulti() {
+  S.multi = [];
+  S.multiAnchor = null;
+  syncMultiChip();
+  renderLedger();
+}
+
+/* ---- 批量动作 (计划 26-10-31-0143): 与单条 togglePin/toggleHide 同一条链路, 幂等 ——
+   已达态成员零副作用 (拍板 D6 / 黄金法则 1); 文案随成员态动态取反向 (openCtx 内算)。 ---- */
+function togglePinBatch(links) {
+  const unpin = links.every(isPinned);   /* 全已置顶 -> 批量取消; 否则把未置顶的全置上 */
+  if (unpin) {
+    S.pins = S.pins.filter(l => !links.includes(l));
+  } else {
+    const fresh = links.filter(l => !isPinned(l));
+    for (let k = fresh.length - 1; k >= 0; k--) S.pins.unshift(fresh[k]);   /* 逆序 unshift = 保持 links 序 */
+  }
+  savePins();
+  renderLedger();
+}
+function toggleHideBatch(links) {
+  const unhide = links.every(isHidden);
+  if (unhide) {
+    S.hidden = S.hidden.filter(l => !links.includes(l));
+  } else {
+    for (const l of links) if (!isHidden(l)) S.hidden.push(l);
+  }
+  saveHidden();
+  /* 批量隐藏后把隐掉的 link 从选区剪掉 (拍板 D5 的边界情形: 隐藏件从所有内容视图退场,
+     留在选区里会让下一次批量菜单悄悄含不可见行); 批量恢复不剪 (行回来了)。 */
+  if (!unhide) {
+    S.multi = S.multi.filter(l => !isHidden(l));
+    syncMultiChip();
+  }
+  renderLedger();
+}
+
+/* ---- 筛选器持久化 (2026-10-05 用户报「刷新即重置」): 与 VIEW_KEY / PINS_KEY 同款纯前端偏好,
+   只存筛选 / 选择类**用户意图**, 不存 DATA 派生物; 读写一律 try/catch 兜底 (file:// 下静默降级为会话内存态)。
+   装载点全壳唯一 (boot 里 restoreFilters 一次) —— derive() 绝不碰, 否则 30s 轮询会把用户改的筛选洗掉
+   (与 pin 同源, 见 pitfalls/web-ui/poll-reseed-filter.md)。 */
+function pickStrings(v, allow) {
+  if (!Array.isArray(v)) return null;
+  return v.filter(x => typeof x === "string" && (!allow || allow.includes(x)));
+}
+function saveFilters() {
+  try {
+    localStorage.setItem(FILTERS_KEY, JSON.stringify({
+      q: S.q,
+      aForms: [...S.aForms], aStatuses: [...S.aStatuses], aTypes: [...S.aTypes],
+      aLive: S.aLive, aChain: S.aChain, sort: S.sort,
+      selTopic: S.selTopic, cq: S.cq, openRows: [...S.openRows],
+      cForms: [...S.cForms], cStatuses: [...S.cStatuses], cLive: S.cLive, expanded: [...S.expanded],
+      statusSeeded: [...statusSeeded],
+    }));
+  } catch (e) { /* file:// 下静默降级为会话内存态 */ }
+}
+function loadFilters() {
+  try {
+    const o = JSON.parse(localStorage.getItem(FILTERS_KEY) || "null");
+    return o && typeof o === "object" ? o : null;
+  } catch (e) { return null; }
+}
+/* 还原必须对 schema 校验 (坑 pitfalls/web-ui/ui-location-persist.md): 集合项只收白名单内的值,
+   空的选中集回落默认 (UI 不变式: 至少留一项, 否则列表整片空); 状态值是数据派生的动态值, 不做白名单。
+   statusSeeded 先并入 KNOWN_ST —— 否则首轮 derive() 会把用户取消过的已知状态又 add 回来。 */
+function restoreFilters() {
+  statusSeeded = new Set(KNOWN_ST);
+  const o = loadFilters();
+  if (!o) return;
+  if (typeof o.q === "string") S.q = o.q;
+  const af = pickStrings(o.aForms, FORM_ORD); if (af && af.length) S.aForms = new Set(af);
+  const at = pickStrings(o.aTypes, TYPES); if (at && at.length) S.aTypes = new Set(at);
+  const as = pickStrings(o.aStatuses); if (as && as.length) S.aStatuses = new Set(as);
+  const cf = pickStrings(o.cForms, FORM_ORD); if (cf && cf.length) S.cForms = new Set(cf);
+  const cs = pickStrings(o.cStatuses); if (cs && cs.length) S.cStatuses = new Set(cs);
+  if (typeof o.aLive === "boolean") S.aLive = o.aLive;
+  if (typeof o.aChain === "boolean") S.aChain = o.aChain;
+  if (typeof o.cLive === "boolean") S.cLive = o.cLive;
+  if (SORT_KEYS.includes(o.sort)) S.sort = o.sort;
+  if (typeof o.selTopic === "string" || o.selTopic === null) S.selTopic = o.selTopic;
+  if (typeof o.cq === "string") S.cq = o.cq;
+  const or = pickStrings(o.openRows); if (or) S.openRows = new Set(or);
+  const ex = pickStrings(o.expanded); if (ex) S.expanded = new Set(ex);
+  const ss = pickStrings(o.statusSeeded); if (ss) for (const s of ss) statusSeeded.add(s);
+}
+
+/* ---- 数据派生 (每次 DATA 更新后重算; 过滤/展开状态保留在 S 里) ---- */
+function derive() {
+  byLink = new Map(DATA.items.map(i => [i.link, i]));
+  groups = new Map();
+  for (const i of DATA.items) {
+    /* 隐藏条目不进分组 → 控制台频道 / 卡片墙 / 同专题列表自动退场 (只读 S.hidden, 绝不写) */
+    if (isHidden(i.link)) continue;
+    const k = i.topic || NO_KEY;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(i);
+  }
+  topicInfo = new Map(DATA.topics.map(t => [t.topic, t]));
+  const seen = new Set(DATA.items.map(i => stOf(i)));
+  for (const s of seen) {
+    if (!statusList.includes(s)) statusList.push(s);
+    /* 状态值不定长 —— 数据里新冒出来的状态要自动入选, 否则带它的条目会静默消失。
+       但只自动入选**一次**(statusSeeded 记账): 每轮 30s 轮询都 add 一遍会把用户刚取消的
+       状态筛选又加回来, 表现就是「状态筛选器隔一会儿自己重置」(2026-10-04 用户报)。
+       形态 / issue 类型的候选是定长常量数组, 没有这条派生逻辑, 所以不受影响。 */
+    if (statusSeeded.has(s)) continue;
+    statusSeeded.add(s);
+    S.aStatuses.add(s);
+    S.cStatuses.add(s);
+  }
+}
+function liveOf(key) { const t = topicInfo.get(key); return t ? !!t.live : false; }
+
+/* ---- 顶栏 / 视图切换 ---- */
+function loadView() {
+  try { const v = localStorage.getItem(VIEW_KEY); return ["ledger", "console", "cards"].includes(v) ? v : "ledger"; }
+  catch (e) { return "ledger"; }
+}
+function saveView(v) { try { localStorage.setItem(VIEW_KEY, v); } catch (e) { /* file:// 下静默降级 */ } }
+function setView(v) {
+  S.view = v;
+  saveView(v);
+  for (const b of document.querySelectorAll("#seg button")) b.classList.toggle("on", b.dataset.view === v);
+  for (const id of ["v-ledger", "v-console", "v-cards"]) $(id).classList.toggle("on", id === "v-" + v);
+  closeCtx();
+  /* 切视图清空多选 (拍板 D5): 避免用户在控制台 / 卡片墙里残留看不见的选区 —— 这里不调
+     clearMulti (它按台账视图渲染), S.view 已换, 只清状态 + 同步 chip, 靠 renderCurrent 重画。 */
+  if (S.multi.length) { S.multi = []; S.multiAnchor = null; syncMultiChip(); }
+  renderCurrent();
+}
+function renderCurrent() {
+  if (!DATA) return;
+  if (S.view === "ledger") renderLedger();
+  else if (S.view === "console") renderConsole();
+  else renderCards();
+}
+function updateTopbar() {
+  const live = DATA.topics.filter(t => t.live).length;
+  const nHid = hiddenZoneItems().length;
+  $("readout").innerHTML =
+    esc(DATA.stamp || "--") + " · <b>" + (DATA.items.length - nHid) + "</b> 件 · <b>" +
+    groups.size + "</b> 专题 · <b>" + live + "</b> 活跃" +
+    (nHid ? ' · 隐藏 <b>' + nHid + "</b>" : "");
+}
+
+/* ---- 错误浮层 ---- */
+function showError(title, msg, hint) {
+  $("oTitle").textContent = title;
+  $("oMsg").innerHTML = msg;
+  $("oHint").innerHTML = hint || "";
+  $("overlay").hidden = false;
+}
+function hideError() { $("overlay").hidden = true; }
+
+/* ============================================================
+   视图 A: 台账
+   ============================================================ */
+function toggleSet(set, v) {
+  if (set.has(v)) { if (set.size === 1) return false; set.delete(v); } else set.add(v);
+  return true;
+}
+function buildFilterRows(groupId, entries, sw, isActive, onToggle) {
+  const box = $(groupId);
+  for (const [val, label, ct] of entries) {
+    const row = document.createElement("div");
+    row.className = "frow" + (isActive(val) ? " on" : "") + (sw ? " sw" : "");
+    row.innerHTML = '<span class="box"></span><span class="nm">' + label + '</span><span class="ct">' + ct + "</span>";
+    row.onclick = () => { onToggle(val); row.classList.toggle("on"); };
+    box.appendChild(row);
+  }
+}
+
+const FORM_ORD_N = { issue: 0, plan: 1, report: 2, task: 3 };
+const ST_ORD_N = { "In Progress": 0, "Open": 1, "Done": 2, "Dropped": 3, "Superseded": 4 };
+
+/* 搜索索引单点 (2026-11-03): 标题 / 专题 / issue 摘要 + 文件路径两种形态 —— link 本身就是 mb 内
+   相对路径 (已含 basename), 再补 "memory-bank/<link>" 这一仓库根相对形态; 正文不入索引 (体积口径)。
+   匹配统一小写并归一反斜杠, Windows 粘来的路径也能命中。台账 / 卡片墙 / 控制台频道的过滤共用本函数。 */
+function navSearchText(i) {
+  const link = (i.link || "").replace(/\\/g, "/");
+  return (i.title + " " + (i.topic || "") + " " + (i["issue-summary"] || "") + " " + link + " memory-bank/" + link).toLowerCase();
+}
+function navSearchQuery(q) {
+  return q.toLowerCase().replace(/\\/g, "/");
+}
+
+/* 搜索被排除匹配项提示 (2026-11-06, task 26-11-06-memory-bank-kb-nav-search-ghint):
+   搜索词非空且存在「匹配搜索但被勾选/隐藏挡住」的条目时, 搜索框下现算一行提示。口径
+   (grilling 两轮拍板, 全文见任务档案):
+   - 总数 = 去重的非隐藏被排除匹配数; 括号内按排除原因分计, 同件可跨组重复 (≥2 维被取消
+     勾选才发生重叠, 行 title 注明口径);
+   - 隐藏件独占一桶: 隐藏∧匹配只进「N项隐藏」不进原因组 —— 点组名也唤不回隐藏件, 数字
+     不互污; 计数是搜索相关的隐藏件非全量 (aCount「已隐藏 N」仍是全量口径, 两处不合并);
+   - 维度按活动视图: 台账 aSets 三维 (状态/形态/issue类型) / 卡片墙 cSets 两维 (无类型过滤) /
+     控制台无勾选过滤 → 只显隐藏桶; 「仅活跃/有认领链/cLive」开关造成的排除不进提示;
+   - 组名可点 = 勾上对应值 (wire() 委托); 已知边角: 同件被两维排除需两次点击。 */
+function ghintExclDims(i) {
+  if (S.view === "ledger") {
+    return [
+      ["status", stOf(i), !S.aStatuses.has(stOf(i))],
+      ["form", i.form, !S.aForms.has(i.form)],
+      ["type", i["issue-type"] || "", !!(i["issue-type"]) && !S.aTypes.has(i["issue-type"])],
+    ].filter(d => d[2]);
+  }
+  if (S.view === "cards") {
+    return [
+      ["status", stOf(i), !S.cStatuses.has(stOf(i))],
+      ["form", i.form, !S.cForms.has(i.form)],
+    ].filter(d => d[2]);
+  }
+  return []; /* 控制台: 频道搜索不做形态/状态过滤 (renderChannels), 只剩隐藏桶可报 */
+}
+
+function ghintData() {
+  if (!S.q) return null; /* 搜索为空永不提示 (面板计数本来就在) */
+  const q = navSearchQuery(S.q);
+  const excl = new Set(), hid = new Set(), byKey = new Map(), groups = [];
+  for (const i of DATA.items) {
+    if (!navSearchText(i).includes(q)) continue;
+    if (isHidden(i.link)) { hid.add(i.link); continue; } /* 独占桶: 隐藏件不进原因组 */
+    let any = false;
+    for (const [dim, val] of ghintExclDims(i)) {
+      any = true;
+      const key = dim + "\u0000" + val;
+      let g = byKey.get(key);
+      if (!g) { g = { dim, val, n: 0 }; byKey.set(key, g); groups.push(g); }
+      g.n++;
+    }
+    if (any) excl.add(i.link);
+  }
+  if (!excl.size && !hid.size) return null;
+  /* 组序 = 面板固定序(形态→状态→类型, 与侧栏 fgForm/fgStatus/fgType 及卡片 pills 的 DOM 序一致);
+     数据派生的未知状态值 indexOf 为 -1, 排在已知值之前, 无碍 */
+  const ord = { form: 0, status: 1, type: 2 };
+  groups.sort((a, b) => ord[a.dim] - ord[b.dim] ||
+    (a.dim === "status" ? statusList.indexOf(a.val) - statusList.indexOf(b.val) :
+     a.dim === "form" ? FORM_ORD.indexOf(a.val) - FORM_ORD.indexOf(b.val) :
+     TYPES.indexOf(a.val) - TYPES.indexOf(b.val)));
+  return { total: excl.size, groups, hidden: hid.size };
+}
+
+/* 提示行渲染单点: 三个视图 render 末尾各挂一次 (过滤切换不经 renderCurrent), q 输入 / 切视图 /
+   30s 轮询 / 勾回点击全部汇到这条链。用词与面板一致 (状态英文原文 / 形态中文)。 */
+const ghintLabel = g => (g.dim === "form" ? FORM_CN[g.val] : g.val);
+function renderGhint() {
+  const el = $("ghint");
+  if (!el) return;
+  const d = DATA && ghintData();
+  if (!d) { el.hidden = true; el.innerHTML = ""; return; }
+  const parts = [], plain = [];
+  if (d.total) {
+    parts.push("另匹配 <b>" + d.total + "</b> 项 (" + d.groups.map(g =>
+      '<button class="gtag" type="button" data-gdim="' + g.dim + '" data-gval="' + esc(g.val) +
+      '" title="勾上「' + esc(ghintLabel(g)) + '」即可看到这些匹配">' + esc(ghintLabel(g)) + " " + g.n + "</button>"
+    ).join('<span class="gsep">·</span>') + ")");
+    plain.push("另匹配 " + d.total + " 项 (" + d.groups.map(g => ghintLabel(g) + " " + g.n).join(" · ") + ")");
+  }
+  if (d.hidden) {
+    parts.push('<span class="ghid" title="被你隐藏的匹配件 (台账隐藏区可逐件恢复)">另有 ' + d.hidden + " 项隐藏</span>");
+    plain.push("另有 " + d.hidden + " 项隐藏");
+  }
+  el.innerHTML = parts.join('<span class="gsep">·</span>');
+  el.title = plain.join(" · ") + " —— 按排除原因分计, 同件可跨组重复";
+  el.hidden = false;
+}
+
+function aFiltered() {
+  let list = DATA.items.filter(i =>
+    !isHidden(i.link) &&
+    S.aForms.has(i.form) && S.aStatuses.has(stOf(i)) &&
+    (!(i["issue-type"]) || S.aTypes.has(i["issue-type"])) &&
+    (!S.aLive || liveOf(i.topic || NO_KEY)) &&
+    (!S.aChain || (i.refs && i.refs.length > 0))
+  );
+  if (S.q) {
+    const q = navSearchQuery(S.q);
+    list = list.filter(i => navSearchText(i).includes(q));
+  }
+  const cmp = {
+    /* updated = doc-updated 新-旧 (缺回落 stamp); 同戳再按创建戳新-旧, 兜底形态序 */
+    updated: (a, b) => (b["doc-updated"] || b.stamp).localeCompare(a["doc-updated"] || a.stamp) ||
+      b.stamp.localeCompare(a.stamp) || FORM_ORD_N[a.form] - FORM_ORD_N[b.form],
+    stamp: (a, b) => b.stamp.localeCompare(a.stamp) || FORM_ORD_N[a.form] - FORM_ORD_N[b.form],
+    form: (a, b) => FORM_ORD_N[a.form] - FORM_ORD_N[b.form] || b.stamp.localeCompare(a.stamp),
+    status: (a, b) => (ST_ORD_N[stOf(a)] != null ? ST_ORD_N[stOf(a)] : 9) - (ST_ORD_N[stOf(b)] != null ? ST_ORD_N[stOf(b)] : 9) || b.stamp.localeCompare(a.stamp),
+    topic: (a, b) => (a.topic || NO_KEY).localeCompare(b.topic || NO_KEY) || b.stamp.localeCompare(a.stamp),
+  }[S.sort];
+  return list.sort(cmp);
+}
+
+/* 台账行单元格: 主表与置顶专区共用同一份栏序/栏宽单点 —— 2026-10-05 用户要求「专区与主区同栏,
+   只置顶展示 + 强调」, 两处共用本函数, 从结构上排除栏漂移。pinMark=true 时 # 栏显示实心图钉标记
+   (置顶专区用), 否则显示行号。hidMark=true 时为隐藏区行: # 栏换成「恢复」按钮, 标题栏不放图钉
+   (隐藏中的件不进置顶专区)。栏序 # 时间戳 形态 状态 类型 标题 专题 链 由守阵
+   test_ledger_status_column_between_form_and_title 钉死。 */
+function ledgerCells(i, n, pinMark, hidMark) {
+  const idx = hidMark
+    ? '<button class="unhidebtn" data-unhide="' + esc(i.link) + '" title="恢复到列表 (取消隐藏)">' + UNHIDE_SVG + "</button>"
+    : (pinMark ? '<span class="pin-mark" title="已置顶">' + PIN_SVG + "</span>" : n + 1);
+  const pinned = isPinned(i.link);
+  /* 时间戳列跟随排序档 (2026-11-10): 更新时间序下显 doc-updated (缺回落 stamp), 否则列与排序
+     对不上看起来像 bug; 创建戳挪进 title 不丢信息 */
+  const cellStamp = S.sort === "updated" ? (i["doc-updated"] || i.stamp) : i.stamp;
+  const stampTitle = cellStamp !== i.stamp ? ' title="创建 ' + esc(i.stamp) + '"' : "";
+  const pinBtn = hidMark ? "" :
+    '<button class="pinbtn' + (pinned ? " on" : "") + '" data-pin="' + esc(i.link) + '" title="' + (pinned ? "取消置顶" : "置顶到专区") + '">' + PIN_SVG + "</button>";
+  return `
+      <td class="idx">${idx}</td>
+      <td class="stamp"${stampTitle}>${esc(cellStamp)}</td>
+      <td class="formc"><span class="fbadge fc-${i.form}">${FORM_CN[i.form]}</span></td>
+      <td class="statc"><span class="chip ${stCls(stOf(i))}">${esc(stOf(i))}</span></td>
+      <td class="typec">${i.form === "issue" && i["issue-type"] ? '<span class="chip">' + esc(i["issue-type"]) + "</span>" : ""}</td>
+      <td class="title-cell">${pinBtn}<b>${esc(i.title)}</b>${i["issue-summary"] ? '<div class="sm">' + esc(i["issue-summary"]) + "</div>" : ""}</td>
+      <td class="topic"><code>${esc(i.topic || NO_KEY)}</code></td>
+      <td class="refs"><span class="chain ${(i.refs && i.refs.length) ? "has" : ""}">${(i.refs && i.refs.length) ? "# " + i.refs.length : "·"}</span></td>`;
+}
+
+function renderLedger() {
+  if (!DATA) return;
+  const cnt = f => DATA.items.filter(f).length;
+  const fgForm = $("fgForm"), fgStatus = $("fgStatus"), fgType = $("fgType"), fgLive = $("fgLive");
+  fgForm.innerHTML = '<div class="fl">形态</div>';
+  fgStatus.innerHTML = '<div class="fl">状态</div>';
+  fgType.innerHTML = '<div class="fl">Issue 类型</div>';
+  fgLive.innerHTML = '<div class="fl">关联</div>';
+  buildFilterRows("fgForm", FORM_ORD.map(k => [k, FORM_CN[k], cnt(i => i.form === k)]), false,
+    v => S.aForms.has(v), v => { toggleSet(S.aForms, v); saveFilters(); renderLedger(); });
+  buildFilterRows("fgStatus", statusList.map(s => [s, s, cnt(i => stOf(i) === s)]), false,
+    v => S.aStatuses.has(v), v => { toggleSet(S.aStatuses, v); saveFilters(); renderLedger(); });
+  buildFilterRows("fgType", TYPES.map(t => [t, t, cnt(i => i["issue-type"] === t)]), false,
+    v => S.aTypes.has(v), v => { toggleSet(S.aTypes, v); saveFilters(); renderLedger(); });
+  buildFilterRows("fgLive", [
+    ["live", "仅活跃专题", cnt(i => liveOf(i.topic || NO_KEY))],
+    ["chain", "有认领链", cnt(i => i.refs && i.refs.length)],
+  ], true,
+    v => (v === "live" ? S.aLive : S.aChain),
+    v => { if (v === "live") S.aLive = !S.aLive; else S.aChain = !S.aChain; saveFilters(); renderLedger(); });
+
+  renderPinZone();
+  renderHiddenZone();
+
+  const list = aFiltered();
+  const nHid = hiddenZoneItems().length;
+  $("aCount").innerHTML = "<b>" + list.length + "</b> / " + (DATA.items.length - nHid) + " 件" +
+    (nHid ? " · 已隐藏 " + nHid : "");
+  /* 多选行挂 msel (拍板 D13): 状态在 S.multi, DOM 重建时重挂 —— 30s 轮询 re-render 选区天然存活 */
+  const ms = multiSet();
+  const rowCls = i => ((S.sel === i.link ? "sel " : "") + (ms.has(i.link) ? "msel" : "")).trim();
+  $("aRows").innerHTML = list.map((i, n) => `<tr data-link="${esc(i.link)}"${rowCls(i) ? ' class="' + rowCls(i) + '"' : ""}>${ledgerCells(i, n)}</tr>`).join("");
+
+  if (S.sel) { if (byLink.has(S.sel)) renderDrawer(S.sel); else closeDrawer(); }
+  renderGhint();
+}
+
+/* 置顶专区: 与主表**同栏**的详细列表 (列宽/列序克隆主表 thead, 行单元格复用 ledgerCells),
+   只是置顶展示 + 强调底色; 空则整块隐藏; 被 pin 的件照旧留在主表 (双向显示), 不受下方筛选影响 */
+function renderPinZone() {
+  const zone = $("pinZone");
+  const items = pinZoneItems();
+  if (!items.length) { zone.hidden = true; zone.innerHTML = ""; return; }
+  zone.hidden = false;
+  /* 列头/列宽单点 = 主表 thead: 直接克隆, 两表逐栏对齐由结构保证 (别在别处再写一份列定义) */
+  const thead = document.querySelector("#v-ledger .ledgerwrap thead");
+  const head = thead ? thead.outerHTML : "";
+  const ms = multiSet();
+  zone.innerHTML =
+    '<div class="pzhead">' +
+    '<button class="pztoggle" id="pzToggle" type="button" aria-expanded="' + (S.pinCollapsed ? "false" : "true") +
+    '" aria-controls="pzBody" aria-label="展开 / 收起置顶区" title="展开 / 收起置顶区">' + CHEV_SVG + "</button>" +
+    "置顶 · PINNED <b>(" + items.length + ")</b>" +
+    '<span class="pzhint">点图钉取消 · 点行看详情</span></div>' +
+    '<div class="pzbody" id="pzBody"><table class="pztable">' + head + "<tbody>" +
+    items.map(i => `<tr class="pin-row${ms.has(i.link) ? " msel" : ""}" data-link="${esc(i.link)}">${ledgerCells(i, 0, true)}</tr>`).join("") +
+    "</tbody></table></div>";
+  applyPinCollapse();
+}
+
+/* 隐藏区: 与置顶专区同构 (克隆主表 thead + 行复用 ledgerCells hidMark 路径), 但默认折叠 ——
+   点工具栏「隐藏区」按钮 (有隐藏条目才出现) 才展开; 停在主表下方, 不与内容区抢位置 */
+function renderHiddenZone() {
+  const zone = $("hidZone"), btn = $("hidBtn");
+  const items = hiddenZoneItems();
+  btn.hidden = !items.length;
+  btn.textContent = "隐藏区 · " + items.length;
+  btn.classList.toggle("on", S.showHidden);
+  if (!items.length || !S.showHidden) { zone.hidden = true; zone.innerHTML = ""; return; }
+  zone.hidden = false;
+  /* 列头/列宽单点 = 主表 thead: 直接克隆, 两表逐栏对齐由结构保证 (别在别处再写一份列定义) */
+  const thead = document.querySelector("#v-ledger .ledgerwrap thead");
+  const head = thead ? thead.outerHTML : "";
+  zone.innerHTML =
+    '<div class="hzhead">隐藏 · HIDDEN <b>(' + items.length + ")</b>" +
+    '<span class="hzhint">点 [恢复] 取消隐藏 · 点行打开原文 · 右键同主表</span>' +
+    '<button class="hzrestore" data-restore-all="1">全部恢复</button></div>' +
+    '<table class="hztable">' + head + "<tbody>" +
+    items.map(i => `<tr class="hid-row" data-link="${esc(i.link)}">${ledgerCells(i, 0, false, true)}</tr>`).join("") +
+    "</tbody></table>";
+}
+
+/* 明细打开单点 (主表与置顶专区共用): 普通单击 = 单选高亮 + 右侧抽屉, 同一套 renderDrawer;
+   置顶件双向显示, 两区同 link 的行都挂 sel。图钉 / 多选早退分支留在各自 click 委托里 (不在这里) */
+function openRowDetail(link) {
+  S.sel = link;
+  document.querySelectorAll("#aRows tr.sel, #pinZone tr.sel").forEach(r => r.classList.remove("sel"));
+  document.querySelectorAll("#aRows tr[data-link], #pinZone tbody tr[data-link]").forEach(r => {
+    if (r.dataset.link === link) r.classList.add("sel");
+  });
+  renderDrawer(link);
+}
+function renderDrawer(link) {
+  const i = byLink.get(link);
+  if (!i) return;
+  const sameTopic = DATA.items.filter(x => (x.topic || NO_KEY) === (i.topic || NO_KEY) && x.link !== link);
+  /* 认领链改用解析后的 targets (nav_data 四态): 原来的 fwd/fwdDead 只会把 578 条"目标其实存在"
+     的引用渲染成灰字「(未入库)」—— 其中 325 条是坑档 / 基线等库外件、253 条是被归档搬走的基线。 */
+  const targets = i.targets || (i.refs || []).map(r => ({ t: refKey(r), st: "ok", raw: r }));
+  const fwd = targets.filter(t => t.st === "ok").map(t => byLink.get(t.t)).filter(Boolean);
+  const fwdOut = targets.filter(t => t.st !== "ok");
+  const rev = DATA.items.filter(x => x.link !== link && (x.targets || []).some(t => t.st === "ok" && t.t === link));
+  const revExt = Object.keys(DATA.ext || {}).filter(p => (DATA.ext[p] || []).indexOf(link) >= 0);
+  /* 库内但不在 memory-bank/ 下的目标 (repo 态): 导航页静态路由不代理, 不给可点链接 */
+  repoHrefs = new Set();
+  DATA.items.forEach(it => (it.targets || []).forEach(tg => { if (tg.st === "repo") repoHrefs.add(tg.t); }));
+  const one = (x, cls) => `
+    <a class="rel ${cls}" href="${MB}${esc(x.link)}" target="_blank">
+      <span class="r1"><span class="fbadge fc-${x.form}" style="width:auto;padding:1px 6px;">${FORM_CN[x.form]}</span><span class="rt">${esc(x.title)}</span></span>
+      <span class="r2">${esc(x.stamp)} · ${esc(stOf(x))}</span></a>`;
+  /* 库外件行: 目标文件在库里 (坑档 / 基线 / 切片), 只是不进台账四类件 —— 给链接 + 角标, 不当死链 */
+  const extRow = (path, st, cls, note) => {
+    const badge = { dead: "失效", basename: "归档回退", repo: "仓库根", ext: "库外件" }[st] || "库外件";
+    const body = '<span class="r1"><span class="chip">' + badge + '</span>' +
+      '<span class="rt mono" style="font-size:11px">' + esc(String(path).split("/").pop()) + "</span></span>" +
+      '<span class="r2">' + esc(note || path) + "</span>";
+    /* dead / repo 态不可点: 前者真找不到, 后者文件在库内但不在 memory-bank/ 下 —— 导航页的静态
+       路由只映射 memory-bank/, 给个 404 链接比老实标成不可点更糟 */
+    return (st === "dead" || st === "repo")
+      ? '<div class="rel ' + cls + '" style="color:var(--faint);border-left-color:var(--faint)"' +
+        (st === "repo" ? ' title="文件在仓库根下, 导航页不代理原文"' : ' title="目标不存在"') + ">" + body + "</div>"
+      : '<a class="rel ' + cls + '" href="' + MB + esc(path) + '" target="_blank">' + body + "</a>";
+  };
+
+  $("dFormLine").innerHTML =
+    '<span class="fbadge fc-' + i.form + '" style="width:auto;padding:1px 8px;">' + FORM_CN[i.form] + "</span>" +
+    '<span class="chip ' + stCls(stOf(i)) + '">' + esc(stOf(i)) + "</span>" +
+    (i["issue-type"] ? '<span class="chip">' + esc(i["issue-type"]) + "</span>" : "") +
+    (i["issue-tier"] ? '<span class="chip">' + esc(i["issue-tier"]) + "</span>" : "");
+  $("dTitle").textContent = i.title;
+  $("dBody").innerHTML = `
+    <div class="dsec"><div class="dlabel">元数据</div>
+      <div class="kv">
+        <span class="k">专题</span><span class="v mono">${esc(i.topic || NO_KEY)}</span>
+        <span class="k">时间戳</span><span class="v mono">${esc(i.stamp)}</span>
+        ${i["doc-updated"] ? '<span class="k">更新</span><span class="v mono">' + esc(i["doc-updated"]) + (i["doc-stale"] ? ' (陈旧 ' + i["doc-age-days"] + ' 天)' : "") + "</span>" : ""}
+        ${i["issue-summary"] ? '<span class="k">摘要</span><span class="v" style="line-height:1.6">' + esc(i["issue-summary"]) + "</span>" : ""}
+      </div>
+    </div>
+    <div class="dsec"><div class="dlabel">关系图 · 点节点下钻 · 库外件空心</div><div id="dGraph"></div></div>
+    <div class="dsec"><div class="dlabel">认领链 · 声明的引用 (${targets.length})</div>
+      ${targets.length
+        ? fwd.map(x => one(x, "fwd")).join("") + fwdOut.map(t2 => extRow(t2.t, t2.st, "fwd", t2.raw)).join("")
+        : '<div class="none">无 doc-refs 声明</div>'}
+    </div>
+    <div class="dsec"><div class="dlabel">反向引用 · 谁声明了本件 (${rev.length + revExt.length})</div>
+      ${(rev.length || revExt.length)
+        ? rev.map(x => one(x, "rev")).join("") + revExt.map(p2 => extRow(p2, "ext", "rev", p2)).join("")
+        : '<div class="none">无反向引用</div>'}
+    </div>
+    <div class="dsec"><div class="dlabel">同专题件 (${sameTopic.length}) · ${esc(i.topic || NO_KEY)}</div>
+      ${sameTopic.length
+        ? sameTopic.slice(0, 14).map(x => one(x, "same")).join("") +
+          (sameTopic.length > 14 ? '<div class="none">… 其余 ' + (sameTopic.length - 14) + " 件</div>" : "")
+        : '<div class="none">单件专题</div>'}
+    </div>
+    <a class="openbtn" href="${MB}${esc(i.link)}" target="_blank">打开原文 -&gt;</a>`;
+  $("drawer").classList.add("open");
+  mountDrawerGraph(link);
+}
+function closeDrawer() { $("drawer").classList.remove("open"); }
+
+/* ---- 关系图 (组件在 nav_graph.js, 壳只负责挂载与跳转接线) ----
+   拖屉里是 compact (局部 / 关联两档); 全库泳道要 900px 以上才读得出来, 走全屏层。
+   节点点击 = 抽屉内下钻 (S.sel 换人, 不跳出页面) —— 这正是"看到关联却只能自己找"的那一步。 */
+let drawerGraph = null;
+let stageGraph = null;
+function mountDrawerGraph(link) {
+  const host = $("dGraph");
+  if (!host) return;
+  if (drawerGraph) { drawerGraph.destroy(); drawerGraph = null; }
+  if (!window.MBGraph) { host.innerHTML = '<div class="none">关系图组件未加载 (nav_graph.js)</div>'; return; }
+  drawerGraph = window.MBGraph.mount(host, {
+    data: DATA, byLink: byLink, focus: link, compact: true,
+    scope: S.graph.scope, steps: S.graph.steps, showFrag: S.graph.showFrag,
+    hrefFor: graphHref,
+    onState: st => { S.graph.scope = st.scope; S.graph.steps = st.steps; S.graph.showFrag = st.showFrag; },
+    onOpen: l => openRowDetail(l),
+    onExpand: () => openGraphStage(link, S.graph.scope),
+  });
+}
+let stageFocus = null;
+function openGraphStage(link, scope) {
+  const host = $("gsHost");
+  $("gStage").hidden = false;
+  stageFocus = link;
+  $("gsTitle").textContent = (byLink.get(link) || {}).title || link;
+  if (stageGraph) { stageGraph.destroy(); stageGraph = null; }
+  if (!window.MBGraph) { host.innerHTML = '<div class="none">关系图组件未加载 (nav_graph.js)</div>'; return; }
+  stageGraph = window.MBGraph.mount(host, {
+    data: DATA, byLink: byLink, focus: link, compact: false,
+    scope: scope === "local" ? "local" : scope === "all" ? "all" : "atlas",
+    hrefFor: graphHref,
+    onState: st => { S.graph.scope = st.scope; S.graph.steps = st.steps; S.graph.showFrag = st.showFrag; },
+    onOpen: l => {
+      openRowDetail(l);
+      stageFocus = l;
+      $("gsTitle").textContent = (byLink.get(l) || {}).title || l;
+      if (stageGraph) stageGraph.setFocus(l);
+    },
+  });
+}
+/* 库内但不在 memory-bank/ 下的目标 (repo 态, 如 resources/*.html): 导航页的静态路由只映射
+   memory-bank/, 给个 404 链接不如老实标成不可点。空串 = 调用方不许生成链接。 */
+let repoHrefs = new Set();
+function graphHref(path) {
+  return repoHrefs.has(path) ? "" : MB + path;
+}
+function closeGraphStage() {
+  const box = $("gStage");
+  if (!box || box.hidden) return;
+  box.hidden = true;
+  if (stageGraph) { stageGraph.destroy(); stageGraph = null; }
+}
+
+/* ---- 右键菜单 (台账行): 无子菜单; 关闭 = 点空白 / Esc / 滚动 / 切视图 ----
+   批量升级 (计划 26-10-31-0143, 拍板 D4): 被点的行 ∈ 当前选中集合且集合 > 1 行 → 菜单作用于
+   整个选区 (auto-qb menu.js CTX-03 口径), 文案带灰色 N (拍板 D12); 否则单条, 文案不变。 */
+function ctxTargets(link) {
+  return S.multi.length > 1 && S.multi.includes(link) ? S.multi.slice() : [link];
+}
+function openCtx(x, y, link) {
+  const m = $("ctxMenu");
+  const links = ctxTargets(link);
+  const n = links.length > 1 ? ' <span class="n">· ' + links.length + "</span>" : "";
+  /* 动态单项 (拍板 D6): 全达态 → 反向文案 (批量取消), 否则正向 (未达态成员全置上, 幂等) */
+  const allPinned = links.every(isPinned);
+  const allHidden = links.every(isHidden);
+  m.innerHTML =
+    '<button class="ctxitem" data-act="pin">' + (allPinned ? "取消置顶" : "置顶到专区") + n + "</button>" +
+    '<button class="ctxitem" data-act="hide">' + (allHidden ? "取消隐藏" : "隐藏条目") + n + "</button>" +
+    '<button class="ctxitem" data-act="open">打开原文' + n + "</button>" +
+    '<button class="ctxitem" data-act="copy">复制仓库路径' + n + "</button>";
+  m.dataset.links = JSON.stringify(links);   /* 打开那一刻冻结目标快照, 菜单存活期选区漂移不影响本次动作 */
+  m.hidden = false;
+  /* 贴边翻侧: 默认跟随光标, 右侧 / 下缘放不下时翻到光标另一侧, 不越出视口 */
+  const r = m.getBoundingClientRect();
+  m.style.left = (x + r.width > innerWidth ? Math.max(0, x - r.width) : x) + "px";
+  m.style.top = (y + r.height > innerHeight ? Math.max(0, y - r.height) : y) + "px";
+}
+function closeCtx() {
+  const m = $("ctxMenu");
+  if (m && !m.hidden) { m.hidden = true; m.innerHTML = ""; }
+}
+/* 剪贴板低层: navigator.clipboard 优先, 非安全上下文 / file:// 降级 execCommand (静默) */
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => { /* 非安全上下文 / 无权限: 静默 */ });
+    return;
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  } catch (e) { /* 静默降级 */ }
+}
+/* 复制仓库路径: 单条一行; 批量 (拍板 D8) 每行一个, 顺序 = 主表当前可见序,
+   被筛选掉但仍在选区的行按 DATA.items 全量序追加在后 */
+function copyPaths(links) {
+  if (links.length === 1) return copyText("memory-bank/" + links[0]);
+  const visSet = new Set(aFiltered().map(i => i.link));
+  const order = aFiltered().map(i => i.link).concat(DATA.items.map(i => i.link).filter(l => !visSet.has(l)));
+  const want = new Set(links);
+  copyText(order.filter(l => want.has(l)).map(l => "memory-bank/" + l).join("\n"));
+}
+/* 打开原文: 逐个 window.open; 批量 >5 先原生 confirm 二次确认 (拍板 D7/D14, 取消则不动)。
+   被浏览器弹窗拦截的 open 返回 null (2026-10-31 验收反馈: 静默失效用户无从知晓) ——
+   记账后走 showError 浮层提醒 (与拉取失败同一提示通道, Esc 收), 引导允许弹窗后重试。 */
+function openLinks(links) {
+  if (links.length > 5 && !confirm("将打开 " + links.length + " 个标签页，继续？")) return;
+  let blocked = 0;
+  for (const l of links) {
+    if (!window.open(MB + l, "_blank")) blocked++;
+  }
+  if (blocked) showError("标签页被浏览器拦截",
+    esc(String(blocked)) + " / " + esc(String(links.length)) + " 个未打开 —— 弹出窗口被浏览器拦截。",
+    "在地址栏右侧允许本站弹出窗口 (或加入弹窗白名单) 后重试 · 按 Esc 关闭本提示。");
+}
+
+/* ============================================================
+   视图 B: 控制台
+   ============================================================ */
+function renderConsole() {
+  if (!DATA) return;
+  /* 四工位统计带 */
+  /* 四工位统计带: DATA.counts 是服务端全量真值, 隐藏是纯前端偏好 —— 在此按可见条目现算,
+     让统计带与下方视图同口径 (隐藏条目不进任何统计) */
+  const visCounts = {};
+  for (const i of DATA.items) {
+    if (isHidden(i.link)) continue;
+    const s = stOf(i);
+    (visCounts[i.form] = visCounts[i.form] || {})[s] = (visCounts[i.form][s] || 0) + 1;
+  }
+  const strip = $("strip");
+  strip.innerHTML = FORM_ORD.map(form => {
+    const byS = visCounts[form] || {};
+    const total = Object.values(byS).reduce((a, b) => a + b, 0);
+    const segs = statusList.filter(s => byS[s]).map(s =>
+      '<i class="' + stBar(s) + '" style="flex:' + byS[s] + '" title="' + esc(s) + ": " + byS[s] + '"></i>').join("");
+    const legend = statusList.filter(s => byS[s]).map(s =>
+      '<span><s class="' + stBar(s) + '"></s>' + esc(s) + " " + byS[s] + "</span>").join("");
+    return `
+    <div class="tile">
+      <div class="tl"><span>${form.toUpperCase()}</span><span>${FORM_CN[form]}</span></div>
+      <div class="tv">${total}<small>件</small></div>
+      <div class="segbar">${segs}</div>
+      <div class="seglegend">${legend}</div>
+    </div>`;
+  }).join("");
+
+  renderChannels();
+  renderScope();
+  renderGhint();
+}
+
+function renderChannels() {
+  const qLocal = S.cq.trim().toLowerCase();
+  const qGlobal = navSearchQuery(S.q);
+  const keys = [...groups.keys()]
+    .filter(k => (!qLocal || k.toLowerCase().includes(qLocal)) &&
+      (!qGlobal || k.toLowerCase().includes(qGlobal) || groups.get(k).some(i => navSearchText(i).includes(qGlobal))))
+    .sort((a, b) => {
+      const la = liveOf(a), lb = liveOf(b);
+      const na = groups.get(a).length, nb = groups.get(b).length;
+      return (nb - na) || (String(lb).localeCompare(String(la))) || a.localeCompare(b);
+    });
+  $("chCount").textContent = keys.length + " CH";
+  $("chlist").innerHTML = keys.map(k => {
+    const g = groups.get(k), live = liveOf(k);
+    const fc = Object.fromEntries(FORM_ORD.map(f => [f, g.filter(i => i.form === f).length]));
+    return `<div class="ch ${S.selTopic === k ? "on" : ""}" data-k="${esc(k)}">
+      <div class="c1"><span class="cdot ${live ? "live" : "done"}" title="${live ? "活跃专题" : "已完结"}"></span><span class="ck">${esc(k)}</span></div>
+      <div class="c2">${FORM_ORD.filter(f => fc[f]).map(f => "<b>" + FORM_CN[f] + " " + fc[f] + "</b>").join("")}</div>
+    </div>`;
+  }).join("");
+}
+
+function refLines(item) {
+  const fwd = (item.refs || []).map(r => byLink.get(refKey(r))).filter(Boolean);
+  const dead = (item.refs || []).filter(r => !byLink.has(refKey(r)));
+  const rev = DATA.items.filter(x => x.link !== item.link && (x.refs || []).some(r => refKey(r) === item.link));
+  const one = (x, cls) => `<a class="refline ${cls}" href="${MB}${esc(x.link)}" target="_blank">
+      <span class="rf fc-${x.form}">${FORM_CN[x.form]}</span><span class="rft">${esc(x.title)}</span>
+      <span class="rfs">${esc(x.stamp)} · ${esc(stOf(x))}</span></a>`;
+  const deadLine = r => '<div class="refline" style="border-left-color:#39434d;color:var(--faint)"><span class="rft mono">' + esc(r) + " (未入库)</span></div>";
+  return `
+    <div class="sublabel">认领链 · 声明引用 ${fwd.length + dead.length}</div>
+    ${(fwd.map(x => one(x, "fwd")).join("") + dead.map(deadLine).join("")) || (!fwd.length && !dead.length ? '<div class="refnone">无 doc-refs 声明</div>' : "")}
+    <div class="sublabel">反向引用 ${rev.length}</div>
+    ${rev.map(x => one(x, "rev")).join("") || '<div class="refnone">无反向声明</div>'}`;
+}
+
+function renderScope() {
+  const shd = $("shd"), sbody = $("sbody");
+  if (!S.selTopic || !groups.has(S.selTopic)) {
+    shd.innerHTML = S.selTopic
+      ? '<span class="sk" style="color:var(--faint)">TOPIC GONE</span>'
+      : '<span class="sk" style="color:var(--faint)">SELECT A CHANNEL</span>';
+    sbody.innerHTML = '<div class="empty">// 从左侧选择一个专题频道载入 readout //</div>';
+    if (S.selTopic) { S.selTopic = null; saveFilters(); }   /* 选中的专题已消失: 落盘清掉, 免得下次还原到空 */
+    return;
+  }
+  const g = groups.get(S.selTopic).slice().sort((a, b) =>
+    FORM_ORD_N[a.form] - FORM_ORD_N[b.form] || b.stamp.localeCompare(a.stamp));
+  const live = liveOf(S.selTopic);
+  shd.innerHTML = '<span class="sk">' + esc(S.selTopic) + "</span>" +
+    '<span class="sn">' + g.length + " 件</span>" +
+    '<span class="sl" style="color:' + (live ? "var(--green)" : "var(--mut)") + '">' + (live ? "ACTIVE" : "CLOSED") + "</span>";
+  sbody.innerHTML = g.map(i => `
+    <div class="row${S.openRows.has(i.link) ? " open" : ""}" data-link="${esc(i.link)}">
+      <div class="row-head">
+        <span class="arrow">&gt;</span>
+        <span class="rf fc-${i.form}">${FORM_CN[i.form]}</span>
+        <span class="rs ${stCls(stOf(i))}">${esc(stOf(i)).toUpperCase()}</span>
+        <span class="rstamp">${esc(i.stamp)}</span>
+        <span class="rtitle">${esc(i.title)}</span>
+        <span class="rchain ${(i.refs && i.refs.length) ? "has" : ""}">${(i.refs && i.refs.length) ? "#" + i.refs.length : ""}</span>
+      </div>
+      <div class="row-body">
+        <div class="rmeta"><span>TOPIC ${esc(i.topic || NO_KEY)}</span><span>${i["doc-updated"] ? "UPD " + esc(i["doc-updated"]) + (i["doc-stale"] ? " STALE " + i["doc-age-days"] + "d" : "") : ""}</span>${i["issue-type"] ? "<span>TYPE " + esc(i["issue-type"]) + "</span>" : ""}${i["issue-tier"] ? "<span>" + esc(i["issue-tier"]) + "</span>" : ""}</div>
+        ${i["issue-summary"] ? '<div class="rsummary">' + esc(i["issue-summary"]) + "</div>" : ""}
+        ${refLines(i)}
+        <a class="openlink" href="${MB}${esc(i.link)}" target="_blank">OPEN -&gt; ${esc(i.link)}</a>
+      </div>
+    </div>`).join("");
+}
+
+/* ============================================================
+   视图 C: 卡片墙
+   ============================================================ */
+function cVisibleItems(key) {
+  let list = groups.get(key).filter(i => S.cForms.has(i.form) && S.cStatuses.has(stOf(i)));
+  if (S.q) {
+    const q = navSearchQuery(S.q);
+    list = list.filter(i => navSearchText(i).includes(q));
+  }
+  return list.slice().sort((a, b) => {
+    const aa = ACTIVE_ST.has(stOf(a)) ? 0 : 1, bb = ACTIVE_ST.has(stOf(b)) ? 0 : 1;
+    return aa - bb || b.stamp.localeCompare(a.stamp);
+  });
+}
+
+function renderCards() {
+  if (!DATA) return;
+  $("cFormPills").innerHTML = FORM_ORD.map(f =>
+    '<span class="pill f-' + f + (S.cForms.has(f) ? " on" : "") + '" data-v="' + f + '">' + FORM_CN[f] + "</span>").join("");
+  $("cStatusPills").innerHTML = statusList.map(s =>
+    '<span class="pill' + (S.cStatuses.has(s) ? " on" : "") + '" data-v="' + esc(s) + '">' + esc(s) + "</span>").join("");
+  $("cLiveOnly").classList.toggle("on", S.cLive);
+
+  const keys = [...groups.keys()].filter(k => {
+    if (S.cLive && !liveOf(k)) return false;
+    const allOn = S.cForms.size === FORM_ORD.length && S.cStatuses.size === statusList.length;
+    if (!S.q && allOn) return true;
+    return cVisibleItems(k).length > 0 || (S.q && k.toLowerCase().includes(navSearchQuery(S.q)));
+  }).sort((a, b) => {
+    const la = liveOf(a) ? 0 : 1, lb = liveOf(b) ? 0 : 1;
+    return la - lb || groups.get(b).length - groups.get(a).length || a.localeCompare(b);
+  });
+  const total = keys.reduce((n, k) => n + groups.get(k).length, 0);
+  $("cStat").innerHTML = "<b>" + keys.length + "</b> 专题 · <b>" + total + "</b> 件";
+
+  $("wall").innerHTML = keys.map(k => {
+    const items = cVisibleItems(k);
+    const all = groups.get(k);
+    const live = liveOf(k);
+    const fc = Object.fromEntries(FORM_ORD.map(f => [f, all.filter(i => i.form === f).length]));
+    const show = S.expanded.has(k) ? items : items.slice(0, 5);
+    const hidden = items.length - show.length;
+    return `<div class="tcard">
+      <div class="tc-top">
+        <div class="tc-key">${esc(k)}</div>
+        <span class="tc-live ${live ? "on" : "off"}">${live ? "活跃" : "完结"}</span>
+      </div>
+      <div class="tc-forms">${FORM_ORD.filter(f => fc[f]).map(f =>
+        '<span class="fchip fc-' + f + '">' + FORM_CN[f] + " " + fc[f] + "</span>").join("")}</div>
+      <div class="items">
+        ${show.map(i => `
+          <a class="it fc-${i.form} ${stCls(stOf(i))}"
+             href="${MB}${esc(i.link)}" target="_blank" title="${esc(i.title)} · ${esc(stOf(i))} · ${esc(i.stamp)}">
+            <span class="if">${FORM_CN[i.form]}</span>
+            <span class="it-t">${esc(i.title)}</span>
+            <span class="it-s">${esc(ST_TXT[stOf(i)] || stOf(i))}</span>
+          </a>`).join("")}
+        ${hidden > 0 ? '<button class="more" data-k="' + esc(k) + '">还有 ' + hidden + " 件, 点击展开</button>" : ""}
+      </div>
+    </div>`;
+  }).join("") || '<div class="empty-wall">没有匹配的专题 —— 试试放宽过滤条件或清空搜索</div>';
+  renderGhint();
+}
+
+/* ============================================================
+   事件绑定 (一次性)
+   ============================================================ */
+/* 清词按钮显隐单点: 有词才显形 —— gq 的 input / Esc 清词 / 清词按钮 / boot 回填四处共用,
+   少同步一处即按钮失踪或幽灵按钮 (空词时点不了还占位)。 */
+function syncGclear() {
+  $("gclear").hidden = !$("gq").value;
+}
+function wire() {
+  $("seg").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (b) setView(b.dataset.view);
+  });
+  $("pullBtn").addEventListener("click", doPull);
+  $("gq").addEventListener("input", e => { S.q = e.target.value.trim(); saveFilters(); renderCurrent(); syncGclear(); });
+  $("gq").addEventListener("keydown", e => {
+    if (e.key === "Escape") { e.target.value = ""; S.q = ""; saveFilters(); renderCurrent(); syncGclear(); }
+  });
+  /* 提示组名点击 = 勾上对应值 (拍板 Q4a): 复用各视图既有 toggle 链 (add + saveFilters + 重渲染,
+     渲染末尾的 renderGhint 重算提示, 该组随即消失 = 可见的操作反馈); 控制台无勾选维度,
+     组名在该视图不出现, 委托自然空转。已知边角: 同件被两维排除需两次点击。 */
+  $("ghint").addEventListener("click", e => {
+    const b = e.target.closest(".gtag");
+    if (!b) return;
+    const dim = b.dataset.gdim, val = b.dataset.gval;
+    if (S.view === "ledger") {
+      if (dim === "status") S.aStatuses.add(val);
+      else if (dim === "form") S.aForms.add(val);
+      else S.aTypes.add(val);
+      saveFilters(); renderLedger();
+    } else if (S.view === "cards") {
+      if (dim === "status") S.cStatuses.add(val);
+      else S.cForms.add(val);
+      saveFilters(); renderCards();
+    }
+  });
+  /* 清词按钮: 清词后焦点还给输入框 (连续改词免再点); 只清搜索词, 不动筛选器与选择态 */
+  $("gclear").addEventListener("click", () => {
+    $("gq").value = ""; S.q = ""; saveFilters(); renderCurrent(); syncGclear(); $("gq").focus();
+  });
+
+  /* A */
+  /* Shift 连选防文字选中 (2026-10-31 验收反馈): 浏览器在 mousedown 期就扩展原生选区,
+     click 里的 preventDefault 已晚 —— 在两处表格上对 shift 手势挡 mousedown 默认行为;
+     普通点击不挡 (标题文本照常可选中复制) */
+  for (const id of ["aRows", "pinZone"]) {
+    $(id).addEventListener("mousedown", e => { if (e.shiftKey) e.preventDefault(); });
+  }
+  $("aRows").addEventListener("click", e => {
+    const pb = e.target.closest(".pinbtn");
+    if (pb) { togglePin(pb.dataset.pin); return; }   /* 早退: 免得图钉冒泡又弹详情抽屉 */
+    const tr = e.target.closest("tr");
+    if (!tr) return;
+    /* 多选手势先于普通单击分支 (计划 26-10-31-0143): Ctrl = 切换, Shift = 锚点区间并入 ——
+       两手势都不开抽屉、不动 S.sel; 普通单击 = 现行为 (单选高亮 + 抽屉), 不清多选 (拍板 D3) */
+    if (e.ctrlKey || e.metaKey) { toggleMulti(tr.dataset.link); return; }
+    if (e.shiftKey) { e.preventDefault(); shiftMulti(tr.dataset.link); return; }
+    S.multiAnchor = tr.dataset.link;   /* 普通点击落锚点 (auto-qb 键鼠衔接口径), 不动 S.multi */
+    openRowDetail(tr.dataset.link);    /* 单选高亮 + 抽屉: 与置顶区共用同一单点 */
+  });
+  $("aRows").addEventListener("contextmenu", e => {
+    const tr = e.target.closest("tr");
+    if (!tr) return;
+    e.preventDefault();
+    openCtx(e.clientX, e.clientY, tr.dataset.link);
+  });
+  /* 置顶专区: 委托点击 (图钉取消 / 条目打开) 与右键 —— 与主表行同款交互 */
+  $("pinZone").addEventListener("click", e => {
+    const tb = e.target.closest(".pztoggle");
+    if (tb) { togglePinCollapsed(); return; }   /* 折叠 = 只切置顶区可见性, 不动选区 / 抽屉 */
+    const pb = e.target.closest(".pinbtn");
+    if (pb) { togglePin(pb.dataset.pin); return; }   /* 早退: 图钉 = 取消置顶, 免得冒泡又开抽屉 */
+    const row = e.target.closest("tr.pin-row");
+    if (!row) return;
+    /* 多选手势 (拍板 D2: 置顶区纳入) 与主表同款; Shift 区间按主表可见序解析 (置顶件双向显示) */
+    if (e.ctrlKey || e.metaKey) { toggleMulti(row.dataset.link); return; }
+    if (e.shiftKey) { e.preventDefault(); shiftMulti(row.dataset.link); return; }
+    S.multiAnchor = row.dataset.link;
+    /* 普通单击与主表一致: 走同一个 openRowDetail (同 renderDrawer / 同选中高亮), 不再单开原文 */
+    openRowDetail(row.dataset.link);
+  });
+  $("pinZone").addEventListener("contextmenu", e => {
+    const row = e.target.closest("tr.pin-row");
+    if (!row) return;
+    e.preventDefault();
+    openCtx(e.clientX, e.clientY, row.dataset.link);
+  });
+  /* 隐藏区开关: 展开 / 收起底部隐藏区 (会话态, 不落盘 —— 需求口径: 点按钮才能查看) */
+  $("hidBtn").addEventListener("click", () => { S.showHidden = !S.showHidden; renderLedger(); });
+  /* 隐藏区: 委托点击 (恢复单条 / 全部恢复 / 条目打开) 与右键 —— 交互口径同置顶专区 */
+  $("hidZone").addEventListener("click", e => {
+    const ub = e.target.closest(".unhidebtn");
+    if (ub) { toggleHide(ub.dataset.unhide); return; }   /* 早退: 恢复 = 取消隐藏, 免得冒泡又开原文 */
+    if (e.target.closest("[data-restore-all]")) { S.hidden = []; saveHidden(); renderLedger(); return; }
+    const row = e.target.closest("tr.hid-row");
+    if (row) window.open(MB + row.dataset.link, "_blank");
+  });
+  $("hidZone").addEventListener("contextmenu", e => {
+    const row = e.target.closest("tr.hid-row");
+    if (!row) return;
+    e.preventDefault();
+    openCtx(e.clientX, e.clientY, row.dataset.link);
+  });
+  /* 右键菜单: 选动作 (单条 / 批量同一条分发链, 目标 = openCtx 冻结的 links 快照) + 点空白 / Esc / 滚动即收 */
+  $("ctxMenu").addEventListener("click", e => {
+    const it = e.target.closest(".ctxitem");
+    if (!it) return;
+    let links = [];
+    try { links = JSON.parse($("ctxMenu").dataset.links || "[]"); } catch (err) { /* 畸形快照: 放弃本动作 */ }
+    if (links.length) {
+      if (it.dataset.act === "pin") togglePinBatch(links);
+      else if (it.dataset.act === "hide") toggleHideBatch(links);
+      else if (it.dataset.act === "open") openLinks(links);
+      else if (it.dataset.act === "copy") copyPaths(links);
+    }
+    closeCtx();
+  });
+  /* 多选计数 chip: 点击清空 (拍板 D10, Esc 末档同款走 clearMulti) */
+  $("mselChip").addEventListener("click", clearMulti);
+  document.addEventListener("click", e => { if (!e.target.closest("#ctxMenu")) closeCtx(); });
+  /* Esc 退栈 (计划 26-10-13-0324, 借鉴 webui lifecycle.js 退栈链): 一次按键退视觉最上档 ——
+     退栈 order = visual z-order: overlay 遮罩 (z-50) 先于 ctxMenu (z-40) 先于 drawer (z-30),
+     遮罩压其余两, 否则 Esc 穿过遮罩去关被盖住的看不见层 (26-10-06 同根实测报障). 遮罩档即消
+     拉取失败全屏锁 (doPull 失败弹 overlay, dismiss 原只 applyData 即 ≤30s 轮 —— 用户按 Esc 即收).
+     IME 组合期不劫 (中文输入组合期 Esc 属于输入法, 取消候选); 判据用可见性 (hidden / open 类),
+     不状态位. 兜档保守 (拍板 P2): 收展开态 + 清 selTopic only, 清筛选 NO (localStorage 持久 prefs);
+     门条件 = console view + 非输入态 —— gq/cq per-input 清词已先手, 兜档不得双清.
+     全壳唯一 document-level Escape 链 (gq/cq 两处 per-input 清词之外, 拍板 P3 keep). */
+  const escRetreat = (e) => {
+    if (e.key !== "Escape") return;
+    if (e.isComposing || e.keyCode === 229) return;   // IME 组合期: 不劫浮层 / 搜索词
+    const gs = $("gStage");
+    if (gs && !gs.hidden) { closeGraphStage(); return; }   // z-70 全屏关系图层: 全壳最高档
+    const ov = $("overlay");
+    if (ov && !ov.hidden) { hideError(); return; }    // z-50 遮罩最上档: 收遮罩即恢复页面操作
+    const m = $("ctxMenu");
+    if (m && !m.hidden) { closeCtx(); return; }       // z-40 右键菜单
+    const drawer = $("drawer");
+    if (drawer.classList.contains("open")) { S.sel = null; closeDrawer(); return; }  // z-30 详情抽屉: 清选择 + 收
+    if (S.multi.length) { clearMulti(); return; }   // 多选档 (计划 26-10-31-0143, 拍板 D9): 收完浮层再退选区
+    const selRows = $("v-ledger").querySelectorAll("tr.sel");   /* 主表 + 置顶专区两处行选择 (同 link 双区同亮) */
+    if (selRows.length) { selRows.forEach(r => r.classList.remove("sel")); return; }  // 行选择退档
+    const inInput = !!e.target.closest("input, textarea, select");
+    if (S.view === "console" && !inInput && (S.openRows.size || S.selTopic)) {
+      S.openRows.clear();
+      S.selTopic = null;
+      saveFilters();
+      renderConsole();   // 兜档: 收展开态 + 清专题选择 —— 可见状态变化即点名, 不静默
+    }
+  };
+  document.addEventListener("keydown", escRetreat);
+  /* "/" 快捷键: 非输入态一键聚焦全局搜索框 (浏览器惯例键位); 输入态 / 下拉内不劫 (正常打字);
+     IME 组合期不劫 (同 escRetreat 口径, keyCode 229 同判); 加修饰键不劫 (留给浏览器 / 系统)。
+     命名函数注册 —— 守阵数 document-level keydown 监听里含 Esc 关键词的必须恰一处,
+     本链与 Esc 无关, 别把那个词写进监听调用点。 */
+  function slashFocus(e) {
+    if (e.key !== "/") return;
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest("input, textarea, select")) return;
+    e.preventDefault();
+    $("gq").focus();
+  }
+  document.addEventListener("keydown", slashFocus);
+  /* Ctrl+A 全选 (计划 26-10-31-0143, 拍板 D11): 台账视图 + 非输入态 = 全选主表当前可见行;
+     输入框 / 下拉内不劫 (正常全选文本), 控制台 / 卡片墙不劫 (留浏览器默认)。
+     全选不落锚点 (下一次 Shift 兜底解析到被点行)。WARN: 监听调用点与函数名不得含 Esc 关键词
+     —— 守阵 test_esc_retreat_chain_single_point 数 document-level Esc 链必须恰一处。 */
+  function selectAllVisible(e) {
+    if (e.key !== "a" && e.key !== "A") return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if (e.isComposing || e.keyCode === 229) return;   // IME 组合期不劫 (同 escRetreat 口径)
+    if (S.view !== "ledger" || !DATA) return;
+    if (e.target.closest("input, textarea, select")) return;
+    e.preventDefault();
+    S.multi = aFiltered().map(i => i.link);
+    S.multiAnchor = null;
+    syncMultiChip();
+    renderLedger();
+  }
+  document.addEventListener("keydown", selectAllVisible);
+  window.addEventListener("scroll", closeCtx, true);
+  $("sort").addEventListener("change", e => { S.sort = e.target.value; saveFilters(); renderLedger(); });
+  $("dclose").onclick = () => { S.sel = null; closeDrawer(); };
+  $("gsClose").onclick = closeGraphStage;
+
+  /* B */
+  $("chlist").addEventListener("click", e => {
+    const ch = e.target.closest(".ch");
+    if (!ch) return;
+    S.selTopic = ch.dataset.k;
+    saveFilters();
+    $("chlist").querySelectorAll(".ch").forEach(x => x.classList.toggle("on", x.dataset.k === S.selTopic));
+    renderScope();
+  });
+  $("cq").addEventListener("input", e => { S.cq = e.target.value; saveFilters(); renderChannels(); });
+  $("cq").addEventListener("keydown", e => {
+    if (e.key === "Escape") { e.target.value = ""; S.cq = ""; saveFilters(); renderChannels(); }
+  });
+  $("sbody").addEventListener("click", e => {
+    const head = e.target.closest(".row-head");
+    if (!head) return;
+    const row = head.parentElement;
+    const link = row.dataset.link;
+    if (S.openRows.has(link)) S.openRows.delete(link); else S.openRows.add(link);
+    saveFilters();
+    row.classList.toggle("open");
+  });
+
+  /* C */
+  $("cFormPills").addEventListener("click", e => {
+    const p = e.target.closest(".pill");
+    if (!p) return;
+    const f = p.dataset.v;
+    if (S.cForms.has(f)) { if (S.cForms.size === 1) return; S.cForms.delete(f); } else S.cForms.add(f);
+    saveFilters();
+    renderCards();
+  });
+  $("cStatusPills").addEventListener("click", e => {
+    const p = e.target.closest(".pill");
+    if (!p) return;
+    const s = p.dataset.v;
+    if (S.cStatuses.has(s)) { if (S.cStatuses.size === 1) return; S.cStatuses.delete(s); } else S.cStatuses.add(s);
+    saveFilters();
+    renderCards();
+  });
+  $("cLiveOnly").addEventListener("click", () => { S.cLive = !S.cLive; saveFilters(); renderCards(); });
+  $("wall").addEventListener("click", e => {
+    const m = e.target.closest(".more");
+    if (!m) return;
+    S.expanded.add(m.dataset.k);
+    saveFilters();
+    renderCards();
+  });
+}
+
+/* ============================================================
+   数据接入: http 模式 fetch + 30s 轮询 / 静态模式注入
+   ============================================================ */
+function applyData(d) {
+  DATA = d;
+  derive();
+  updateTopbar();
+  hideError();
+  renderCurrent();
+  /* 全屏层只在打开时挂一次: 不跟着新数据重挂, 轮询/拉取后看到的还是上一轮快照与旧 byLink */
+  if (!$("gStage").hidden && stageGraph) {
+    const st = stageGraph.getState();
+    /* 焦点件可能已被外部改动删掉 (拉取 / 别处提交): 不判在库就重挂, layoutRing 会拿到 undefined
+       中心节点直接抛, 页面表现是「图没了」而没有任何提示 */
+    if (byLink.has(st.center)) { stageFocus = st.center; openGraphStage(st.center, st.scope); }
+    else closeGraphStage();
+  }
+}
+
+async function refresh(silent) {
+  try {
+    const res = await fetch("/api/data", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const d = await res.json();
+    if (!d || !Array.isArray(d.items)) throw new Error("unexpected payload");
+    applyData(d);
+    return true;
+  } catch (err) {
+    if (!silent) {
+      showError("数据加载失败",
+        esc(String(err)) + " —— 无法从 <code>/api/data</code> 取得导航数据。",
+        '可改用静态件: <code>python .agents/skills/memory-bank/scripts/nav_server.py --gen-static</code>, ' +
+        "再用浏览器以 file:// 打开生成的单文件。");
+    }
+    return false;
+  }
+}
+
+/* 拉取 (仅快进): POST /api/pull 让服务端同步本仓库; 成功即刷新数据, 失败弹提示。
+   服务端只做 merge --ff-only —— 分叉 / 本地改动重叠 / 离线都会回 ok:false + 一行原因, 不 rebase。 */
+async function doPull() {
+  const btn = $("pullBtn");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.classList.remove("ok", "err");
+  btn.classList.add("busy");
+  $("pullLabel").textContent = "同步中";
+  try {
+    const res = await fetch("/api/pull", { method: "POST", headers: { [PULL_HEADER]: "pull" } });
+    const d = await res.json().catch(() => null);
+    if (d && d.ok) {
+      btn.classList.add("ok");
+      $("pullLabel").textContent = "已更新";
+      await refresh(true);
+      setTimeout(() => { btn.classList.remove("ok"); $("pullLabel").textContent = "拉取"; }, 1600);
+    } else {
+      btn.classList.add("err");
+      $("pullLabel").textContent = "拉取";
+      showError("同步失败", esc((d && d.message) || ("HTTP " + res.status)),
+        "仅快进: 分叉 / 本地改动重叠 / 离线时不会自动 rebase, 需人工处理后再点。");
+    }
+  } catch (err) {
+    btn.classList.add("err");
+    $("pullLabel").textContent = "拉取";
+    showError("同步失败", esc(String(err)), "无法访问 <code>/api/pull</code> —— 服务是否仍在运行?");
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove("busy");
+  }
+}
+
+function boot() {
+  wire();
+  if (STATIC_MODE || location.protocol === "file:") $("pullBtn").hidden = true;   /* 静态 / file 模式无服务端可拉 */
+  S.pins = loadPins();   /* 全壳唯一装载点 (derive 绝不触碰): 守阵 test_pin_state_not_reseeded_by_derive */
+  S.pinCollapsed = loadPinCollapsed();   /* 折叠态同款: 全壳唯一装载点 (derive 不碰) */
+  S.hidden = loadHidden();   /* 隐藏同款: 全壳唯一装载点 (derive 只读不写), 守阵 test_hidden_state_not_reseeded_by_derive */
+  S.view = loadView();
+  restoreFilters();      /* 全壳唯一装载点 (derive 绝不触碰): 刷新后筛选器不丢 */
+  /* 受控控件回填初值: 状态还原了但输入框 / 下拉还显示默认值, 用户会当成"没生效" */
+  $("gq").value = S.q;
+  $("cq").value = S.cq;
+  $("sort").value = S.sort;
+  syncGclear();   /* 回填了搜索词就得同步清词按钮显隐, 否则刷新后带词重开按钮失踪 */
+  for (const b of document.querySelectorAll("#seg button")) b.classList.toggle("on", b.dataset.view === S.view);
+  for (const id of ["v-ledger", "v-console", "v-cards"]) $(id).classList.toggle("on", id === "v-" + S.view);
+
+  if (STATIC_MODE) {
+    try {
+      applyData(JSON.parse(INLINE));
+    } catch (err) {
+      showError("静态件数据损坏", "注入数据解析失败: " + esc(String(err)), "请重新生成: nav_server.py --gen-static");
+    }
+    return;
+  }
+  if (location.protocol === "file:") {
+    showError("壳内无数据",
+      "当前以 file:// 打开的是未注入数据的页面壳。",
+      '请先执行 <code>python .agents/skills/memory-bank/scripts/nav_server.py --gen-static</code> 生成静态件再打开, 或起本地服务后经 http 访问。');
+    return;
+  }
+  refresh(false).then(ok => {
+    if (ok) setInterval(() => { refresh(true); }, POLL_MS);
+  });
+}
+
+boot();
+</script>
+</body>
+</html>

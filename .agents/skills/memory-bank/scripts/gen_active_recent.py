@@ -1,15 +1,16 @@
-"""会话滚动状态切片阅读器 —— 扫 `memory-bank/activeContext/` 的时间戳切片, 按「最后活动」倒序输出一行摘要。
+"""会话滚动状态切片阅读器 —— 扫 `memory-bank/active-context/` 的时间戳切片, 按「最后活动」倒序输出一行摘要。
 
-名字沿用 `gen_*` 前缀是与 `gen_tasks_index.py` / `gen_kb_index.py` 对齐, 但**本脚本不写任何文件**。
+名字沿用 `gen_*` 前缀是与 `gen_kb_index.py` 对齐, 但**本脚本不写任何文件**。
 
 数据源 (手写的只有切片文件):
-    <mb>/activeContext/YY-MM-DD-HHMM-<slug>.md
+    <mb>/active-context/YY-MM-DD-HHMM-<slug>.md
         # <标题>
         > 摘要: 一句话说清这个会话在做什么
-        > 最后活动: YYYY-MM-DD HH:MM      ← 排序键; 缺失则回退文件名时间戳 (= 创建时间)
+        > 最后活动: YYYY-MM-DD HH:MM      ← 排序键; 缺失则回退文件名时间戳 (= 创建时间); 存在但格式坏 → --check 报红
 
 用法 (从仓库根; `<skill-dir>` = 加载 memory-bank skill 时它实际所在的目录):
-    python <skill-dir>/scripts/gen_active_recent.py                   全量倒序输出一行摘要
+    python <skill-dir>/scripts/gen_active_recent.py                   默认按字节预算取最近 K 条
+    python <skill-dir>/scripts/gen_active_recent.py -n 5 / --all      改条数 / 全量排障 (会落盘)
     python <skill-dir>/scripts/gen_active_recent.py --check           只校验 (闸门 / 守卫用)
     python <skill-dir>/scripts/gen_active_recent.py --stale-days 14   改陈旧阈值
 
@@ -17,14 +18,17 @@
 
 1. **不写任何文件** —— 没有 `_recent.md`。缓存会过期: 一个看着可读、实际是上次运行快照的文件,
    比「没跑脚本」更危险 (后者一眼看得出)。时间戳文件名自带时间与主题, `ls` 本身就是索引。
-2. **不做「取最近 N 条」截断** —— 条数不是稳定的时间尺度 (活跃期一天十条会把半天挤出去,
-   安静期三条可能跨一个月), 而且截断会漏掉「创建早但仍在推进」的切片。
-   改为**全量倒序 + 陈旧标记**, 目录规模靠归档阈值控制, 不靠 N。
+2. **默认按字节预算截取最近 K 条** (2026-10-02 修订) —— 原口径是「不做『取最近 N 条』截断, 全量倒序 +
+   陈旧标记」: 条数不是稳定的时间尺度, 截断会漏「创建早但仍在推进」的切片。但切片 90+ 条后实测输出
+   ~51KB, 撞上 AI 工具壳 30,000 字节内联上限 → 全量落盘 + 预览乱码, 「全量」反而变得不可读
+   (pitfalls/ops/console-encoding.md 2026-10-02 变体)。改为**字节预算内取最近 K 条** (排序键仍是
+   最后活动, 推进中的切片必在最近侧); 总数 / 待归档数 / 省略数进页脚不丢, `--all` / `-n N` 逃生
+   (全量会落盘, 读 `*-stdout.log` 即原文)。目录规模仍靠归档阈值控制, 不靠 N。
 3. **文件名不带 clone 标记** —— 同分钟同名 add/add 概率极低, 撞了改个 slug 重来即可。
    「我上次做到哪」靠 **slug 复用** (同一专题跨会话沿用同一个 slug) 检索 —— 这给出的是
    专题维度的时间线, 比 clone 维度分区信息价值更高。
-4. **activeContext 不含长青职能** —— 定案口径 / 下一步候选 / 待走查 / 历史归档各自有真实归属
-   (根 AGENTS.md · conventions/ · pitfalls/ · 想法.md + progress/roadmap.md · checklists/ · tasks/),
+4. **active-context 不含长青职能** —— 定案口径 / 下一步候选 / 待走查 / 历史归档各自有真实归属
+   (根 AGENTS.md · conventions/ · pitfalls/ · architecture/ · projectbrief.md · tasks/),
    本目录只承载会话滚动状态。所以这里没有 global.md, 也不需要全局索引。
 """
 
@@ -41,8 +45,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (  # noqa: E402
     LAST_ACTIVE_RE,
     SLICE_COUNT_LIMIT,
+    SLICE_COUNT_TARGET,
     SLICE_DIR,
     SLICE_FILE_RE,
+    STALE_DAYS_VOLATILE,
     SUMMARY_RE,
     TITLE_RE,
     cap_of,
@@ -51,7 +57,15 @@ from _common import (  # noqa: E402
     resolve_mb_dir,
 )
 
-DEFAULT_STALE_DAYS = 14
+# 会话切片属 volatile 层 —— 陈旧阈值 = 会话级 (`_common.STALE_DAYS_VOLATILE`)。
+# 其它层的阈值 (reference 90 天 / plan·report 不审) 由 nav_data.py 消费同名单点。
+DEFAULT_STALE_DAYS = STALE_DAYS_VOLATILE
+
+# 默认字节预算 (按 UTF-8 编码后计): AI 工具壳 (ZCode Bash) 内联上限 30,000 字节, 超限全量落盘 +
+# 只回 2,000 字符预览, 截断点切进多字节字符时预览整段乱码 (pitfalls/ops/console-encoding.md
+# 2026-10-02 变体, 实测 kb.active 51KB 中招)。预算留 ~1/3 余量给 stderr 债务清单与增长;
+# 要全量走 --all (接受落盘, 读 *-stdout.log 即原文)。
+DEFAULT_BYTE_BUDGET = 20000
 
 # 文件名前缀 `YY-MM-DD-HHMM` → 创建时间
 _CREATED_RE = re.compile(r"^(\d{2})-(\d{2})-(\d{2})-(\d{2})(\d{2})")
@@ -79,15 +93,20 @@ def parse_created(name: str) -> datetime | None:
         return None
 
 
-def parse_last_active(text: str) -> datetime | None:
-    """文件内 `> 最后活动:` 字段 → 时间; 缺失返回 None (调用方回退创建时间)。"""
+def parse_last_active(text: str) -> tuple[datetime | None, bool]:
+    """文件内 `> 最后活动:` 字段 → `(时间, 是否「存在但格式坏」)`。
+
+    - 行缺失 → `(None, False)` —— 按设计回退创建时间, 不算问题。
+    - 行存在但格式坏 → `(None, True)` —— 2026-10-06 起在 `--check` **报红**(不再静默回退成创建时间):
+      坏值被吞掉, 排序与「待归档」标记就跟着漂, 而守卫永远不响(旧实现在这里静默 `return None`)。
+    """
     m = LAST_ACTIVE_RE.search(text)
     if not m:
-        return None
+        return None, False
     try:
-        return datetime.strptime(m.group(1).strip(), _ACTIVE_FMT)
+        return datetime.strptime(m.group(1).strip(), _ACTIVE_FMT), False
     except ValueError:
-        return None
+        return None, True
 
 
 def collect(slice_dir: Path, root: Path) -> tuple[list[dict], list[str], list[str]]:
@@ -97,8 +116,9 @@ def collect(slice_dir: Path, root: Path) -> tuple[list[dict], list[str], list[st
     没有"下一次读"了。
 
     **债务的判据只是"该蒸馏了"**(2026-09-30 债务制, 计划 26-09-30-2112): 单个切片超 cap 与
-    切片总数超阈值, 违反后读起来更贵、但事实源完好 —— 报进 `warns`, 提交不拦, 由 `doc.caps` /
-    `kb.active` 现算输出并转告用户, 清理另开会话。旧口径是判红, 实测后果是在会话最贵的时刻
+    切片总数达到 `SLICE_COUNT_LIMIT`, 违反后读起来更贵、但事实源完好 —— 报进 `warns`, 提交不拦,
+    由 `doc.caps` / `kb.active` 现算输出并转告用户, 清理另开会话。提示文案带处置目标
+    `SLICE_COUNT_TARGET`(一次降到该值以内, 免得刚清完又立刻触顶)。旧口径是判红, 实测后果是在会话最贵的时刻
     (满载历史) 逼出一轮蒸馏返工, 而阈值原就是按 ~5 片/日校准的估计值。
     """
     rows: list[dict] = []
@@ -131,10 +151,13 @@ def collect(slice_dir: Path, root: Path) -> tuple[list[dict], list[str], list[st
         if len(text) > cap:
             warns.append(
                 f"{rel}: {len(text)} 字符 > 切片 cap {cap} —— **债务**: 不拦提交; 本会话不修, "
-                "转告用户另开会话清理(清理口径: 蒸馏进 progress/ 或任务档案, 不是调 cap)"
+                "转告用户另开会话清理(清理口径: 蒸馏进任务档案, 不是调 cap)"
             )
 
-        last = parse_last_active(text) or created
+        last, bad_last = parse_last_active(text)
+        if bad_last:
+            problems.append(f"{rel}: 「最后活动」存在但格式坏 (须严格 `YYYY-MM-DD HH:MM`) —— 取时走 `commands run kb.time time`")
+        last = last or created
         slug = path.name[len(_CREATED_RE.match(path.name).group(0)) + 1:-len(".md")]
         rows.append(
             {
@@ -148,10 +171,11 @@ def collect(slice_dir: Path, root: Path) -> tuple[list[dict], list[str], list[st
 
     rows.sort(key=lambda r: r["last"], reverse=True)
 
-    if len(rows) > SLICE_COUNT_LIMIT:
+    if len(rows) >= SLICE_COUNT_LIMIT:
         warns.append(
-            f"切片数 {len(rows)} > {SLICE_COUNT_LIMIT} —— **债务**: 不拦提交; 本会话不修, "
-            "转告用户另开会话清理(把 14 天未动的切片蒸馏进 progress/ 或任务档案后删除)"
+            f"切片数 {len(rows)} 条 >= 上限 {SLICE_COUNT_LIMIT} 条 —— **债务**: 只告警, 不拦提交/收尾; "
+            f"处置目标 = 蒸馏到 {SLICE_COUNT_TARGET} 条以内 (一次降到位, 否则刚处理完又立刻超限); "
+            "把 14 天未动的切片蒸馏进任务档案后删除"
         )
     return rows, problems, warns
 
@@ -162,21 +186,48 @@ def _pad(text: str, width: int) -> str:
     return text + " " * max(0, width - shown)
 
 
-def render(rows: list[dict], stale_days: int, now: datetime) -> str:
-    # 不截断 slug —— 截断会丢信息, 且 slug 长度本来就有界
+def render(
+    rows: list[dict], stale_days: int, now: datetime, limit: int | None = None, byte_budget: int | None = None
+) -> str:
+    """渲染表格; 截取优先级 byte_budget > limit > 不截 (调用方三选一, 见 main)。
+
+    **截的是展示不是事实**: rows 按最后活动倒序, 截取取的是前缀 (最近侧), 页脚保留总数 /
+    待归档数 / 省略数 —— 「创建早但仍在推进」的切片靠排序键必然留在显示侧。
+    """
+    # 不截断 slug —— 截断会丢信息, 且 slug 长度本来就有界; 宽度按全量算, 截取前后列宽稳定
     width = max((len(r["slug"]) for r in rows), default=10)
-    lines = [_pad("创建", 17) + _pad("最后活动", 17) + _pad("切片 slug", width + 2) + "摘要", ""]
-    for r in rows:
+
+    def row_line(r: dict) -> str:
         stale = (now - r["last"]).days
         mark = f"  [陈旧 {stale} 天 → 待归档]" if stale > stale_days else ""
-        lines.append(
+        return (
             _pad(f"{r['created']:%y-%m-%d %H:%M}", 17) + _pad(f"{r['last']:%y-%m-%d %H:%M}", 17) +
             _pad(r["slug"], width + 2) + r["summary"] + mark
         )
+
+    if byte_budget is not None:
+        shown: list[dict] = []
+        used = 0
+        for r in rows:
+            size = len(row_line(r).encode("utf-8")) + 1  # +1 换行
+            if shown and used + size > byte_budget:
+                break
+            shown.append(r)
+            used += size
+    else:
+        shown = rows if limit is None else rows[:limit]
+
+    lines = [_pad("创建", 17) + _pad("最后活动", 17) + _pad("切片 slug", width + 2) + "摘要", ""]
+    lines.extend(row_line(r) for r in shown)
     stale_n = sum(1 for r in rows if (now - r["last"]).days > stale_days)
+    omitted = len(rows) - len(shown)
     lines.append("")
-    lines.append(f"共 {len(rows)} 个切片 · {stale_n} 个待归档 (阈值 {stale_days} 天未动)")
-    lines.append("长青焦点不在这里 —— 「下一步」看 想法.md + progress/roadmap.md, 定案口径看根 AGENTS.md / conventions/ / pitfalls/")
+    total = f"共 {len(rows)} 个切片 · {stale_n} 个待归档 (阈值 {stale_days} 天未动)"
+    if omitted:
+        basis = f" (字节预算 {byte_budget})" if byte_budget is not None else ""
+        total += f" · 显示最近 {len(shown)} 条{basis}, 省略 {omitted} 条 (--all / -n N 看更旧)"
+    lines.append(total)
+    lines.append("长青焦点不在这里 —— 「下一步」看 想法.md + plans/ Open, 定案口径看根 AGENTS.md / conventions/ / pitfalls/")
     return "\n".join(lines)
 
 
@@ -184,6 +235,8 @@ def main() -> int:
     _utf8_stdout()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check", action="store_true", help="只校验, 不打印摘要 (闸门与守卫用)")
+    parser.add_argument("-n", type=int, default=None, help="列最近 N 条 (默认按字节预算截取, 保证内联可读)")
+    parser.add_argument("--all", action="store_true", help="全量输出 (超 30KB 内联上限会落盘, 读 *-stdout.log; 排障用)")
     parser.add_argument("--stale-days", type=int, default=DEFAULT_STALE_DAYS, help=f"陈旧阈值, 默认 {DEFAULT_STALE_DAYS} 天")
     parser.add_argument("--root", help="仓库根 (默认向上找 .git)")
     parser.add_argument("--mb-dir", help="memory-bank 目录 (默认 <root>/memory-bank)")
@@ -194,8 +247,8 @@ def main() -> int:
     slice_dir = mb / SLICE_DIR
 
     if not slice_dir.is_dir():
-        # 尚未目录化 —— 不是错误, 别堵住闸门
-        sys.stderr.write(f"尚无 {slice_dir.name}/ 目录 (仍是单文件 activeContext.md), 本脚本在 W1 目录化后生效\n")
+        # 无切片目录 —— 不是错误, 别堵住闸门
+        sys.stderr.write(f"尚无 {slice_dir.name}/ 目录 (还没有会话切片), 本脚本无数据可扫\n")
         return 0
 
     rows, problems, warns = collect(slice_dir, root)
@@ -212,7 +265,12 @@ def main() -> int:
             sys.stderr.write(f"cap 债务 {len(warns)} 项 —— 不拦提交; 本会话不修, 转告用户另开会话清理。\n")
         return 0
 
-    print(render(rows, args.stale_days, datetime.now()))
+    if args.all:
+        print(render(rows, args.stale_days, datetime.now()))
+    elif args.n is not None:
+        print(render(rows, args.stale_days, datetime.now(), limit=max(1, args.n)))
+    else:
+        print(render(rows, args.stale_days, datetime.now(), byte_budget=DEFAULT_BYTE_BUDGET))
     for p in problems:
         sys.stderr.write(f"[warn] {p}\n")
     for w in warns:

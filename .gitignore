@@ -23,3 +23,7 @@
 #   2. 禁止删除/注释本行，或改用更窄的通配符把它放进来；
 #   3. 禁止把目录内内容复制到 src/、tests/、memory-bank/ 等受追踪位置。
 resources-do-not-track/
+
+# skill 编译产物不入库
+__pycache__/
+*.pyc
