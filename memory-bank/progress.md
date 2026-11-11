@@ -13,7 +13,7 @@
   列索引运行时探测后动态生成 CSS，原站功能（16 项导航、信息栏入口含签到、搜索箱与折叠、排序、
   RSS 增删、分页、页脚）由「功能基线快照 + hit-test」两道仿真断言守住。  结构契约（A 级锚点 + **必需**列齐全 + 行列数一致）任一不满足 ⇒ 卸妆 + 控制台 error + 顶部红色横幅 +
   写 `hdui.lastError`；运行时 MutationObserver 复查。诊断统一走 `Diag` 账本，禁止空 catch，
-  挂载 window error/unhandledrejection 只记不吞。详见 `scripts/HDHomeUI.md` 与 `pitfalls.md` P33。
+  挂载 window error/unhandledrejection 只记不吞。详见 `scripts/HDHomeUI.md` 与 `pitfalls/_index.md` P33。
   **`.5`（已改码，**已提交 d56ffbb**）：新增 SVG 图标体系**（原型在 `.workbuddy-ai/hdui-mock/film.html`，
   96/48/24/16px 四档对照下经多轮用户选型定稿）。`ICONS`（31 个实心路径）+ `iconUri()` data URI 生成器；
   类别 7 类换图 + 本色 16% 淡底圆角色块、表头指标 8 个按语义各一色、导航 16 项每项一色。
@@ -25,7 +25,7 @@
   **新测试 `sim-hdui-icons.js`（第 24 个）**：补上"图标真的画出来了"这一层断言 ——
   原有测试只能证明"没回归"，没有任何一条断言图标生效。5 套主题下逐项验 content 是 SVG 且宽度>0、
   保种≠断种、tape 导航挂 0 个、signal 色点设计保留、RSS 链接不被压塌。
-  图标选型方法论固化在 `pitfalls.md` **P34–P42**（16px 幸存信号三类 / 同色叠画不可见 / 列宽吃掉图标 /
+  图标选型方法论固化在 `pitfalls/_index.md` **P34–P42**（16px 幸存信号三类 / 同色叠画不可见 / 列宽吃掉图标 /
   "椭圆+竖槽≈手" / 倒置辨识度不足 / evenodd 越界 / **边缘缺 vs 内部缺** / 无图验证手段 / SVG 固有尺寸）。
   `scripts/HDHomeUI.md` 新增 §7「图标体系」。
   **`.6`（已改码，**已提交 d56ffbb**）：修正 `UNHANDLED_REJECTION` 的**归因误导**。**
@@ -36,7 +36,7 @@
   修：日志补 **stack 首帧** + 显式「来自页面或其它脚本（本脚本无异步代码），非 HDHomeUI 故障」；
   `check-hdui-static.js` 新增 3 条断言 —— ① **脚本零异步**（无 `async`/`await`/`new Promise`/`.then`，
   这是免责的前提，将来引入异步即变红提醒同步改措辞）② 日志含免责措辞 ③ 日志取 stack。
-  三断言均做过反向验证（注入 `async` / 删措辞 ⇒ 确实变红）。方法论见 `pitfalls.md` **P43**。
+  三断言均做过反向验证（注入 `async` / 删措辞 ⇒ 确实变红）。方法论见 `pitfalls/_index.md` **P43**。
   **`.7`（已改码，**已提交 d56ffbb**）：移除旧 5 套, 改为单一主题「胶片墙」`film`。**
   原型 `.workbuddy-ai/hdui-mock/film.html` 早就存在（图标体系就是在它上面定稿的）, 但 `.5` 只移植了
   **图标层**、没落地主题本身 —— 用户一句"为什么还是之前的 5 套 UI, 新 UI 呢"才暴露这个疏漏。
@@ -60,7 +60,7 @@
   (配置类「主题设置无效」, 按钮「改用胶片墙」而非没用的「重新尝试」)。
   **新测试 `sim-hdui-legacy-theme.js`（第 25 个）**: 逐个旧 id 验「上妆成功 + 无横幅 + 存储已改写」,
   并验无效值走「主题设置无效」而非「结构不符」、不进等待窗口。静态新增 §11。
-  全量 **25/25** 全绿。详见 `pitfalls.md` **P44**。
+  全量 **25/25** 全绿。详见 `pitfalls/_index.md` **P44**。
   **`.9`（已改码，**已提交 d56ffbb**）：① 首装直接上妆；② 导航配色去撞色（方案 B）。**
   ① `FIRST_ID = 'film'` —— 旧行为首装不上妆, 装完还得手动切一次才看得到界面, 与"全面改为新 UI"不符。
      ⚠️ 只在**存储无值**时生效; 用户选过(含选「原站默认」)一律以存储为准, 不会被强推回胶片墙。
@@ -69,7 +69,7 @@
   ② `ICON_NAV` 改 4 行: home→#eda23c(饱和 90→83)、upload→#e0762c(H39→25 推成橙)、
      shield→#a99e8b(降饱和变暖灰)、logdoc→#94a3b8(中性石板灰, 青绿让给种子独占)。真撞 **4→0**。
      ⚠️ 判据必须**三维**(Δh≤8 且 Δs≤20 且 Δl≤15), 只看色相会得到虚高问题数(7 vs 真实 4)。
-     见 `pitfalls.md` **P45**。
+     见 `pitfalls/_index.md` **P45**。
   **`.10`（已改码，**已提交 d56ffbb**）：两个"宽屏测不出、窄屏才暴露"的布局陷阱。**
   ⚠️ 同源根因: 站点外层**固定宽 + table-layout:auto**, 会被内容的 max-content 撑开。
   ① **上妆把整页撑宽**: 文档宽 **1260 → 1503**。因为 `min-width:0` 只管**收缩**(min-content),
@@ -82,7 +82,7 @@
      修后 1024/900 均 **0/16 被挡**, 宽屏无影响。
   **新测试 `sim-hdui-layout-width.js`（第 26 个）**: 用 `Emulation.setDeviceMetricsOverride` 改视口,
   钉死「文档宽 ≤ 原站 / 窄屏导航 0 被挡 / 滚动后片头吸顶」。全量 **26/26** 全绿。
-  `tests/README.md` 测试清单同步。详见 `pitfalls.md` **P46**。
+  `tests/README.md` 测试清单同步。详见 `pitfalls/_index.md` **P46**。
   **`.4`（已提交 `4e01743`, 分支 `dev`, 已推 gitee, 10s）**：真站首装报 `E_COLUMN_UNKNOWN: a,ave`、点重试就好 ——
   A / A·GB 是**别的脚本运行时注入**的列（`#calcTHeadA` / `#calcTHeadAve`），比本脚本晚，**纯时序问题**。
   ① `a`/`ave` 改**可选列**（`REQUIRED_COLUMNS` 由全集剔除得出），缺了返回成功码 `OK_NO_CALC` 照常上妆，
@@ -219,7 +219,7 @@
   促销徽章无兜底（未登记 `pro_*` 变 16×16 空白）、inline 白底兜底漏 6 位 `#ffffff`（公告块）。
 - **结构裁决落地**：未知列 `E_COLUMN_UNEXPECTED` / 未知分组行 `E_ROW_UNKNOWN` ⇒ 一律卸妆、不进等窗口；
   行结构由「只查 `rows[1]`」改为**逐行**校验。
-- 测试数 **29 → 34**，全绿。详见 `pitfalls.md` P66–P69、`scripts/HDHomeUI.md` §2.1。
+- 测试数 **29 → 34**，全绿。详见 `pitfalls/_index.md` P66–P69、`scripts/HDHomeUI.md` §2.1。
 
 ### 已知问题（2026-09-20 记录，尚未定位）
 
@@ -236,7 +236,7 @@
 - **中期**：设置面板化；解析工具函数收敛；表格解析回归测试；发布自动化（版本号校验）。
 - **远期**：多站点种子聚合/搜索辅助；签到结果推送（GM_notification/Server 酱）；规则热更新（远端 JSON + 缓存）；代码现代化评审。
 
-## 已知问题（见 pitfalls.md 完整清单）
+## 已知问题（见 pitfalls/_index.md 完整清单）
 
 - P2、P10：上述现存 Bug。
 - P16 起：PTAutoCheckIn v2 站点建模的各类已踩坑（落地页无反馈、confirmManual 卡 pending、跨天快照、验证码站、no-text 按钮、SPA 导航时序等）均已记录症状→原因→对策。

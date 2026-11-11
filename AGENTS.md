@@ -15,7 +15,7 @@
 7. `memory-bank/progress.md` —— 已实现 / 待办 / 现状 / 已知问题
 8. `memory-bank/tasks/_index.md` —— 任务清单（按状态分类）
 
-> 深度参考文档（记忆库允许的「附加上下文」）按需阅读：`memory-bank/conventions.md`（代码约定）、`memory-bank/pitfalls.md`（易错点）、`memory-bank/scripts/*.md`（各脚本详解）。
+> 深度参考文档（记忆库允许的「附加上下文」）按需阅读：`memory-bank/conventions.md`（代码约定）、`memory-bank/pitfalls/_index.md`（易错点）、`memory-bank/scripts/*.md`（各脚本详解）。
 
 ## 项目速览
 
@@ -60,8 +60,8 @@
 
 - **首次接触项目**：读 `memory-bank/projectbrief.md` + `memory-bank/README.md` 了解结构与脚本概览。
 - **修改某个脚本**：读 `memory-bank/scripts/<脚本名>.md` + 源文件（`src/*.user.js`）。
-- **动手写代码前**：读 `memory-bank/conventions.md`（约定）与 `memory-bank/pitfalls.md`（易错点），避免重踩历史 Bug。
-- **排障/查现状**：优先查 `memory-bank/pitfalls.md` 的症状→原因对照表；其次看脚本内 `[ScriptName]` 日志。
+- **动手写代码前**：读 `memory-bank/conventions.md`（约定）与 `memory-bank/pitfalls/_index.md`（易错点），避免重踩历史 Bug。
+- **排障/查现状**：优先查 `memory-bank/pitfalls/_index.md` 的症状→原因对照表；其次看脚本内 `[ScriptName]` 日志。
 - **规划改动**：参考 `memory-bank/tasks/` 中已登记的待办与方向。
 - **更新记忆库**：被要求「更新记忆库」时，须复查 `memory-bank/` 全部文件，重点更新 `activeContext.md`、`progress.md` 与 `tasks/_index.md`。
 - **计划产出**: 列计划时使用 `delivery-artifact` skill 产出文档, 将计划文档放入 `docs/plans/` 中; **格式一律为单文件 HTML (`.html`), 不使用 Markdown (`.md`)** —— `docs/plans/` 下的计划文档若出现 `.md` 即为违规, 需转为 HTML; 命名统一为"日期-时间-标题", 如 `26-09-17-0906-improve-webui-plan.html`, 意思为"26年9月17日上午9点6分的改进webui计划", 方便检索, 注意需通过命令获取当前准确的日期和时间, 不要靠记忆!

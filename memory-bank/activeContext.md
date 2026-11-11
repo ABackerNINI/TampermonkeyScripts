@@ -42,7 +42,7 @@
 （否则底色那条会把悬停反馈吃掉）。
 **反向验证**：去掉 `!important` ⇒ 仿真背景回落 `rgb(250, 238, 244)`，与真站探针**完全一致**；
 两条都去掉 ⇒ 异常 4 个，证明两条都必需。新增仿真断言④（直接给置顶行写 inline 粉白复现真站）。
-新教训 `pitfalls.md` **P76**：先分清「没匹配上」还是「被压住」，修法完全不同。
+新教训 `pitfalls/_index.md` **P76**：先分清「没匹配上」还是「被压住」，修法完全不同。
 **2026-09-20 `.27`（已提交 `b4edd94` 并推送）——用户再报「第二段置顶种子仍是白色背景」：先实测再动手。**
 结论：**代码侧不用改** —— 真站样本上 `tr.sticky_top` 86 个（外 43 + 内 43）**全部 `self=29` 深色**，
 置顶验收 86/86、漏白 / 小件近白**双双干净**，全页 `lum>120` 的只有 `span.tags` 的 23 种分类色
@@ -56,7 +56,7 @@
   改三条严断言（背景存在 / 内层不带 inset / 未退化成 `#torrenttable .sticky_top` 通用后代）。
 - **两次反向验证均已跑**：删 `background` ⇒ sim 红（内层 `rgba(0,0,0,0)`）+ 静态红（1 项）；
   恢复后 **36/36 全绿**。
-新教训 `pitfalls.md` **P75**：**透明 ≠ 白** —— 内层漏规则时透出的是**外层已上妆的深色**，
+新教训 `pitfalls/_index.md` **P75**：**透明 ≠ 白** —— 内层漏规则时透出的是**外层已上妆的深色**，
 所以漏白 / 近白扫描**都抓不到**；这类「声明缺失」只能靠分层计数 + 具体色值断言。
 **2026-09-20 `.26`（已改码，**待审核**）——「未知元素不默认屏蔽」专项（用户诉求）+ T6 基建入库：**
 诉求：加测试保证**站点改版冒出来的东西（消息弹窗 / 公告 / 新种子标签）不被主题屏蔽**。
@@ -299,7 +299,7 @@ autofill 的浅黄底用 `inset box-shadow` 盖掉（它改不了 `background-co
 可这是**配置值失效**，等也不会变好 —— 与 P43 同类的归因误导。
 修：`LEGACY_THEMES` 静默迁移 + 写回存储；`CONFIG_CODES=['E_BAD_THEME']` 与 `STRUCT_CODES` 分开；
 `showAlert` 按错误码分流措辞，配置类按钮给「改用胶片墙」而非没用的「重新尝试」。
-新测试 `sim-hdui-legacy-theme.js`（第 25 个）+ 静态 §11。全量 **25/25** 全绿。见 `pitfalls.md` **P44**。
+新测试 `sim-hdui-legacy-theme.js`（第 25 个）+ 静态 §11。全量 **25/25** 全绿。见 `pitfalls/_index.md` **P44**。
 ⚠️ **今后删任何主题都要把 id 登记进 `LEGACY_THEMES`** —— 静态会提醒，但登记是人的责任。
 **2026-09-19 `.7`（已改码，**已提交 d56ffbb**）——移除旧 5 套，改为单一主题「胶片墙」`film`**：
 用户判定那 5 套"已经没用了"。⚠️ 关键教训：**这套新 UI 的原型 `.workbuddy-ai/hdui-mock/film.html`
@@ -321,7 +321,7 @@ autofill 的浅黄底用 `inset box-shadow` 盖掉（它改不了 `background-co
 害用户去 HDHomeUI 里找一个不存在的 `innerText`（真身在 `PTAutoCheckIn.user.js` 的 `visibleText()`）。
 修：日志带 **stack 首帧** + 显式「来自页面或其它脚本（本脚本无异步代码），非 HDHomeUI 故障」；
 并把「零异步」钉成静态不变量（将来引入异步即变红，提醒同步改措辞，否则免责声明成了谎言）。
-三断言均做过反向验证。见 `pitfalls.md` **P43**。全量 24 个测试通过。
+三断言均做过反向验证。见 `pitfalls/_index.md` **P43**。全量 24 个测试通过。
 **2026-09-19 `.5`（已改码，**已提交 d56ffbb**）——新增 SVG 图标体系**（原型在 `.workbuddy-ai/hdui-mock/film.html`，
 已在 96/48/24/16px 四档对照下经多轮用户选型定稿）：
 ① 新增 `ICONS` 实心路径表（31 个）+ `iconUri(name,color)` data URI 生成器 + `rgba()` 辅助；
@@ -438,7 +438,7 @@ autofill 的浅黄底用 `inset box-shadow` 盖掉（它改不了 `background-co
   注释已升级为带理由的安全边界说明）；② 其中的密钥/passkey/token/cookie/uid **禁止任何形式外泄**
   （不进对话回复、日志、截图、提交与 diff、issue/PR/Gist、云端笔记、`tests/` 夹具、`src/*.html` 样本）；
   ③ 引用只描述结构（选择器/类名/URL 形状），值一律 `***`；需要样本入库先复制并手工清凭据。
-  落点：`AGENTS.md` 铁律 5、`conventions.md` §0.5 + §1 提交前自查第 5 条、`pitfalls.md` **P32**、
+  落点：`AGENTS.md` 铁律 5、`conventions.md` §0.5 + §1 提交前自查第 5 条、`pitfalls/_index.md` **P32**、
   `README.md` 索引与快速提醒 9。**已提交 d56ffbb**（与今日其他改动同一批）。
 
 ## 活跃决策与考量
@@ -490,5 +490,5 @@ autofill 的浅黄底用 `inset box-shadow` 盖掉（它改不了 `background-co
 
 ## 待办追踪
 
-- 完整任务清单见 [tasks/_index.md](./tasks/_index.md)；现存 Bug 清单见 [pitfalls.md](./pitfalls.md)。
-- 现存 Bug 清单见 [pitfalls.md](./pitfalls.md)（P2、P10 为未修复的现存 Bug）。
+- 完整任务清单见 [tasks/_index.md](./tasks/_index.md)；现存 Bug 清单见 [pitfalls/_index.md](./pitfalls/_index.md)。
+- 现存 Bug 清单见 [pitfalls/_index.md](./pitfalls/_index.md)（P2、P10 为未修复的现存 Bug）。

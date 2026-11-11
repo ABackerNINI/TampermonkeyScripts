@@ -40,7 +40,7 @@ generated_regen_cmd = ""
 # ---------------------------------------------------------------------------
 
 [[gates]]
-match   = ["src/", "tests/"]
+match   = ["src/", "tests/run-all.js", "tests/ptautocheckin/", "tests/hdhomeui/", "tests/lib/"]
 run     = ["node tests/run-all.js"]
 note    = "JS 改动: 零依赖全量测试(当前 35 个, 约 5 分钟; 无浏览器时 SKIP 仿真用例)"
 auto    = true

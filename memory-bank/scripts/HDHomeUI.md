@@ -40,7 +40,7 @@
      拼出 `tr.sticky_top:hover #torrenttable table.torrentname ...` 要求行内再套一个
      `#torrenttable`，**语法合法但永远匹配不上** = 死规则。必须写相对路径
      `table.torrentname > tbody > tr`。这条是**仿真 hover 实测**抓到的(静态断言只验字符串
-     存在，抓不到死规则)，详见 `pitfalls.md` **P78**。
+     存在，抓不到死规则)，详见 `pitfalls/_index.md` **P78**。
   ⚠️ 内层不能写 transparent —— 它背后是外层行的 `<td>`(站点 `td.rowfollow` 有浅底)，
      透明会直接露出浅底，那正是 .25 之前「内层白底」的来源。
   **② 促销徽章从图形改文字。** 用户报「Free 等促销标签图标不具辨识度」。
@@ -85,11 +85,11 @@
     改为三条严断言（背景存在 / 内层不带 inset / 未退化成 `#torrenttable .sticky_top` 通用后代选择器）。
   · **两次反向验证**：删掉 `background` 声明 ⇒ sim 用例红（内层 `rgba(0,0,0,0)`）、静态红（1 项）；
     恢复后 36/36 全绿。
-  ⚠️ 两条教训（详见 `pitfalls.md` **P70 / P71**）：① **`||` 兜底 + `[\s\S]*` 通配 = 假断言**，
+  ⚠️ 两条教训（详见 `pitfalls/_index.md` **P70 / P71**）：① **`||` 兜底 + `[\s\S]*` 通配 = 假断言**，
   写完必须反向验证一次；② **透明 ≠ 白** —— 内层漏规则时是 `transparent`，透出**外层已经上妆的深色**，
   于是**漏白 / 近白扫描都报干净**，渲染扫描根本看不见这类漏规则，只能靠"分层计数 + 具体色值"。
 - **2026.09.19.11：与原型 `film.html` 的保真度对齐（TASK019）** —— 用户报「未能完整复刻原型」。
-  查出三类差异，共 29 条，根因是**「原型」被当成了「真站」**（详见 `pitfalls.md` P48/P49）：
+  查出三类差异，共 29 条，根因是**「原型」被当成了「真站」**（详见 `pitfalls/_index.md` P48/P49）：
   · **A 类 真站适配缺失（11 条，真站上真的画错）**：类别家族只覆盖 7 族（真站 12 族，
     漏 `c_cartoon`/`c_misc`/`c_4kuhd_remux`/`c_tvshows`/`c_tvmusics`）且**无兜底** ⇒
     未命中时只压尺寸不换图，而 `catsprites.css` 是按 45×46 算的 `background-position` ⇒ 碎片；
@@ -124,7 +124,7 @@
      **原站 inline 布局会自然换行，换 flex 后必须显式给 `max-width:100vw` 才会 wrap。**
      修后 1024/900 下均 **0/16 被挡**，宽屏无影响。
   新测试 `sim-hdui-layout-width.js`（第 26 个）：文档宽 ≤ 原站、窄屏导航 0 被挡、滚动后片头吸顶
-  （`Emulation.setDeviceMetricsOverride` 改视口）。详见 `pitfalls.md` **P46**。
+  （`Emulation.setDeviceMetricsOverride` 改视口）。详见 `pitfalls/_index.md` **P46**。
 - **2026.09.19.9：① 首装直接上妆；② 导航 16 色去撞色。**
   · **首装默认改为 `FIRST_ID = 'film'`** —— 旧行为是首装不上妆（`DEFAULT_ID`），
     装完还得手动切一次才看得到界面，与"全面改为新 UI"的意图不符。
@@ -136,7 +136,7 @@
     `shield #c9a86a→#a99e8b`（降饱和变暖灰）、`logdoc #57c9a8→#94a3b8`（中性石板灰，
     让青绿独占给种子）。真撞对数 **4 → 0**。
     ⚠️ 判据必须是**三维**（`Δh≤8 且 Δs≤20 且 Δl≤15`）—— 只看色相会得到虚高的问题数
-    （7 对 vs 真实 4 对），据此改色会白动一堆没问题的颜色。详见 `pitfalls.md` **P45**。
+    （7 对 vs 真实 4 对），据此改色会白动一堆没问题的颜色。详见 `pitfalls/_index.md` **P45**。
 - **2026.09.19.8：旧主题 id 自动迁移 —— 删主题的收尾**（用户实测
   `[HDHomeUI] 页面结构与预期不符(E_UNKNOWN_THEME) ... 未知主题 tape`）：
   他以前选的就是 `tape`，`.7` 把主题删了但 GM 存储里的值还在。两个错：
@@ -147,7 +147,7 @@
   现在：`LEGACY_THEMES`（旧 5 套）+ `LEGACY_MIGRATE_TO = 'film'` 静默迁移；
   `CONFIG_CODES = ['E_BAD_THEME']` 与 `STRUCT_CODES` 分开；`showAlert` 按错误码分流措辞
   （配置类说「主题设置无效」，按钮给「改用胶片墙」而不是没用的「重新尝试」）。
-  新增第 25 个测试 `sim-hdui-legacy-theme.js` + 静态 §11。详见 `pitfalls.md` **P44**。
+  新增第 25 个测试 `sim-hdui-legacy-theme.js` + 静态 §11。详见 `pitfalls/_index.md` **P44**。
   ⚠️ **今后删任何主题，都要把它的 id 登记进 `LEGACY_THEMES`** —— 静态断言会提醒，但登记是人的责任。
 - **2026.09.19.7：旧的 5 套主题（片库索引 / 电传纸带 / 大开本 / 瑞士网格 / 播控台）全部移除，
   改为单一主题「胶片墙」`（id: film）`** —— 用户判定那 5 套"已经没用了"。
@@ -179,7 +179,7 @@
   别人的异常也会进来，而日志前缀写的是 `[HDHomeUI]` ⇒ 把外部故障伪装成了本脚本故障。
   现在监听里补上 **stack 首帧** + 显式结论「来自页面或其它脚本（本脚本无异步代码），非 HDHomeUI 故障」；
   并在 `check-hdui-static.js` 钉死「零异步」不变量 —— 将来引入异步时该断言变红，提醒同步改这段措辞
-  （否则免责声明就成了谎言）。详见 `pitfalls.md` **P43**。
+  （否则免责声明就成了谎言）。详见 `pitfalls/_index.md` **P43**。
   （该 `innerText` 真实位于 `PTAutoCheckIn.user.js` 的 `visibleText()`，且该函数有 `if (!el) return ''` 守卫。）
 - **2026.09.19.4：A / A·GB 两列改为「可选列 + 等结构就绪」**（用户实测报错 `E_COLUMN_UNKNOWN: a,ave`）：
   那两列是**别的脚本**注入的（表头 `#calcTHeadA` / `#calcTHeadAve`，数据格带 `data-calc-a`），
@@ -297,7 +297,7 @@
   `spanRow`（数据行里任一单元格 `colSpan > 1` 的行号）；两者都排在 `!d.map` / `d.reason` 判定**之前**。
 - 剧本：`hdhome-ui-extracol` / `-grouprow` / `-grouprow-first` / `-laterow`。
 
-详见 `pitfalls.md` **P68 / P69**。
+详见 `pitfalls/_index.md` **P68 / P69**。
 
 回退动作：卸掉全部 `hdui-*` 样式与自定义属性 → 写 `hdui.lastError` → `console.error` →
 页面顶部**红色横幅**（含错误码 + 「重新尝试」「知道了」）→ 主题显示回落 `default`。
@@ -424,7 +424,7 @@
    只换 `content` 换不干净；两个都换成同一个 SVG，`content` 万一失效背景层还能兜住。
    颜色避开金色（金只属于做种数与交互态），全部复用已有色板，不新增色相。
 
-**图标选型的方法论**（踩坑总结在 `pitfalls.md` P34–P41，改图标前必读）：
+**图标选型的方法论**（踩坑总结在 `pitfalls/_index.md` P34–P41，改图标前必读）：
 - 16px 下只有三类信号能幸存：**缺口 / 方向 / 配件**；叶脉、茎弯折、卷边这类细节一律消失。
 - 成对概念（保种 vs 断种）**保留同一轮廓 + 只改强信号**，不要发明新形状。
   → 断种 = 保种同一片叶形 + 枯黄 `#b8933a` + 右下锯齿缺角。
@@ -442,7 +442,7 @@
 ## 8. 改动须知
 
 - 改任何代码/元数据 ⇒ **同步递增 `@version`**（`conventions.md` §0.3）。
-- 改图标 ⇒ 同步更新本节 + `pitfalls.md` 的 P34–P41 **与 P50**（背景层必须显式清），
+- 改图标 ⇒ 同步更新本节 + `pitfalls/_index.md` 的 P34–P41 **与 P50**（背景层必须显式清），
   并重新出四档对照图确认 16px 仍可辨。
 - **动样式后的验收不止"仿真全绿"**（P49）：仿真全绿只证明没回归，不证明真站画得对。
   还要**开真站的非种子页（我的 / 论坛 / 详情页）确认没有大面积浅色块**（P51），

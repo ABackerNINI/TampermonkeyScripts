@@ -29,7 +29,7 @@
 - 每次更新**代码**或**项目文档**（README、脚本头描述等）后，**必须同步更新 `memory-bank/` 知识库**中受影响的条目，并与代码改动放入**同一次提交**。
 - 检查顺序：
   1. 行为/结构变化 → `memory-bank/scripts/<脚本名>.md`；
-  2. 通用约定 / 新坑 → `memory-bank/conventions.md` / `memory-bank/pitfalls.md`；
+  2. 通用约定 / 新坑 → `memory-bank/conventions.md` / `memory-bank/pitfalls/_index.md`；
   3. 新脚本 / 新站点 / 新能力 → `memory-bank/README.md` 索引与对应脚本表；
   4. 完成/新增待办 → `memory-bank/tasks/_index.md` 登记。
 - 原则：**改了代码却不同步知识库，等同改动没做完**。
@@ -160,7 +160,7 @@
 - 同步检查表：
   1. 脚本头 `@version`（**必须**，见第 1 节铁律）+ `@description`（能力变化时）；
   2. `memory-bank/scripts/<脚本名>.md`：结构/字段/站点表/选择器变化时；
-  3. `memory-bank/conventions.md` / `memory-bank/pitfalls.md`：产生新的通用约定或坑时；
+  3. `memory-bank/conventions.md` / `memory-bank/pitfalls/_index.md`：产生新的通用约定或坑时；
   4. `memory-bank/tasks/_index.md`：完成/新增待办登记到对应任务文件或 `_index.md`；
   5. 新脚本/新站点：`memory-bank/README.md` 索引登记。
 - 新站点/新规则上线前，先在真实页面控制台验证解析与点击日志，再提交。
