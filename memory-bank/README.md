@@ -14,15 +14,15 @@
 
 原 `pitfalls` 单文件**已删除**（git 历史即冷库，不留墓碑/存根）；**P1–P79 全 79 条**已按八类切片落盘到 `pitfalls/<类>/`，正文逐字节照搬原文。
 改码前查坑 / 排障统一从 `pitfalls/_index.md`（生成物，由 `commands run kb.index` 产出，**不要手改**）进入，按「要做的动作」选类再进单文件；全量归类清单在 `pitfalls/_about.md`「归类清单」段。
-路由表**同时给出「现在去哪」与「迁入后去哪」**：坑档一律按「现在去哪」走；「迁入后去哪」只作后续波次的前瞻，指向尚不存在的目录时不要去点。本步（S08）已把 `conventions.md` 拆为 `conventions/`、四常青件蒸馏进 `projectbrief.md` 与 `architecture/`，对应行的「迁入后去哪」标为已完成。
+路由表**同时给出「现在去哪」与「迁入后去哪」**：坑档一律按「现在去哪」走；「迁入后去哪」只作后续波次的前瞻，指向尚不存在的目录时不要去点。本步（S08）已把 `conventions.md` 拆为 `conventions/`、四常青件蒸馏进 `projectbrief.md` 与 `architecture/`；S09 又把 `activeContext.md` 的「当前工作焦点」按专题拆进 `active-context/`，对应行的「现在去哪」与「迁入后去哪」均标为已完成（三段过期流水由 git 历史兜底，不搬运）。
 
 ## 路由表（现在去哪 → 迁入后去哪）
 
-| 我要… | 现在去哪（事实源） | 迁入后去哪（S07–S10） |
+| 我要… | 现在去哪（事实源） | 迁入后去哪（已完成） |
 |---|---|---|
 | 看项目范围 / 基石 / 仓库结构 | `projectbrief.md` | 仍为 `projectbrief.md`（基石保留，S08） |
 | 看项目为何存在 / 用户体验目标 | `projectbrief.md`（为何存在 / 解决的问题 / 用户体验目标） | 已完成 → `projectbrief.md`（S08） |
-| 看当前焦点 / 最近改动 / 下一步 / 活跃决策 | `activeContext.md` | `active-context/`（按 `kb.active` 定位切片） |
+| 看当前焦点 / 最近改动 / 下一步 / 活跃决策 | `active-context/`（按 `kb.active` 定位切片） | 已完成 → `active-context/`（按 `kb.active` 定位切片，S09） |
 | 看已实现 / 待办 / 现状 / 已知问题 | `progress.md` | `reports/` |
 | 查架构 / 关键技术决策 / 组件关系 | `architecture/system-patterns.md` | 已完成 → `architecture/system-patterns.md`（S08） |
 | 查技术栈 / 环境 / 依赖 / 约束 | `architecture/tech-context.md` + `projectbrief.md`（关键约束） | 已完成 → `architecture/tech-context.md`（S08） |
