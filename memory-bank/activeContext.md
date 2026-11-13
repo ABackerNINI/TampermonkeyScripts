@@ -418,7 +418,7 @@ autofill 的浅黄底用 `inset box-shadow` 盖掉（它改不了 `background-co
 - **2026-09-20 提交流水线闸门**：新增 `scripts/check_context_caps.py`（检查 AGENTS.md 是否被 IDE 注入上限截断），
   并登记进 `.commit-flow.toml` 的 `[[gates]]`（`match = ["AGENTS.md", "scripts/"]`）—— 见「仓库基建」类改动。
 - **2026-09-18 .1 慢站误判修复（TASK015 / P28）**：`unconfirmed` 独立状态；状态单向阶梯 `STATUS_TRANSITIONS`；超时预算不变式 + 双校验；点击后事件驱动观察窗（4s）+ 有界复检（5s/12s，只检测不重点）；`waitForElement` 可交互判定 + 慢页面超时自适应；进度心跳 + 20s 零进度判死站；整流程 25s→40s、调度窗口 50s→60s。
-- **2026-09-18 测试基础设施（TASK016）**：`scripts/` → **`tests/`**（静态校验器迁入）；新增零依赖运行器 `tests/run-all.js` 与约定文档 `tests/README.md`；约定 = 顶层 `tests/*.js` 每个文件一个测试、**以退出码表达结果**、不加框架不引依赖；`conventions.md` §8.1 明确「测试统一放 `tests/`」。
+- **2026-09-18 测试基础设施（TASK016）**：`scripts/` → **`tests/`**（静态校验器迁入）；新增零依赖运行器 `tests/run-all.js` 与约定文档 `tests/README.md`；约定 = 顶层 `tests/*.js` 每个文件一个测试、**以退出码表达结果**、不加框架不引依赖；`conventions/` §8.1 明确「测试统一放 `tests/`」。
 - **2026-09-19 新增站点 HDHome（.1 → .2 → .3）**：`SITES` 加 `hdhome`（url `https://hdhome.org/index.php`）+ `@match *://*.hdhome.org/*`。该站**已签后签到入口消失、原地变成魔力值行内纯文本「(签到已得N)」**，按钮文案通道无按钮可查。三轮演进:
   - **.1** 只开 `alreadyPageCheck`（整页文本），刻意不开 `noButtonMeansCheckedIn`（"入口全站常驻"前提未实测）。
   - **.2** 用户实测确认「入口在所有页面常驻 + 文案为无方括号的『签到得魔力』」→ 放开 `noButtonMeansCheckedIn` 做兜底。
@@ -438,7 +438,7 @@ autofill 的浅黄底用 `inset box-shadow` 盖掉（它改不了 `background-co
   注释已升级为带理由的安全边界说明）；② 其中的密钥/passkey/token/cookie/uid **禁止任何形式外泄**
   （不进对话回复、日志、截图、提交与 diff、issue/PR/Gist、云端笔记、`tests/` 夹具、`src/*.html` 样本）；
   ③ 引用只描述结构（选择器/类名/URL 形状），值一律 `***`；需要样本入库先复制并手工清凭据。
-  落点：`AGENTS.md` 铁律 5、`conventions.md` §0.5 + §1 提交前自查第 5 条、`pitfalls/_index.md` **P32**、
+  落点：`AGENTS.md` 铁律 5、`conventions/` §0.5 + §1 提交前自查第 5 条、`pitfalls/_index.md` **P32**、
   `README.md` 索引与快速提醒 9。**已提交 d56ffbb**（与今日其他改动同一批）。
 
 ## 活跃决策与考量
@@ -480,7 +480,7 @@ autofill 的浅黄底用 `inset box-shadow` 盖掉（它改不了 `background-co
 3. **补测试用例（TASK016）**：约定与运行器已就位，按价值排序补 —— ① PTAutoCheckIn 场景矩阵（慢加载/冷却不改写/双标签并发/慢跳转/预算/既有行为基线）；② 纯函数抽取（阶梯、预算、`deriveStateSignals`/`readEntryState`、超时分类）；③ BTSchoolHelper `parseTorrentTable` 回归（可先为 P2/P10 写失败断言）；④ 仓库元数据一致性检查（TASK010 前置）。候选清单见 `tests/README.md`「待铺的路」。
 4. **BTSchoolHelper 待修 Bug**：时魔数值恒为 0（P2，`parseCommaIntSafe`→`parseCommaNumberSafe`）；命名不一致（P10）。
 5. **BilibiliEnterFullscreen**：评估 `window.onload + 轮询` 升级 `MutationObserver`。
-6. **新增/校准站点**：按 `conventions.md` 第 7 节清单继续补站（新增 `function` 步骤时记得写 `budgetMs`）。
+6. **新增/校准站点**：按 `conventions/` 第 7 节清单继续补站（新增 `function` 步骤时记得写 `budgetMs`）。
 7. **BTSchool 的同类盲区评估（待用户决定，未改）**：全脚本目前只有 `btschool` 仍在用
    `noButtonMeansCheckedIn: true`，它与 HDHome .2 版是同款建模 → **未登录(cookie 过期)页同样没有
    签到入口，会被判成"今日已成功"**（漏登录被静默报成成功）。暂未改动的原因：需要真站确认

@@ -15,7 +15,7 @@
 7. `memory-bank/progress.md` —— 已实现 / 待办 / 现状 / 已知问题
 8. `memory-bank/tasks/_index.md` —— 任务清单（按状态分类）
 
-> 深度参考文档（记忆库允许的「附加上下文」）按需阅读：`memory-bank/conventions.md`（代码约定）、`memory-bank/pitfalls/_index.md`（易错点）、`memory-bank/scripts/*.md`（各脚本详解）。
+> 深度参考文档（记忆库允许的「附加上下文」）按需阅读：`memory-bank/conventions/`（代码约定）、`memory-bank/pitfalls/_index.md`（易错点）、`memory-bank/scripts/*.md`（各脚本详解）。
 
 ## 项目速览
 
@@ -32,13 +32,13 @@
 
 ## 项目铁律（最高优先级，违反即视为任务未完成）
 
-以下约定是 `memory-bank/conventions.md` 的核心条款，所有 AI 助手与开发者必须无条件遵守：
+以下约定是 `memory-bank/conventions/iron-rules.md` 的核心条款，所有 AI 助手与开发者必须无条件遵守：
 
 1. **计划不改码**：任务定位为「计划 / 分析 / 调研 / 设计」时，**只输出方案，禁止改动任何代码文件**。确需改码才能得出结论时先停下征询用户。
 2. **等审核再提交**：AI 完成代码修改后，**禁止自动 `git commit` / `git push`**，一律由用户审核后决定。修改完毕应汇报改动并提示「请审核，确认后再提交」。
-3. **版本号铁律**：修改**任何代码/元数据**必须同步递增脚本头 `@version`（格式 `YYYY.MM.DD.N`，跨天重置 `N`），并与代码改动放入**同一次提交**（纯注释、仅改 `memory-bank/` 文档除外）。详见 `memory-bank/conventions.md` 第 1 节。
-4. **知识库同步铁律**：每次更新代码或项目文档后，**必须同步更新 `memory-bank/` 记忆库**中受影响条目，并与代码改动同次提交。改码却不同步知识库，等同改动没做完。详见 `memory-bank/conventions.md` 第 0.4 / 6 节。
-5. **私有资源与凭据铁律**：`resources-do-not-track/` 目录**永远不得被 Git 追踪**；其中网页内含的 **passkey / authkey / token / cookie / uid 等密钥与凭据，不得以任何形式泄露到网络**。详见 `memory-bank/conventions.md` 第 0.5 节。要点速记：
+3. **版本号铁律**：修改**任何代码/元数据**必须同步递增脚本头 `@version`（格式 `YYYY.MM.DD.N`，跨天重置 `N`），并与代码改动放入**同一次提交**（纯注释、仅改 `memory-bank/` 文档除外）。详见 `memory-bank/conventions/version.md` 第 1 节。
+4. **知识库同步铁律**：每次更新代码或项目文档后，**必须同步更新 `memory-bank/` 记忆库**中受影响条目，并与代码改动同次提交。改码却不同步知识库，等同改动没做完。详见 `memory-bank/conventions/doc-sync.md` 第 0.4 / 6 节。
+5. **私有资源与凭据铁律**：`resources-do-not-track/` 目录**永远不得被 Git 追踪**；其中网页内含的 **passkey / authkey / token / cookie / uid 等密钥与凭据，不得以任何形式泄露到网络**。详见 `memory-bank/conventions/iron-rules.md` 第 0.5 节。要点速记：
    - 不 `git add -f`、不改 `.gitignore` 解除忽略、不复制目录内容到仓库受追踪位置（含 `src/`、`tests/`、`memory-bank/`）。
    - 不得把其中的真实值写进对话回复、日志、截图、提交信息、issue/PR、Gist、云端笔记、测试夹具、示例 HTML。
    - 需要引用时**只描述结构**（选择器 / 类名 / URL 形状），值一律脱敏为 `***`；需要样本入库时先复制一份并手工清除凭据。
@@ -60,7 +60,7 @@
 
 - **首次接触项目**：读 `memory-bank/projectbrief.md` + `memory-bank/README.md` 了解结构与脚本概览。
 - **修改某个脚本**：读 `memory-bank/scripts/<脚本名>.md` + 源文件（`src/*.user.js`）。
-- **动手写代码前**：读 `memory-bank/conventions.md`（约定）与 `memory-bank/pitfalls/_index.md`（易错点），避免重踩历史 Bug。
+- **动手写代码前**：读 `memory-bank/conventions/`（约定）与 `memory-bank/pitfalls/_index.md`（易错点），避免重踩历史 Bug。
 - **排障/查现状**：优先查 `memory-bank/pitfalls/_index.md` 的症状→原因对照表；其次看脚本内 `[ScriptName]` 日志。
 - **规划改动**：参考 `memory-bank/tasks/` 中已登记的待办与方向。
 - **更新记忆库**：被要求「更新记忆库」时，须复查 `memory-bank/` 全部文件，重点更新 `activeContext.md`、`progress.md` 与 `tasks/_index.md`。
@@ -69,11 +69,11 @@
 
 ## 记忆库维护规则
 
-- 发现新的项目模式、关键决策、用户偏好时，记录到 `memory-bank/activeContext.md` 与 `memory-bank/conventions.md`（学习日志）。
+- 发现新的项目模式、关键决策、用户偏好时，记录到 `memory-bank/activeContext.md` 与 `memory-bank/conventions/`（学习日志）。
 - 新任务建立时在 `memory-bank/tasks/` 创建任务文件并登记到 `_index.md`；进度变更时同步更新任务文件的 subtask 表与进度日志。
 - 任务完成/状态变更后同步更新 `memory-bank/progress.md` 与 `memory-bank/tasks/`。
 
-详见 `memory-bank/conventions.md` 完整约定与 `memory-bank/scripts/` 各脚本文档。
+详见 `memory-bank/conventions/` 完整约定与 `memory-bank/scripts/` 各脚本文档。
 
 ## 提交 / PR
 

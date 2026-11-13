@@ -105,7 +105,7 @@ success      -> suspect
 
 安全性质: ① `success` 只能转 `suspect`(P25 降级), 任何不确定结果都不得覆盖「已确认成功」; ② `suspect` 只能转 `success`(页面确认); ③ 任何「有结论」的状态都不得转回 `pending`(在途标记不可复活); ④ `skipped` 与初始态必须能转 `pending`(它们不是结论, 否则「上次无动作 → 这次真点击」会被拒)。
 
-**双校验**: 运行时 `auditUnitBudgets()`(启动时逐站求和, 通过则打一行摘要, 违规打全量表格 + `console.error`); 提交前 `node tests/ptautocheckin/check-ptac-budget.js`(零依赖, 校验常量不变式 + 阶梯结构 + 不透明成本声明 + 自测 `computeUnitBudget`)。**不提供 `window` 调试入口**(`conventions.md` §8.2)。
+**双校验**: 运行时 `auditUnitBudgets()`(启动时逐站求和, 通过则打一行摘要, 违规打全量表格 + `console.error`); 提交前 `node tests/ptautocheckin/check-ptac-budget.js`(零依赖, 校验常量不变式 + 阶梯结构 + 不透明成本声明 + 自测 `computeUnitBudget`)。**不提供 `window` 调试入口**(`conventions/` §8.2)。
 
 ## 存储与状态层(GM, key 前缀 `ptac_`)
 

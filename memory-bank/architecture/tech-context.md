@@ -1,6 +1,10 @@
 # 技术语境（Tech Context）
+> 摘要: 使用的技术、开发环境、技术约束、依赖（技术栈 / CI / 仿真站 / 元数据 / 发布流程）
+> 触发: 查技术栈, 查环境, 查依赖, 查技术约束
 
 > 记忆库核心文件：使用的技术、开发环境、技术约束、依赖。
+
+> 细节出处：源自 `memory-bank/techContext.md`（原件已随本次切片删除，git 历史可考）。
 
 ## 技术栈
 
@@ -35,7 +39,7 @@ HDHomeUI 另有 **5 个「未知元素安全」用例**（`check/sim-hdui-hide-a
 - 无 package.json / 无 npm / 无构建步骤。直接编辑 `src/*.user.js`。
 - 测试用 Node 直接跑（无需 `npm install`）：`node tests/run-all.js`（全部）或 `node tests/<某测试>.js`（单个）；语法检查 `node --check src/*.user.js`。
 
-## UserScript 元数据约定（见 conventions.md 第 3 节）
+## UserScript 元数据约定（见 conventions/code-style.md）
 
 - 必需字段：`@name`（英文）+ `@name:zh-CN`、`@namespace`、`@version`、`@description`、`@author ABacker`、`@license GNU GPL-3.0`、`@tag`。
 - `@match`：只声明脚本确实要操作的域名；个人站点用小域名 + 路径限定，避免误伤。
@@ -59,9 +63,9 @@ HDHomeUI 另有 **5 个「未知元素安全」用例**（`check/sim-hdui-hide-a
   - `parseFileSizeInBytes(sizeStr)` —— `"8.15GB"` → 字节数（1024 进制，支持 K/M/G/T/P）
   - `waitForElement(selector, timeout)` —— 轮询/`MutationObserver` 等待元素（支持函数选择器）
 
-## 发布与更新流程（详见 conventions.md 第 10 节）
+## 发布与更新流程（详见 conventions/workflow.md）
 
-完整工作流见 [conventions.md](./conventions.md) 第 10 节「开发与发布工作流」，此处仅列技术要点：
+完整工作流见 [conventions/workflow.md](../conventions/workflow.md) 第 10 节「开发与发布工作流」，此处仅列技术要点：
 
 1. 编辑 `src/*.user.js`。
 2. 递增版本号（跨天重置 `N`）。

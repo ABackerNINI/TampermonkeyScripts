@@ -14,20 +14,20 @@
 
 原 `pitfalls` 单文件**已删除**（git 历史即冷库，不留墓碑/存根）；**P1–P79 全 79 条**已按八类切片落盘到 `pitfalls/<类>/`，正文逐字节照搬原文。
 改码前查坑 / 排障统一从 `pitfalls/_index.md`（生成物，由 `commands run kb.index` 产出，**不要手改**）进入，按「要做的动作」选类再进单文件；全量归类清单在 `pitfalls/_about.md`「归类清单」段。
-路由表**同时给出「现在去哪」与「迁入后去哪」**：坑档一律按「现在去哪」走；「迁入后去哪」只作后续波次的前瞻，指向尚不存在的目录时不要去点。
+路由表**同时给出「现在去哪」与「迁入后去哪」**：坑档一律按「现在去哪」走；「迁入后去哪」只作后续波次的前瞻，指向尚不存在的目录时不要去点。本步（S08）已把 `conventions.md` 拆为 `conventions/`、四常青件蒸馏进 `projectbrief.md` 与 `architecture/`，对应行的「迁入后去哪」标为已完成。
 
 ## 路由表（现在去哪 → 迁入后去哪）
 
 | 我要… | 现在去哪（事实源） | 迁入后去哪（S07–S10） |
 |---|---|---|
-| 看项目范围 / 基石 / 仓库结构 | `projectbrief.md` | `architecture/` |
-| 看项目为何存在 / 用户体验目标 | `productContext.md` | `architecture/` |
+| 看项目范围 / 基石 / 仓库结构 | `projectbrief.md` | 仍为 `projectbrief.md`（基石保留，S08） |
+| 看项目为何存在 / 用户体验目标 | `projectbrief.md`（为何存在 / 解决的问题 / 用户体验目标） | 已完成 → `projectbrief.md`（S08） |
 | 看当前焦点 / 最近改动 / 下一步 / 活跃决策 | `activeContext.md` | `active-context/`（按 `kb.active` 定位切片） |
 | 看已实现 / 待办 / 现状 / 已知问题 | `progress.md` | `reports/` |
-| 查架构 / 关键技术决策 / 组件关系 | `systemPatterns.md` | `architecture/` |
-| 查技术栈 / 环境 / 依赖 / 约束 | `techContext.md` | `architecture/` |
+| 查架构 / 关键技术决策 / 组件关系 | `architecture/system-patterns.md` | 已完成 → `architecture/system-patterns.md`（S08） |
+| 查技术栈 / 环境 / 依赖 / 约束 | `architecture/tech-context.md` + `projectbrief.md`（关键约束） | 已完成 → `architecture/tech-context.md`（S08） |
 | 改码前查坑 / 排障（症状→原因→对策） | `pitfalls/_index.md`（生成物索引，全 79 条按八类落盘） | `pitfalls/<类>/`（按下方八类细路由选类再进单文件） |
-| 查铁律 / 约定 / 提交规范 / 检查清单 / 开发发布工作流 | `conventions.md` | `conventions/` |
+| 查铁律 / 约定 / 提交规范 / 检查清单 / 开发发布工作流 | `conventions/`（按主题分件） | 已完成 → `conventions/`（S08） |
 | 查某个脚本的职责与用法 | `memory-bank/scripts/<脚本名>.md` | 不变 |
 | 写 / 跑测试 | `tests/README.md` + `node tests/run-all.js` | `testing/baselines/`（基线快照） |
 | 看计划 / 方案 | `docs/plans/` | 不变 |
@@ -57,11 +57,11 @@
 - **计划**在 `docs/plans/`（HTML 制品），**不在** `memory-bank/plans/`；
 - **脚本文档**在 `memory-bank/scripts/`：`PTAutoCheckIn.md` / `BTSchoolHelper.md` / `BilibiliEnterFullscreen.md` / `EnhanceVisitedLinks.md` / `HDHomeUI.md`，与 `src/*.user.js` 一一对应；
 - **任务档案**在 `memory-bank/tasks/`，TASK001–020 **冻结**（正文零改动，死链靠 `grep` + `git log -- <旧路径>` 兜底）；
-- 脚本速查表、约定、检查清单、测试约定、开发与发布工作流、HDHomeUI 两条铁律等**事实性内容**仍完整保存在 `conventions.md` 与上述脚本文档 / `pitfalls/_index.md`，本文件只做路由、不复述。
+- 脚本速查表、约定、检查清单、测试约定、开发与发布工作流、HDHomeUI 两条铁律等**事实性内容**仍完整保存在 `conventions/`（按主题分件）与上述脚本文档 / `pitfalls/_index.md`，本文件只做路由、不复述。
 
 ## 一条不能丢的红线
 
-`resources-do-not-track/`（私有站点另存为的整页网页）**永不被 Git 追踪**，其中的 passkey / authkey / token / cookie / uid **禁止以任何形式外泄**（不进回复、日志、截图、提交、issue、测试夹具、示例 HTML）；只描述结构、值一律脱敏为 `***`。详见 `conventions.md` 第 0.5 节与 `pitfalls/_index.md` P32。
+`resources-do-not-track/`（私有站点另存为的整页网页）**永不被 Git 追踪**，其中的 passkey / authkey / token / cookie / uid **禁止以任何形式外泄**（不进回复、日志、截图、提交、issue、测试夹具、示例 HTML）；只描述结构、值一律脱敏为 `***`。详见 `conventions/iron-rules.md` 第 0.5 节与 `pitfalls/_index.md` P32。
 
 ---
 铁律（计划不改码 / 版本号 `@version` / 知识库同步）、提交信息规范、常用命令的**单点在根 `AGENTS.md`**；找它们直接看 AGENTS.md，本文件不复述。

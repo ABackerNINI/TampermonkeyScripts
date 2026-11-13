@@ -1,6 +1,10 @@
 # 系统模式（System Patterns）
+> 摘要: 系统架构、关键技术决策、设计模式、组件关系（PTAutoCheckIn 为例）
+> 触发: 查架构, 查关键决策, 查组件关系
 
-> 记忆库核心文件：系统架构、关键技术决策、设计模式、组件关系。详细代码约定见 [conventions.md](./conventions.md)。
+> 记忆库核心文件：系统架构、关键技术决策、设计模式、组件关系。详细代码约定见 [conventions/](../conventions/)。
+
+> 细节出处：源自 `memory-bank/systemPatterns.md`（原件已随本次切片删除，git 历史可考）。
 
 ## 总体架构
 
@@ -66,7 +70,7 @@ boot() → main()
 - **BilibiliEnterFullscreen**：`window.onload` + 轮询点击「网页全屏」，Enter/Shift+Enter 键盘监听。
 - **EnhanceVisitedLinks**：`GM_addStyle` 注入 `:visited` 样式 + MutationObserver/interval 检测 URL 变化重注入。
 
-## 健壮性约定（详见 conventions.md）
+## 健壮性约定（详见 conventions/robustness.md）
 
 - 解析文本先 `trim`；数字走 `parseCommaIntSafe` / `parseCommaNumberSafe`；文件大小走 `parseFileSizeInBytes` 得数值字节。
 - DOM 查询在可预期失败路径做空值兜底，不抛错中断整行解析。
