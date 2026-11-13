@@ -12,7 +12,7 @@
 - [ ] 实测：未签到页能点、已签到页不重复点、10 分钟内刷新不重复触发、贴吧各吧独立触发；
 - [ ] **若新增/修改了 `function` 步骤或自定义 `alreadyCheck`**：**必须**声明 `budgetMs`(步骤) / `alreadyCheckBudgetMs`(unit)，**纯同步 DOM 判定写 `0`**；并确认该站「检测 + 各步骤 + 固定预留 18000ms」未超 `UNIT_TOTAL_TIMEOUT`(40000ms)（超时预算不变式，见 P28）；
 - [ ] 跑 `node tests/ptautocheckin/check-ptac-budget.js`（零依赖），必须全绿：常量不变式 + 状态阶梯结构 + 不透明成本声明 + `computeUnitBudget` 自测（等价于 `node tests/run-all.js` 跑该测试）；
-- [ ] 递增版本号 + 更新 `memory-bank/scripts/PTAutoCheckIn.md` 站点表与「各 unit 实测预算」表。
+- [ ] 递增版本号 + 更新 `memory-bank/scripts/PTAutoCheckIn/sites.md` 站点表与「各 unit 实测预算」表。
 
 新增独立脚本：
 - [ ] 完整元数据头（见第 3 节）+ IIFE + `ScriptName`；
@@ -28,4 +28,4 @@ PT 站大多基于同一套开源代码（NexusPHP 系），但**各站模板与
 - 部分站点点击签到会**跳转新页面**（HDBao、慕雪阁），需要多步骤：先点"立即签到"提交表单 → 等待 → 再在新页面点签到。
 - 部分站点使用**对话框签到**（蜂巢 fengchao.chat, 原 pting.club），需依次点击外层按钮、对话框按钮、关闭按钮。
 - BTSchool 站种子表格结构特殊（详见 `scripts/BTSchoolHelper.md`）。
-- 完整站点表与各站入口/特征见 `scripts/PTAutoCheckIn.md`「已有站点一览」。
+- 完整站点表与各站入口/特征见 `scripts/PTAutoCheckIn/sites.md`「已有站点一览」。
