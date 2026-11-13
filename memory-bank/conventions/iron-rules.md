@@ -33,7 +33,7 @@
   1. 行为/结构变化 → `memory-bank/scripts/<脚本名>.md`；
   2. 通用约定 / 新坑 → `memory-bank/conventions/` / `memory-bank/pitfalls/_index.md`；
   3. 新脚本 / 新站点 / 新能力 → `memory-bank/README.md` 索引与对应脚本表；
-  4. 完成/新增待办 → `memory-bank/tasks/_index.md` 登记。
+  4. 完成/新增待办 → `memory-bank/conventions/known-issues.md` 登记。
 - 原则：**改了代码却不同步知识库，等同改动没做完**。
 
 ### 0.5 私有资源与凭据铁律（`resources-do-not-track/`）
