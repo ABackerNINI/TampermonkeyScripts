@@ -1,4 +1,6 @@
 # EnhanceVisitedLinks.user.js — 已访问链接增强
+> 摘要: 已访问链接 :visited 增强: 明暗两色紫色与 !important 覆盖, GM_addStyle 注入、SPA 软导航 URL 变化检测, 元数据要点与维护提示
+> 触发: 查已访问链接样式, 改紫色色值, 维护样式重注入
 
 > 源文件：`src/EnhanceVisitedLinks.user.js` ｜ 版本 `2026.08.09.1`（升级时同步更新）
 

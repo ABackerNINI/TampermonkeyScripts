@@ -1,4 +1,6 @@
 # BilibiliEnterFullscreen.user.js — B站 Enter 键全屏
+> 摘要: B站 Enter 键全屏: 自动网页全屏轮询、全屏/网页全屏多候选按钮选择器、键盘监听与失焦处理, 元数据要点与维护提示
+> 触发: 查 B站全屏脚本, 改播放器按钮选择器, 维护 B 站改版
 
 > 源文件：`src/BilibiliEnterFullscreen.user.js` ｜ 版本 `2026.07.22.7`（升级时同步更新）
 

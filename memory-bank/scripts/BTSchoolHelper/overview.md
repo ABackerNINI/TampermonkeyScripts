@@ -1,4 +1,6 @@
 # BTSchoolHelper.user.js — BTSchool 种子列表助手
+> 摘要: BTSchool 种子列表助手: 2xFree 高亮 / 置顶低亮 / 空格跳转; parseTorrentTable 解析器、TorrentState、表格选择器易错点、工具函数、页面行为、主流程、已知问题与修改指南
+> 触发: 查 BTSchool 脚本, 改种子表格解析, 查列索引与选择器, 改高亮规则
 
 > 源文件：`src/BTSchoolHelper.user.js` ｜ 版本 `2026.08.09.1`（升级时同步更新）
 

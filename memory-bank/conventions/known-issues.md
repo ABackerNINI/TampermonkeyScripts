@@ -21,7 +21,7 @@
   促销徽章无兜底（未登记 `pro_*` 变 16×16 空白）、inline 白底兜底漏 6 位 `#ffffff`（公告块）。
 - **结构裁决落地**：未知列 `E_COLUMN_UNEXPECTED` / 未知分组行 `E_ROW_UNKNOWN` ⇒ 一律卸妆、不进等窗口；
   行结构由「只查 `rows[1]`」改为**逐行**校验。
-- 测试数 **29 → 34**，全绿。详见 `pitfalls/_index.md` P66–P69、`scripts/HDHomeUI.md` §2.1。
+- 测试数 **29 → 34**，全绿。详见 `pitfalls/_index.md` P66–P69、`scripts/HDHomeUI/architecture.md` §2.1。
 
 ### 已知问题（2026-09-20 记录，尚未定位）
 

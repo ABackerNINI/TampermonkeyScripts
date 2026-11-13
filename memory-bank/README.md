@@ -55,7 +55,7 @@
 ## 本项目特有落点（别走错）
 
 - **计划**在 `docs/plans/`（HTML 制品），**不在** `memory-bank/plans/`；
-- **脚本文档**在 `memory-bank/scripts/`：`PTAutoCheckIn/` / `BTSchoolHelper.md` / `BilibiliEnterFullscreen.md` / `EnhanceVisitedLinks.md` / `HDHomeUI.md`，与 `src/*.user.js` 一一对应；
+- **脚本文档**在 `memory-bank/scripts/`：`PTAutoCheckIn/` / `BTSchoolHelper/` / `BilibiliEnterFullscreen/` / `EnhanceVisitedLinks/` / `HDHomeUI/`，与 `src/*.user.js` 一一对应；
 - **任务档案**在 `memory-bank/tasks/`，TASK001–020 **冻结**（正文零改动，死链靠 `grep` + `git log -- <旧路径>` 兜底）；
 - 脚本速查表、约定、检查清单、测试约定、开发与发布工作流、HDHomeUI 两条铁律等**事实性内容**仍完整保存在 `conventions/`（按主题分件）与上述脚本文档 / `pitfalls/_index.md`，本文件只做路由、不复述。
 
