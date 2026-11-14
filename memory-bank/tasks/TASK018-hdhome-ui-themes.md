@@ -1,4 +1,5 @@
 # TASK018 · HDHome 界面主题（胶片墙）
+**Topics:** hdhome-ui-themes
 
 > ⚠️ **本文件是历史设计档案。** 原计划做「5 套可切换 UI」，那 5 套已于 `2026.09.19.7`
 > **全部移除**（用户判定"已经没用了"），改为单一主题**胶片墙**（原型 `.workbuddy-ai/hdui-mock/film.html`）。

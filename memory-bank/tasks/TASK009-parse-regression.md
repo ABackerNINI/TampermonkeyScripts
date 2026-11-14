@@ -3,6 +3,7 @@
 **Status:** Pending
 **Added:** 2026-09-16
 **Updated:** 2026-09-16
+**Topics:** parse-regression
 
 ## Original Request
 

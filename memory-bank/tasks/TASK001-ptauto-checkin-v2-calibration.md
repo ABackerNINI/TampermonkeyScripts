@@ -3,6 +3,8 @@
 **Status:** In Progress
 **Added:** 2026-09-07
 **Updated:** 2026-09-16
+**Topics:** ptauto-checkin-v2
+**Refs:** memory-bank/tasks/TASK002-fix-btschool-calc.md
 
 ## Original Request
 

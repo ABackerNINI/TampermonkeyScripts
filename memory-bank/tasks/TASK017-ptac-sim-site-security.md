@@ -1,4 +1,5 @@
 # TASK017 — PTAutoCheckIn 本地仿真站与安全测试矩阵
+**Topics:** ptac-sim-site-security
 
 > 状态：**In Progress —— M1~M3 已完成（仿真站 + 11 个用例 + 4 项已修），等用户审核后提交；M4 补全 / M5 残留项待定**
 > 实测结论与修复清单见 `memory-bank/pitfalls.md` **P29 / P30**；用法见 `tests/README.md`「仿真站」章节。

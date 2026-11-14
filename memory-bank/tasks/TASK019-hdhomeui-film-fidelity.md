@@ -1,6 +1,7 @@
 # TASK019 · HDHomeUI「胶片墙」保真度对齐（对齐原型 `.workbuddy-ai/hdui-mock/film.html`）
+**Topics:** hdhomeui-film-fidelity
 
-> 状态：**已完成实施（`2026.09.19.11`，待用户审核；未提交）**
+> 状态：**已完成实施（`2026.09.19.11`），随本专题入库**
 > 触发：用户报「目前的 HDHomeUI 脚本未能完整复刻 `.workbuddy-ai/hdui-mock/film.html` 的样式」。
 > 目标：把 `src/HDHomeUI.user.js` 的胶片墙做到**与原型一致**，且**在真站（不是仿真页）上一致**。
 > 关联：TASK018（HDHomeUI 主题本体）、`pitfalls.md` P33–P49、`scripts/HDHomeUI.md`。

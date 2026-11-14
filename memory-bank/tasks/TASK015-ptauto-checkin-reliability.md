@@ -3,6 +3,7 @@
 **Status:** In Progress
 **Added:** 2026-09-18
 **Updated:** 2026-09-18
+**Topics:** ptauto-checkin-reliability
 
 ## Original Request
 
