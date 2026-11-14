@@ -41,4 +41,4 @@
 
 - `.commands/review/scripts/review_pack.py` 第 135 / 141 行仍有两处 Review: / Review-Skip: 锚点提示措辞(历史注释与警告文本), 按「零改写 Python」本轮未改。
 - 本项目提交信息不引入该 trailer; review.pack 实际使用以 --base <rev> **显式指定**评审起点为准, 不依赖任何 trailer 锚点自动推算。
-- 计划/报告制品协议(dark 单文件 HTML、doc-added / doc-updated / doc-status / doc-refs meta、变更记录 R 行、认领链双向声明)归 `conventions/doc-forms.md`, 由 S12 建立, 本步不建该文件、只留此指针。
+- 计划/报告制品协议(dark 单文件 HTML、doc-added / doc-updated / doc-status / doc-refs meta、变更记录 R 行、认领链双向声明)见 `conventions/doc-forms.md`（制品协议单点）。
