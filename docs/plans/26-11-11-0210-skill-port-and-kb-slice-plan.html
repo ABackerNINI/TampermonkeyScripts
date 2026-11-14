@@ -316,7 +316,7 @@
 <span class="checkbox">[ ]</span> git status --short                只含本计划内路径；无 src/、无 resources-do-not-track/、无 config.yml
 <span class="checkbox">[ ]</span> 版本号                           src/*.user.js 零改动 ⇒ @version 不变（铁律 3 不适用）
 <span class="checkbox">[ ]</span> 提交单点                        .commands/my-commit-flow + ship 存在且 ship.commit --no-push 可用；旧 skill 与 .commit-flow.toml 已退役
-<span class="checkbox">[ ]</span> 收尾                              汇报改动 + 「请审核，确认后再提交」；未 commit / push</code></pre>
+<span class="checkbox">[ ]</span> 收尾                              每步 ship.commit --no-push 本地提交；最终 rebase + ff 合入本地 develop，全程不 push，等待用户显式提交指令</code></pre>
 
 <h2 id="s11"><span class="no">§11</span>决策记录与变更记录</h2>
 <h3>grilling 一轮（2026-11-11，4 问，全部收敛）</h3>

@@ -4,18 +4,11 @@
 
 ## 任务开始前：先读记忆库（必做）
 
-**本项目的记忆在每次会话间会重置。** AI 助手唯一能依赖的跨会话上下文就是 `memory-bank/` 记忆库，必须按以下顺序阅读全部核心文件——不是可选项：
+**本项目的记忆在每次会话间会重置。** 跨会话上下文只认 `memory-bank/` 记忆库。按检索纪律三步走（**禁止整读整个目录**，预算纪律）：① `commands run kb.active` 看最近活跃切片；② 回 `memory-bank/README.md` 细路由，按动作选文档；③ `grep -rn "<词>" memory-bank/` 兜底。
 
-1. `memory-bank/README.md` —— 记忆库入口与文档索引
-2. `memory-bank/projectbrief.md` —— 项目范围与目标（基石）
-3. `memory-bank/productContext.md` —— 项目为何存在、解决什么问题
-4. `memory-bank/systemPatterns.md` —— 系统架构与关键设计决策
-5. `memory-bank/techContext.md` —— 技术栈、开发环境、约束
-6. `memory-bank/activeContext.md` —— 当前工作焦点、最近改动、下一步
-7. `memory-bank/progress.md` —— 已实现 / 待办 / 现状 / 已知问题
-8. `memory-bank/tasks/_index.md` —— 任务清单（按状态分类）
+必读核心件（3 个）：`memory-bank/README.md`（细路由）、`memory-bank/projectbrief.md`（基石）、`memory-bank/conventions/iron-rules.md`（铁律原文）。
 
-> 深度参考文档（记忆库允许的「附加上下文」）按需阅读：`memory-bank/conventions/`（代码约定）、`memory-bank/pitfalls/_index.md`（易错点）、`memory-bank/scripts/*.md`（各脚本详解）。
+> 深度参考文档按需阅读：`memory-bank/conventions/`（代码约定）、`memory-bank/pitfalls/_index.md`（易错点）、`memory-bank/scripts/<脚本>/`（5 个分包目录，各脚本详解）。
 
 ## 项目速览
 
@@ -42,7 +35,7 @@
    - 不 `git add -f`、不改 `.gitignore` 解除忽略、不复制目录内容到仓库受追踪位置（含 `src/`、`tests/`、`memory-bank/`）。
    - 不得把其中的真实值写进对话回复、日志、截图、提交信息、issue/PR、Gist、云端笔记、测试夹具、示例 HTML。
    - 需要引用时**只描述结构**（选择器 / 类名 / URL 形状），值一律脱敏为 `***`；需要样本入库时先复制一份并手工清除凭据。
-6. **范围守恒**: 计划外的代码/文档缺陷**一行都不改** —— 入池到 `memory-bank/issues/`: 报告文件名 = `<时间>-<类型>-<slug>.html`(类型 8 类: `bug` / `perf` / `docs` / `test` / `refactor` / `feat` / `chore` / `question`), 档位由类型定(便签档一两句话 / 标准档取证), `_index.md` 登记类型+简述+链接(生成物, 重跑脚本更新)。**入池不为填单做代码分析**(结论会过期)。该不该现在修见 [scope-guard skill](.agents/skills/scope-guard/SKILL.md); 建报告与改状态见 [create-issue skill](.agents/skills/create-issue/SKILL.md)。
+6. **范围守恒**: 计划外的代码/文档缺陷**一行都不改** —— 入池到 `memory-bank/issues/`: 报告文件名 = `<时间>-<类型>-<slug>.html`(类型 8 类: `bug` / `perf` / `docs` / `test` / `refactor` / `feat` / `chore` / `question`), 档位由类型定(便签档一两句话 / 标准档取证), 报告由 `commands run kb.new issue` 建件（时间戳 / 命名 / 头部字段由命令派生），**不再维护 `_index.md` 索引**；制品协议见 `memory-bank/conventions/doc-forms.md`。**入池不为填单做代码分析**(结论会过期)。该不该现在修见 [scope-guard skill](.agents/skills/scope-guard/SKILL.md); 建报告与改状态见 [create-issue skill](.agents/skills/create-issue/SKILL.md)。
 7. **请求边界 (2026-09-20 用户指定)**: 开工先判这一轮是**问答 / 只读**还是**执行任务**。
    - 用户只是问("能不能 X""是什么""怎么看""有没有") ⇒ **只在回复里作答**, 不得入池 issue、
      不得立档 `tasks/`、不得产出计划文档、不得改动任何文件、不得 commit / push。
@@ -59,21 +52,21 @@
 ## 常见任务入口
 
 - **首次接触项目**：读 `memory-bank/projectbrief.md` + `memory-bank/README.md` 了解结构与脚本概览。
-- **修改某个脚本**：读 `memory-bank/scripts/<脚本名>.md` + 源文件（`src/*.user.js`）。
+- **修改某个脚本**：读 `memory-bank/scripts/<脚本>/` + 源文件（`src/*.user.js`）。
 - **动手写代码前**：读 `memory-bank/conventions/`（约定）与 `memory-bank/pitfalls/_index.md`（易错点），避免重踩历史 Bug。
 - **排障/查现状**：优先查 `memory-bank/pitfalls/_index.md` 的症状→原因对照表；其次看脚本内 `[ScriptName]` 日志。
-- **规划改动**：参考 `memory-bank/tasks/` 中已登记的待办与方向。
-- **更新记忆库**：被要求「更新记忆库」时，须复查 `memory-bank/` 全部文件，重点更新 `activeContext.md`、`progress.md` 与 `tasks/_index.md`。
-- **计划产出**: 列计划时使用 `delivery-artifact` skill 产出文档, 将计划文档放入 `docs/plans/` 中; **格式一律为单文件 HTML (`.html`), 不使用 Markdown (`.md`)** —— `docs/plans/` 下的计划文档若出现 `.md` 即为违规, 需转为 HTML; 命名统一为"日期-时间-标题", 如 `26-09-17-0906-improve-webui-plan.html`, 意思为"26年9月17日上午9点6分的改进webui计划", 方便检索, 注意需通过命令获取当前准确的日期和时间, 不要靠记忆!
+- **规划改动**：参考 `conventions/known-issues.md`（待办方向）与 `memory-bank/tasks/`（TASK001–020 冻结档案）。
+- **更新记忆库**：被要求「更新记忆库」时，须复查 `memory-bank/` 全部文件，按新落点更新 `active-context/` 切片、`conventions/` 对应件与 `README.md` 细路由；`tasks/` 档案层冻结、`_index.md` 已退役。
+- **计划产出**: 列计划时使用 `delivery-artifact` skill 产出文档, 将计划文档放入 `docs/plans/` 中; **格式一律为单文件 HTML (`.html`), 不使用 Markdown (`.md`)** —— `docs/plans/` 下的计划文档若出现 `.md` 即为违规, 需转为 HTML; 命名统一为"日期-时间-标题", 如 `26-09-17-0906-improve-webui-plan.html`, 意思为"26年9月17日上午9点6分的改进webui计划", 方便检索, 时间统一由 `commands run kb.time` 取（UTC+8 钉死，禁止凭记忆写日期）
 - **提交 / 推送 (commit + push)** | [my-commit-flow 命令包](.commands/my-commit-flow/) 的 `ship.commit` / `ship.push` (口径在本文件「提交 / PR」节) |
 
 ## 记忆库维护规则
 
-- 发现新的项目模式、关键决策、用户偏好时，记录到 `memory-bank/activeContext.md` 与 `memory-bank/conventions/`（学习日志）。
-- 新任务建立时在 `memory-bank/tasks/` 创建任务文件并登记到 `_index.md`；进度变更时同步更新任务文件的 subtask 表与进度日志。
-- 任务完成/状态变更后同步更新 `memory-bank/progress.md` 与 `memory-bank/tasks/`。
+- 发现新的项目模式、关键决策、用户偏好时，记录到 `active-context/` 对应切片与 `conventions/`（学习日志）。
+- `tasks/` 为 TASK001–020 冻结档案、`_index.md` 已退役，不再新建任务档；待办方向登记到 `conventions/known-issues.md`。
+- 任务完成/状态变更后，按 `README.md` 细路由同步更新 `active-context/` 切片与 `conventions/` 对应件，与代码改动同次提交。
 
-详见 `memory-bank/conventions/` 完整约定与 `memory-bank/scripts/` 各脚本文档。
+详见 `memory-bank/conventions/` 完整约定与 `memory-bank/scripts/<脚本>/`。
 
 ## 提交 / PR
 
