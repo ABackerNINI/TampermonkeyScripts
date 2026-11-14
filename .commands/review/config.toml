@@ -7,58 +7,10 @@ confirmed = true
 run     = ["python .commands/review/scripts/review_pack.py pack <args>"]
 timeout = 120
 when    = "code-review skill 第 3 步 评审包：每批收尾、派遣评审子代理之前"
-note    = "--base <rev> 必填（= 上一条带 `Review:` 的提交，即闸门锚点；拿不准问用户）。输出基线与 HEAD hash、diff 统计与 400 行分档提示、文件清单、红线/安全敏感面预警 —— 红线清单与 my-commit-flow 闸门同源（读 .commands/my-commit-flow/.my-commit-flow.toml 的 red_lines/warn_lines，缺文件给可见警告不静默降级）。输出含基哈希（=整批过滤 diff 哈希，提交闸门据此与 trailer 的 `· 基` 比对，评审后有新改动会判红）。分档与预警是提示不是闸门，拦截仍归提交闸门"
+note    = "--base <rev> 必填(评审起点 rev 显式指定)。输出基线与 HEAD hash、diff 统计与 400 行分档提示、改动文件清单、红线/安全敏感面预警 —— 红线清单来自 .commands/my-commit-flow/.my-commit-flow.toml 的 red_lines(本项目 = resources-do-not-track/) 与 warn_lines, 缺文件给可见警告不静默降级。分档与预警是提示不是闸门, 拦截仍归提交闸门。用裸 python 运行"
 
 [tasks."review.check"]
 run     = ["python .commands/review/scripts/review_pack.py check <args>"]
 timeout = 120
 when    = "code-review skill 第 5 步 产出裁决：reviewer 交回 findings JSON 后、采信任何一条之前"
-note    = "--findings <json文件|-> 必填（- 指 stdin），--root 可指定仓库根（默认 cwd）。逐条校验：字段齐全（file/line/quote/severity/claim/relevance/fix）、severity/relevance 枚举合法、quote 与源码逐字比对（单行内连续片段 ≥4 字符，行号允许 ±3 邻近，--window 可调）。REFUTE 的发现直接弃、不复核；rc=0 全部通过 / rc=1 存在被弃条目 / rc=2 用法或环境错误。存量评审 R4 用法：--root <快照目录>（路线会话的 review.lane.start 产物），引文对快照逐字比对"
-
-[tasks."review.trace"]
-run     = ["python .commands/review/scripts/check_review_trace.py <args>"]
-timeout = 60
-when    = "提交闸门(每次提交跑): 批内累计改动是否需要评审、`Review:` trailer 声明与实算是否一致"
-note    = "批次 = 最近一条带 Review:/Review-Skip: 的提交 → 当前工作树(锚点现算, 不用填 hash; 历史 Skip 照旧识别, 不追溯)。判据顺序: 实算恒 0(纯记账类/生成物, 及 0 行二进制改动)且无 Review: trailer 才静默; 带 trailer 的 0 行批不短路照走全链校验, 基比对可达(26-11-08-1701: 二进制改动实算恒 0, 基比对是它唯一的机检面) → Review 行校验(声明行数 == 实算 ±0; blocker/修/入池 数字齐, 修/入池/检 P/T 为全轮累计且 P ≥ 修+入池; `· 基 <12hex>` 必填且与闸门重算的整批过滤 diff 哈希一致 —— 不一致=评审后有新改动, 重跑 review.pack 取新基补一轮复评; `· 轮 R` 缺省 1, 写了须整数 ≥1; >400 行须 `· 派发 ≥2`) → Review-Skip 判红(豁免已退役, 理由长短不再看) → 其余拦下(50 行下限已退役: 可评行数 >0 即需 Review: trailer)。安全敏感面 = red_lines ∪ 路径标记词(与 review_pack 同源), 命中不论行数都要评。stdout 静默即通过; 红给一行原因 + 下一步。WARN: 用裸 python 不用 uv run: 脚本纯 stdlib, 而 uv/console-script 在本仓有 trampoline 坏掉的先例(pitfalls/ops/venv-trampoline-clone-copy.md), 提交闸门不能押在它上面"
-
-[tasks."review.lane.manifest"]
-run     = ["python .commands/review/scripts/review_lane.py manifest <args>"]
-timeout = 300
-when    = "存量评审 R4（计划 26-11-05-2335）：S0 生成/重生成 manifest（批次矩阵+底册切片+覆盖守卫）"
-note    = "机器事实源生成器（D14/D17）：freeze 钉定=生成时点 develop tip（ls-remote 现查核验，未 sync 即拒；任何路线认领后拒绝重生成——冻结基线一经引用不可移动）+ 批次矩阵在冻结树临时解包上盘点（互斥+全覆盖守卫，重叠/漏配 rc=1 列清单）。产出 memory-bank/reports/attachments/legacy-review4/manifest.json。--dry-run 只演算"
-
-[tasks."review.lane.claim"]
-run     = ["python .commands/review/scripts/review_lane.py claim <args>"]
-timeout = 120
-when    = "存量评审 R4：路线会话认领路线（claim -> ship.commit -> start）"
-note    = "--route R1..R5 --owner <标识> 必填。freeze 取 manifest 钉值（生成时点 ls-remote 核验的 develop tip，D17），校验为其 HEAD 祖先 + 本地 HEAD==远端 tip（ls-remote 现查，未 sync 即拒）+ 树净 + develop 分支。写 route-<R>.json（认领单点，重复认领拒）。认领后尽快 ship.commit 入库(防跨 clone 重复认领), 再 start"
-
-[tasks."review.lane.start"]
-run     = ["python .commands/review/scripts/review_lane.py start <args>"]
-timeout = 300
-when    = "存量评审 R4：认领入库后导出冻结快照（repo 外，不切分支不动 HEAD）并打印三件套"
-note    = "--route 必填；--fresh 重建快照；--snapshot 覆盖默认 <repo>/../auto-qb-review4-snap/<repo名>。git archive <freeze> 导出 + .snapshot-hash 标记；快照存在且标记吻合则复用（幂等）。打印存量适配三件套与首批文件。--dry-run 在临时目录真实解包后删除（验证 archive 链路不落盘）"
-
-[tasks."review.lane.verify"]
-run     = ["python .commands/review/scripts/review_lane.py verify <args>"]
-timeout = 120
-when    = "存量评审 R4：每批 reviewer 派遣前与交回后的开工自检/收尾复核（三件套第 3 条）"
-note    = "--route 必填。复核：快照在盘且标记==钉值 / develop 分支 / freeze 仍为祖先 / 树净（仅 legacy-review4/ 内允许落盘）。通过即打印下一批的文件清单+底册切片+三件套（可直接粘贴进派遣提示）"
-
-[tasks."review.lane.batch"]
-run     = ["python .commands/review/scripts/review_lane.py batch <args>"]
-timeout = 120
-when    = "存量评审 R4：单批评审完成（引文校验过后）勾选进度"
-note    = "--route --id <批次> 必填，--findings N 记该批通过 review.check 的发现数。进度单点在 route JSON（D10/D14）。批次未过 review.check 不得勾选"
-
-[tasks."review.lane.done"]
-run     = ["python .commands/review/scripts/review_lane.py done <args>"]
-timeout = 120
-when    = "存量评审 R4：路线全部批次完成后翻终态"
-note    = "--route 必填。校验：无 pending 批次（完成判据=批次全覆盖无断号）+ route-<R>-findings.json 与 route-<R>-notes.md 在盘且 findings 是合法 JSON。翻 done 后 ship.commit 入库，S6 聚合会话接手"
-
-[tasks."review.lane.smoke"]
-run     = ["python .commands/review/scripts/review_lane.py smoke <args>"]
-timeout = 300
-when    = "存量评审 R4：S0 验收/环境变更后重验 —— 全环真冒烟（含重复认领与批次未齐两个负例断言）"
-note    = "真实跑 claim/负例/start/verify/done 负例/逐批勾选/done 全环，结束删除 route JSON、findings、小结、快照目录（树恢复干净）。需树净+网络（ls-remote）"
+note    = "--findings <json文件|-> 必填(- 指 stdin)。逐条校验: 字段齐全(file/line/quote/severity/claim/relevance/fix 七字段)、severity/relevance 枚举合法、quote 与源码逐字比对(单行内连续片段 ≥4 字符, 行号允许 ±3 邻近, --window 可调)。REFUTE 的发现直接弃、不复核; rc=0 全部通过 / rc=1 存在被弃条目 / rc=2 用法或环境错误。用裸 python 运行"
