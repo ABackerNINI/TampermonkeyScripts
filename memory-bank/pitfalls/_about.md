@@ -26,6 +26,8 @@
 
 格式：`P<编号> -> <类>/<文件名>`。文件名带 P 编号便于守恒核对；全 79 条已按本清单落盘，逐段守恒核对 missing = 0。
 
+另有 3 条**动作命名坑档**（随 auto-qb 口径 2026-11-17 移植，无 P 编号）：`git/history-integration.md`（rebase/merge 事故档案与恢复手册，禁令已解除）· `kb/doc-status-meta.md`（doc-status 5 词表外静默漏收）· `kb/doc-topics-comma-composite.md`（Topics 逗号复合主键）。
+
 ```
 P1 -> site-adapt/p01-btschool-table-parsing.md
 P2 -> site-adapt/p02-calc-a-float-parse.md

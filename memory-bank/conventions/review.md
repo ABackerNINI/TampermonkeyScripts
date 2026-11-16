@@ -24,21 +24,21 @@
 - **状态单点在机器 JSON**: 路线进度/认领/冻结基线一律落在机器可读的 JSON(route / manifest), 不靠人脑或文档记账。
 - **互斥 + 全覆盖守卫**: manifest 生成时校验批次文件矩阵互斥(无重叠)且全覆盖(无漏配), 不满足即 rc=1 列清单。
 - **计划 HTML 静态不随执行改版**: 评审计划是成文那天的静态 HTML 制品, 执行进度不回写改写它。
-- **本轮不移植状态机代码**(按 D2 与用户「纯裁剪 + 文档、零新增/改写 Python」决策): 该状态机深度依赖 ls-remote 现查 / develop tip 钉定 / 多 clone 冻结快照 / Review: trailer 口径; 与本项目「本地分支无远端、中文首行提交、不引入该 trailer」的口径冲突, 且属 qB 存量评审专用执行面, 故只把方法论与原则落成本文档, 不带代码。
+- **2026-11-17 口径更新**: 分批评审的机械面已随 auto-qb 移植回本仓 —— `review.pack` / `review.check` / `review.trace`(提交闸门强制 `Review:` trailer, Review-Skip 判红)与 ship.gate 预跑全部生效; `review.lane.*` 状态机仍不移植(属 qB 存量评审专用执行面)。协作主线 Gitee `develop`, 提交信息 gitmoji+中文(单点在 `AGENTS.md`「提交 / PR」)。
 
 ## 4. 不带走清单（D2）
 
 - 473 条 findings、6 份 issue HTML、终审报告、route JSON、auto-qb 路径常量, 一律不带走。
-- Review-Skip / Review: trailer 口径不带走 —— 与本项目「中文首行 + 详述」提交规范冲突。
+- ~~Review-Skip / Review: trailer 口径不带走~~ **已推翻**(2026-11-17 用户拍板): trailer 口径随 review.trace 闸门带回, `Review:` trailer 为提交闸门强制项, Review-Skip 判红(豁免退役)。
 
 ## 5. 命令面
 
-- 只保留 review.pack(评审包生成) 与 review.check(findings 引文校验) 两个 task, 脚本均落在 `.commands/review/scripts/review_pack.py`(机械面, 本轮零改写)。
-- review.trace 与 7 个 review.lane.* 命令已随 qB 专属脚本一并退役。
+- 命令面 3 个 task: `review.pack`(评审包生成) / `review.check`(findings 引文校验) / `review.trace`(提交闸门评审留痕校验, 2026-11-17 移植), 脚本落在 `.commands/review/scripts/`。
+- 7 个 review.lane.* 命令(存量评审 R4 状态机)仍随 qB 专属脚本退役, 不移植。
 - `.commands/review/scripts/review_content.py` 作为 `review_pack.py` 的必需 stdlib 依赖模块予以保留(432 行、无 qB 路径常量), 故本轮实际退役 3 个 qB 专属脚本、包内为 3 文件。
 
 ## 6. 已知限制（如实登记）
 
 - `.commands/review/scripts/review_pack.py` 第 135 / 141 行仍有两处 Review: / Review-Skip: 锚点提示措辞(历史注释与警告文本), 按「零改写 Python」本轮未改。
-- 本项目提交信息不引入该 trailer; review.pack 实际使用以 --base <rev> **显式指定**评审起点为准, 不依赖任何 trailer 锚点自动推算。
+- `Review:` trailer 现为提交闸门强制项(`review.trace`, 2026-11-17 起); review.pack 仍以 --base <rev> **显式指定**评审起点为准, 不依赖 trailer 锚点自动推算。
 - 计划/报告制品协议(dark 单文件 HTML、doc-added / doc-updated / doc-status / doc-refs meta、变更记录 R 行、认领链双向声明)见 `conventions/doc-forms.md`（制品协议单点）。

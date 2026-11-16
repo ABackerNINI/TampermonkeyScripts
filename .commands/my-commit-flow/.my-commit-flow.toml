@@ -1,5 +1,4 @@
-# 提交流水线配置(my-commit-flow) —— 2026-11-11 按本仓库事实本地化。
-# 口径等价迁移自仓库根 .commit-flow.toml; 只保留本包脚本读取的 schema 键(见 references/config.md)。
+# 提交流水线配置(my-commit-flow) —— 本仓库事实 + auto-qb 闸门全套(2026-11-17 对齐移植)。
 # 本仓库: 单文件 .user.js / 纯 Node 零依赖 / 无 package.json; 测试用 tests/run-all.js。
 # 协作主线 Gitee develop, GitHub 只作镜像(与 AGENTS.md 一致)。本分支无 upstream, 提交走 --no-push。
 # 生效值与来源: python .commands/my-commit-flow/scripts/_pipeline.py --show-config
@@ -7,69 +6,142 @@
 confirmed = true
 
 branch = ""                       # 留空 = 跟当前分支
-
-main_candidates = ["gitee", "github", "origin"]
+# origin 存在即主线, 镜像由主线主机决定(主机 ≠ 主线主机的第一个远端) ——
+# 下面四个键只在**没有 origin** 的仓库里兜底(旧逻辑, 行为不变); 判据单点在 _ship_config.py。
+main_candidates = ["gitee", "origin", "github"]
 main_host_mark  = "gitee.com"     # 主线 URL 特征(Gitee develop 主线)
 mirror          = "github"
 mirror_host_mark = "github.com"   # GitHub 只作镜像
 
+# 决策点指针: 预检在检查表末尾打印它 —— 把「改代码 / 跑 git 前该读哪份陷阱索引」
+# 摆到提交那一刻眼前(库里的约束不接到决策点上就等于没写)。留空 = 不打印。
+pitfalls_index = "memory-bank/pitfalls/git/_index.md"
+
 # 出现即 STOP —— 铁律 5: resources-do-not-track/ 里的私有整页与凭据永不入 Git
-red_lines = ["resources-do-not-track/"]
-# 出现需人工确认: 项目数据目录(已 gitignore, 出现在暂存清单即为异常)
-warn_lines = [".workbuddy-ai/", ".codebuddy/"]
+red_lines = ["resources-do-not-track/", "config.yml"]
+# 出现需人工确认: 用户自己的在途改动 / 不该入库的项目数据
+warn_lines = ["想法.md", ".workbuddy-ai/", ".codebuddy/"]
 
 # 跨平台风险: Windows 本地全绿不等于 CI(ubuntu)绿
 platform_hints = ["child_process", "spawn", "spawnSync", "fs.rmSync", "process.platform", "path.sep"]
 staged_panic = 200
 each_limit = 99                  # <each:GLOB> 展开条数上限
 
-# 生成物白名单(sync 自动化解用, 仅 sync.py 读取): 本分支无 upstream、全程 --no-push 不开 sync,
-# 当前不需要; 置空, 不继承 <skill-dir:memory-bank>/scripts/gen_all.py 默认值(该文件确实存在, S02 落盘,
-# 但本阶段不跑)。需启用时再填回 --list / 重跑两条命令。
-auto_resolve_generated = false
-generated_list_cmd = ""
-generated_regen_cmd = ""
+# ---------------------------------------------------------------------------
+# 生成物冲突自动化解: 同步时若冲突 / 重叠**全部**落在可重跑的生成物上, 自动
+# 「任取一侧 + 重跑生成器 + 自证」, 无需人工; 只要有一个手写文件参与, 行为与
+# 不配这三个键时逐字一致(该失败就失败)。
+# 白名单唯一权威来源是生成器自己的 `--list`(集合单点 gen_all.py); 列错 = 静默丢内容。
+# ---------------------------------------------------------------------------
+auto_resolve_generated = true
+generated_list_cmd  = "python <skill-dir:memory-bank>/scripts/gen_all.py --list"
+generated_regen_cmd = "python <skill-dir:memory-bank>/scripts/gen_all.py"
 
 # ---------------------------------------------------------------------------
 # 闸门: auto = true → 预检真的执行(红了即 STOP); 占位符展开不了同样 STOP。
-# 只保留本项目真实存在的 5 条, 不挂 qB 专属闸门(review.trace / Review: trailer /
-# check_command_drift.py / sync_agent_skills.py / dev.fmt / test.quick /
-# test.pkg.scoped / gen_active_recent --check / check_html --vnu 等)。
-# KB 骨架与接线是 S06 的事, 本步不对 .commands/**/scripts/*.py 做全量 <each:> 冒烟
-# (新增脚本里含无参即真动作的提交/同步脚本, 全跑会有副作用)。
+# 命令一律走单点定义的 task id 或脚本本体, 不在这里抄第二份。
 # ---------------------------------------------------------------------------
 
 [[gates]]
-match   = ["src/", "tests/run-all.js", "tests/ptautocheckin/", "tests/hdhomeui/", "tests/lib/"]
-run     = ["node tests/run-all.js"]
-note    = "JS 改动: 零依赖全量测试(当前 35 个, 约 5 分钟; 无浏览器时 SKIP 仿真用例)"
+# match 用 tests/ 的直接子路径枚举而非裸 "tests/": hit() 是子串语义, "tests/" 会误中
+# memory-bank/pitfalls/tests/*.md(本仓 pitfalls 有 tests 类, auto-qb 没有) —— 纯文档改动
+# 会误触全量 JS 测试闸门。新增 tests/ 顶层子目录或顶层散文件(如 tests/check-x.js)时同样要加进本清单。
+match   = ["src/", "tests/lib/", "tests/ptautocheckin/", "tests/hdhomeui/", "tests/run-all.js"]
+run     = ["python <skill-dir:commands>/scripts/run.py run test.full"]
+note    = "全量测试: 经 commands 引擎跑 test.full(node tests/run-all.js, 零依赖; 无浏览器时 SKIP 仿真用例), 红了即 STOP"
 auto    = true
 timeout = 900
 
 [[gates]]
-match   = ["AGENTS.md", "scripts/"]
-run     = ["python scripts/check_context_caps.py"]
-note    = "AGENTS.md 改动: IDE 注入上限 8000 字符; 只改 scripts/ 时等同冒烟"
-auto    = true
+match = ["memory-bank/"]
+run   = ["python <skill-dir:memory-bank>/scripts/gen_kb_index.py --check",
+         "python <skill-dir:memory-bank>/scripts/gen_doc_map.py --check",
+         "python <skill-dir:memory-bank>/scripts/gen_baseline_recent.py --check",
+         "python <skill-dir:memory-bank>/scripts/check_wording.py --check",
+                  "python <skill-dir:memory-bank>/scripts/check_doc_templates.py --check",
+         "python <skill-dir:memory-bank>/scripts/timekit.py --check --files <changed:memory-bank/**>",
+         "python <skill-dir:memory-bank>/scripts/check_status_drift.py --check",
+         "python <skill-dir:memory-bank>/scripts/check_html.py --check <changed:**/*.html>"]
+auto  = true
 timeout = 60
+note  = "知识库索引 + 制品索引与专题视图 + 日期守卫 + 基线切片结构 + 回写措辞: 覆盖面与 kb.check 对齐(缺一条就是静默红 —— 能判红却不在闸门里 = 静默红)"
 
 [[gates]]
-match   = ["memory-bank/"]
-run     = ["git status --short memory-bank/"]
-note    = "知识库改动: 铁律 4 —— 代码改动须与 memory-bank/ 同步且同次提交; 轻量检查, 不挂 kb.check / gen_active_recent / check_html"
-auto    = true
+match = ["memory-bank/active-context/"]
+run   = ["python <skill-dir:memory-bank>/scripts/gen_active_recent.py --check"]
+auto  = true
 timeout = 60
+note  = "会话切片: 命名定宽前缀 / 三行头 / cap —— 该脚本只校验, 不写文件"
 
 [[gates]]
-match   = [".agents/skills/"]
-run     = ["python <each:.agents/skills/**/scripts/*.py|--with-safety> --help"]
-note    = "skill 改动: 被改脚本 --help 冒烟; --with-safety 摘掉无参即真动作的脚本"
-auto    = true
+match = ["memory-bank/", "docs/", "AGENTS.md"]
+run   = ["python <skill-dir:memory-bank>/scripts/check_doc_links.py --quiet"]
+auto  = true
+timeout = 60
+note  = "相对链接存在性: 改名 / 搬家后的坏链不会让任何测试失败, 只能机检"
+
+[[gates]]
+# HTML 结构守卫: L1+L2 零依赖常驻判据随上一条 memory-bank 闸门全库跑; 本条是规范级
+# 增量面: 本次改动的 HTML 才过 W3C v.Nu —— 改谁谁达标, 存量 error 不进闸门。
+# vnu.jar 在 <root>/.tools/(gitignored, 缺时自动下载, 需 java); 无 HTML 改动时跳过。
+match = [".html"]
+run   = ["python <skill-dir:memory-bank>/scripts/check_html.py --vnu --strict <changed:**/*.html>"]
+auto  = true
+timeout = 120
+note  = "HTML 规范级增量检查(v.Nu): 全仓改动 HTML 都查; 有 error 即 STOP; 修复后重跑, 或 commands run kb.html-audit 看全库报告"
+
+[[gates]]
+# 两处都扫: `.agents/skills/`(skill 的家) 与 `.commands/`(包内脚本)。
+# |--with-safety: --help 未必被脚本认 —— 把陌生参数当无参处理时, 无参=真动作的脚本会被真跑一次;
+# 让展开先问每个脚本自己的 --safety 探针, 把「无参即真动作」的摘出去(摘掉会在输出里写明)。
+match = [".agents/skills/", ".commands/"]
+run   = ["python <each:.agents/skills/**/scripts/*.py|--with-safety> --help",
+         "python <each:.commands/**/scripts/*.py|--with-safety> --help"]
+auto  = true
 timeout = 300
+note  = "脚本冒烟: 改了哪个跑哪个(<each:> 把一条 run 复制成多条); |--with-safety 摘掉「无参即真动作」脚本(否则 --help 会真的同步/推送)"
 
 [[gates]]
-match   = ["memory-bank/", "docs/", "AGENTS.md"]
-run     = ["python <skill-dir:memory-bank>/scripts/check_doc_links.py --quiet"]
-note    = "文档改动: 相对链接坏链机检, 红了即拦; 历史死链按 D2 接受, 全量检查留到 S13"
-auto    = true
+# 评审留痕: 分批评评的强制面。match 空串(每次提交都跑) —— 触发条件不是"改了哪些文件",
+# 而是批内累计未评改动量(锚点从 git 历史现算), 按路径匹配永远命中不了"这一笔含可评增量"。
+# when_message: ship.gate 预跑侧在消息文件不存在时打略过行后摘除(评审批次 pack 前评审
+# 尚未发生, 照跑必红); commit 侧不受影响(闸门前就因消息缺失拒跑)。
+match = [""]
+run   = ["python <skill-dir:commands>/scripts/run.py run review.trace"]
+auto  = true
+timeout = 60
+when_message = true
+note  = "评审留痕: 可评内容 >0 行(代码+事实性文档)或触安全敏感面即需 `Review:` trailer(含 `· 基`); 新提交写 `Review-Skip:` 判红; 实算恒 0 且无 Review: trailer 才静默; 口径单点见 .commands/review/config.toml 的 review.trace note"
+
+[[gates]]
+# 空串 = 每次提交都命中: 从远端 pull 进来的 skill 改动在本地不产生 diff(HEAD 已跟着往前走),
+# 按路径匹配命中不了 —— 只能靠每次提交跑一次幂等同步来兜。
+match = [""]
+run   = ["python scripts/sync_agent_skills.py"]
+auto  = true
+timeout = 60
+note  = "skill 链接同步(幂等): 拉取来的改动靠每次提交兜一次"
+
+[[gates]]
+# cap 债务制: AGENTS.md 是硬规定(超 8000 注入尾部被静默截断, 超了且本次改动命中 → STOP,
+# 不套收缩、不进债务); 其余尺寸(SKILL.md / KB 角色 cap)是债务 —— 派生输出, 只报告不拦。
+# <changed:> 无匹配即静默跳过; 债务只算本次改动的文件。
+match = ["AGENTS.md", ".agents/skills/", ".commands/", "memory-bank/"]
+run   = ["python scripts/check_context_caps.py --files <changed:AGENTS.md>",
+         "python scripts/check_context_caps.py --files <changed:.agents/skills/**>",
+         "python scripts/check_context_caps.py --files <changed:.commands/**>",
+         "python scripts/check_context_caps.py --files <changed:memory-bank/**>"]
+auto  = true
+timeout = 60
+note  = "上下文字符上限: AGENTS.md 超限且改动命中即拦(硬规定); SKILL/KB 角色 cap 债务只算本次改动的文件 —— 输出含「提醒用户另开新会话清理」, 不拦提交"
+
+[[gates]]
+# 空串 = 每次提交都跑: 手抄可能出现在任何文档里, 按路径匹配必然漏。
+# 改动清单单点是预检 —— 脚本不自查 git(复跑阶段树已净, 自查语义就错)。
+match = [""]
+run   = ["python scripts/check_command_drift.py --files <changed:*.md>",
+         "python scripts/check_command_drift.py --full <changed:.commands/**/config.toml>",
+         "python scripts/check_command_drift.py --full <changed:.agents/skills/commands/scripts/*.py>"]
+auto  = true
 timeout = 180
+note  = "命令漂移: 改动的 md 只扫改动文件; 注册表/引擎骨架逻辑变了 → 全量扫; 文档里手抄已收录的命令 → 判红(必须写成 commands run <task>)"

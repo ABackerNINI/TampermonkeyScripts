@@ -7,7 +7,7 @@
 ### 8.1 鼓励设计易测试的代码
 
 - 允许并鼓励为可测试性设计：逻辑尽量纯函数化（输入数据 → 输出数据，如 `parseTorrentTable`）、配置与逻辑分离、副作用收敛到 `main()` 等入口、可注入数据源/时钟等。
-- 本地回归脚本/断言**统一放在 `tests/`**（不放 `src/`，避免与生产脚本混放）：按被测脚本分子目录 `tests/<脚本名>/*.js`，每个文件 = 一个可独立运行的测试，以退出码表达结果（如 `tests/ptautocheckin/`）；`node tests/run-all.js` **递归**跑完全部（新增脚本目录无需改运行器）。共享基建 `tests/lib/`（含 `lib/sim` 仿真站）与数据 `tests/fixtures/` 不被当作测试执行。
+- 本地回归脚本/断言**统一放在 `tests/`**（不放 `src/`，避免与生产脚本混放）：按被测脚本分子目录 `tests/<脚本名>/*.js`，每个文件 = 一个可独立运行的测试，以退出码表达结果（如 `tests/ptautocheckin/`）；`commands run test.full` **递归**跑完全部（新增脚本目录无需改运行器）。共享基建 `tests/lib/`（含 `lib/sim` 仿真站）与数据 `tests/fixtures/` 不被当作测试执行。
 - **零依赖**：只用 Node 内置模块，不引入任何 npm 包/测试框架（与本仓库「无 package.json / 无构建」一致）。
 - 测试约定与「如何测 userscript」（把源文件里自包含的代码块切出来写进临时模块再 `require`）见 `tests/README.md`。
 

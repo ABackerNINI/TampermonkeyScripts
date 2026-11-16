@@ -11,7 +11,7 @@
 - **语言**：JavaScript（ES6+，`const`/`let`，禁止 `var`）
 - **运行时**：浏览器 + Tampermonkey（Greasemonkey API）
 - **脚本格式**：`.user.js`（单文件，含 UserScript 元数据头）
-- **测试**：**无测试框架**（刻意保持：无 `package.json` / 无 npm / 无构建），但已有 `tests/` 开发期测试区 —— 约定为「按被测脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个可独立运行的测试，**以退出码表达结果**」，`node tests/run-all.js` 一次跑完（极简零依赖运行器）。现有测试：`tests/ptautocheckin/check-ptac-budget.js`（PTAutoCheckIn 超时预算 / 状态阶梯 / 不透明成本声明 / `computeUnitBudget` 自测，见 P28）与 `check-ptac-panel.js`（主面板「失焦自动关闭」+「重现不弹主面板」两条交互不变式的静态校验，2026.09.19.4）；
+- **测试**：**无测试框架**（刻意保持：无 `package.json` / 无 npm / 无构建），但已有 `tests/` 开发期测试区 —— 约定为「按被测脚本分子目录 `tests/<脚本名>/*.js`（如 `tests/ptautocheckin/`），每个文件 = 一个可独立运行的测试，**以退出码表达结果**」，`commands run test.full` 一次跑完（极简零依赖运行器）。现有测试：`tests/ptautocheckin/check-ptac-budget.js`（PTAutoCheckIn 超时预算 / 状态阶梯 / 不透明成本声明 / `computeUnitBudget` 自测，见 P28）与 `check-ptac-panel.js`（主面板「失焦自动关闭」+「重现不弹主面板」两条交互不变式的静态校验，2026.09.19.4）；
 以及 `tests/ptautocheckin/sim-*.js` 共 13 个**仿真站**用例（`sim-security-s*.js` 11 个安全向 + `sim-hdhome-pagetext.js` 站点功能向 + `sim-panel-autoclose.js` UI 交互向，2026.09.19 起仿真站不再只服务安全用例）：起本地仿真服务器 + 一次性 Chrome
 （`--host-resolver-rules="MAP * 127.0.0.1:<port>"` 让真实域名 URL 落到本机，**生产脚本零改动**即可命中 `@match`），
 用 CDP（Node 22 内置 `WebSocket`，零依赖）注入「GM 垫片 + userscript」跑真浏览器端到端断言，
@@ -24,7 +24,7 @@ HDHomeUI 另有 **5 个「未知元素安全」用例**（`check/sim-hdui-hide-a
 `tests/lib/hdui-scan.js`（五档渲染扫描 + 金丝雀探针，从 gitignore 的 `_verify-hdui-real-render.js` 提升而来，
 不入库就永远无法回归）。详见 `pitfalls/_index.md` P66–P69。
 - **CI**：`.github/workflows/ci.yml` —— GitHub Actions，`ubuntu-latest` × Node 20/22 矩阵：
-  `node --check src/*.user.js` 语法检查 + `node tests/run-all.js -v` 跑全部测试。
+  `node --check src/*.user.js` 语法检查 + 本地 `commands run test.full` 跑全部测试。⚠现网 `.github/workflows/ci.yml` 是 Python 3.12/3.13 + uv/pytest 形态(2026-09-20 随上游同步还原, 与本仓纯 Node 测试栈不符 —— 属计划外缺陷, 待另行登记修复), 其结论不反映本仓测试状态, 以本地 `commands run test.full` 为准。
   （旧版 ci.yml 是从一个 Python/uv/pytest 仓库复制过来忘了清理的，2026-09-18 已整体替换。）
   仿真站用例在无浏览器的环境会打印 `SKIP` 并退 0，不会让 CI 变红；GitHub 的 ubuntu 镜像自带 Chrome。
   ⚠️ 仿真站还依赖 **Node 22 内置的全局 `WebSocket`**（`cdp.js` 靠它做到零依赖）——
@@ -37,7 +37,7 @@ HDHomeUI 另有 **5 个「未知元素安全」用例**（`check/sim-hdui-hide-a
 - 工作目录：`D:\Projects\TampermonkeyScripts`
 - `.vscode/settings.json` 配置 cSpell 词典（站点域名等专有名词拼写白名单）
 - 无 package.json / 无 npm / 无构建步骤。直接编辑 `src/*.user.js`。
-- 测试用 Node 直接跑（无需 `npm install`）：`node tests/run-all.js`（全部）或 `node tests/<某测试>.js`（单个）；语法检查 `node --check src/*.user.js`。
+- 测试用 Node 直接跑（无需 `npm install`）：全量 `commands run test.full`，单个 `node tests/<某测试>.js`；语法检查 `node --check src/*.user.js`。
 
 ## UserScript 元数据约定（见 conventions/code-style.md）
 

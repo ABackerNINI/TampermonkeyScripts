@@ -10,4 +10,6 @@
 
 | 主题 | 一句话 | 触发词 |
 |---|---|---|
+| [doc-status-meta.md](doc-status-meta.md) | `plans/` `reports/` 的 `<meta name="doc-status">` 不在 5 词表(`Open`/`In Progress`/`Done`/`Dropped`/`Superseded`)时, 该件不落任何分区 ⇒ **静默漏收**。修复前 `kb.i… | 新建计划/报告, doc-status, 状态词, 索引漏收, kb.index 已生成但件不在索引, Draft |
+| [doc-topics-comma-composite.md](doc-topics-comma-composite.md) | Topics 行英文逗号不拆主键 | Topics, 专题主键, docmap, 跨形态视图, 名录 |
 | [p13-ai-collab-discipline.md](p13-ai-collab-discipline.md) | 计划/分析任务不得改码，实施任务完成后须汇报等审核，提交一律由用户执行。 | 让 AI 做方案, 让 AI 改码, 提交前, 审核改动 |

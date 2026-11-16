@@ -32,9 +32,10 @@
 | 查计划 / 报告制品协议（meta / R 行 / 认领链 / 状态词表） | `conventions/doc-forms.md` |
 | 查未修项 / 待办方向 / 已知问题 | `conventions/known-issues.md` |
 | 查某个脚本的职责与用法 | `memory-bank/scripts/<脚本>/`（5 个分包目录） |
-| 写 / 跑测试 | `tests/README.md` + `node tests/run-all.js` |
-| 看计划 / 方案 | `docs/plans/` |
-| 查任务档案 | `memory-bank/tasks/`（TASK001–020） |
+| 写 / 跑测试 | `tests/README.md`；全量走 `commands run test.full` |
+| 看计划 / 方案 | `memory-bank/plans/`（四工位 plan 工位; `docs/plans/` 为历史落点, 存量保留不动） |
+| 查任务档案 | `memory-bank/tasks/`（存量 TASK001–020 + 新档 `kb.new task` 立档） |
+| 看审计 / 取证 / 可行性报告 | `memory-bank/reports/` |
 
 > 表没覆盖的：`grep -rn "<词>" memory-bank/` 兜底，别整读目录。
 
@@ -48,8 +49,8 @@
 | `pitfalls/site-adapt/` | PT 站点签到建模 / 表格与字段解析 / 落地页 / 状态判定 / 页面归属 / favicon | P1–P3·P5·P6·P11·P15·P16·P18·P19·P21–P27·P31 |
 | `pitfalls/css-theme/` | HDHomeUI 换肤 / FAB 皮肤 / CSS 规则 / 布局 / 16px SVG 图标 / 列结构契约 | P17·P33–P40·P42·P45·P46·P50–P69·P75–P79 |
 | `pitfalls/tests/` | 测试基建 / 仿真 / 断言与判据 / 原型派生 / CI 度量 | P14·P41·P48·P49·P70–P74 |
-| `pitfalls/git/` | 提交 / 分支 / 版本号 | P20 |
-| `pitfalls/kb/` | 知识库 / AI 协作纪律 | P13 |
+| `pitfalls/git/` | 提交 / 分支 / 版本号 / 历史整合事故档案 | P20 · history-integration |
+| `pitfalls/kb/` | 知识库 / AI 协作纪律 / 制品协议守卫 | P13 · doc-status-meta · doc-topics-comma-composite |
 | `pitfalls/docs/` | 文档漂移 / 约定 / 编码与仓库卫生 | P12 |
 | `pitfalls/security/` | 凭据 / 私有资源 / 仿真站安全审计 | P30·P32 |
 
@@ -57,9 +58,9 @@
 
 ## 本项目特有落点（别走错）
 
-- **计划**在 `docs/plans/`（HTML 制品），**不在** `memory-bank/plans/`；
+- **计划**在 `memory-bank/plans/`（HTML 制品, `kb.new plan` 建; 历史落点 `docs/plans/` 存量保留不动）；**报告**在 `memory-bank/reports/`（出厂即冻结）；
 - **脚本文档**在 `memory-bank/scripts/`：`PTAutoCheckIn/` / `BTSchoolHelper/` / `BilibiliEnterFullscreen/` / `EnhanceVisitedLinks/` / `HDHomeUI/`，与 `src/*.user.js` 一一对应；
-- **任务档案**在 `memory-bank/tasks/`，TASK001–020 为存量档案（仅补 `**Topics:**` / `**Refs:**` 元数据行，事实正文不动，死链靠 `grep` + `git log -- <旧路径>` 兜底）；
+- **任务档案**在 `memory-bank/tasks/`：TASK001–020 为存量档案（仅补 `**Topics:**` / `**Refs:**` 元数据行，事实正文不动）；新专题经 `commands run kb.new task` 立档（唯一滚动更新件），待办方向另见 `conventions/known-issues.md`；
 - 脚本速查表、约定、检查清单、测试约定、开发与发布工作流、HDHomeUI 两条铁律等**事实性内容**仍完整保存在 `conventions/`（按主题分件）与上述脚本文档 / `pitfalls/_index.md`，本文件只做路由、不复述。
 
 ## 一条不能丢的红线

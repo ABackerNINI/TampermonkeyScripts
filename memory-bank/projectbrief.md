@@ -39,7 +39,7 @@ TampermonkeyScripts/
 
 个人自用的 **Tampermonkey 用户脚本** 集合，覆盖 B 站、多个 PT 站与百度贴吧的自动化辅助功能。代码以中文注释为主，功能以解决实际使用痛点为目标。无构建步骤、无依赖包、无测试框架；脚本为单文件、可直接安装到 Tampermonkey 的 `.user.js`。
 
-- 远程仓库：`https://github.com/ABackerNINI/TampermonkeyScripts`（Gitee 镜像用于 B 站脚本直链更新）
+- 远程仓库：Gitee 主线 `https://gitee.com/ABacker/TampermonkeyScripts`（`develop` 分支，交付只看 Gitee）；GitHub `https://github.com/ABackerNINI/TampermonkeyScripts` 只作镜像；BilibiliEnterFullscreen 的 `@downloadURL` 直链用 Gitee。
 - 许可证：GNU GPL-3.0（每个脚本头部均标注）
 
 ## 现有脚本清单
@@ -102,6 +102,6 @@ TampermonkeyScripts/
 - **语言**：JavaScript（ES6+，`const`/`let`，禁止 `var`）
 - **运行时**：浏览器 + Tampermonkey（Greasemonkey API）
 - **脚本格式**：`.user.js`（单文件，含 UserScript 元数据头）
-- **版本管理**：git（远程 GitHub + Gitee 镜像）
+- **版本管理**：git（Gitee `develop` 主线，GitHub 只作镜像允许滞后）
 - 无 package.json / 无 npm / 无构建步骤。直接编辑 `src/*.user.js`。
-- 测试用 Node 直接跑（无需 `npm install`）：`node tests/run-all.js`（全部）或 `node tests/<某测试>.js`（单个）；语法检查 `node --check src/*.user.js`。
+- 测试用 Node 直接跑（无需 `npm install`）：全量 `commands run test.full`，单个 `node tests/<某测试>.js`；语法检查 `node --check src/*.user.js`。

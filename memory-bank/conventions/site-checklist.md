@@ -11,7 +11,7 @@
 - [ ] 对照站点页面的真实 DOM（非网络截图）核对选择器与文案；
 - [ ] 实测：未签到页能点、已签到页不重复点、10 分钟内刷新不重复触发、贴吧各吧独立触发；
 - [ ] **若新增/修改了 `function` 步骤或自定义 `alreadyCheck`**：**必须**声明 `budgetMs`(步骤) / `alreadyCheckBudgetMs`(unit)，**纯同步 DOM 判定写 `0`**；并确认该站「检测 + 各步骤 + 固定预留 18000ms」未超 `UNIT_TOTAL_TIMEOUT`(40000ms)（超时预算不变式，见 P28）；
-- [ ] 跑 `node tests/ptautocheckin/check-ptac-budget.js`（零依赖），必须全绿：常量不变式 + 状态阶梯结构 + 不透明成本声明 + `computeUnitBudget` 自测（等价于 `node tests/run-all.js` 跑该测试）；
+- [ ] 跑 `node tests/ptautocheckin/check-ptac-budget.js`（零依赖），必须全绿：常量不变式 + 状态阶梯结构 + 不透明成本声明 + `computeUnitBudget` 自测（全量回归走 `commands run test.full`）；
 - [ ] 递增版本号 + 更新 `memory-bank/scripts/PTAutoCheckIn/sites.md` 站点表与「各 unit 实测预算」表。
 
 新增独立脚本：

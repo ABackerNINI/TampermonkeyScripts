@@ -15,4 +15,8 @@ timeout = 120
 when    = "查上下文字符上限与 cap 债务(提交闸门每次都跑默认模式); 清理会话用 --strict 收口"
 note    = "2026-09-30 债务制: 只有 AGENTS.md 是硬规定(超 8000 注入时尾部被静默截断, 超限即拦、不挂账); 其余尺寸超限是**债务** —— 默认只报告不拦提交, 输出自带「提醒用户另开新会话清理」指令。<args> 可传 --strict(债务非空即 rc=1, 只许用在清理会话收口, 闸门只用默认模式) / --quiet"
 
-
+[tasks."doc.drift"]
+run     = ["python scripts/check_command_drift.py <args>"]
+timeout = 180
+when    = "文档里有没有人（含 agent）手抄了已收录的命令"
+note    = "命令只应在包里定义一份；文档里要写就写 task id。<args> 可传 --list 看正在盯的命令骨架"
