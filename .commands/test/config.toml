@@ -7,4 +7,5 @@ confirmed = true
 run     = ["node tests/run-all.js"]
 timeout = 1800
 pin     = true
+silent_success = true  # 成功只留结论行(同 auto-qb test.* 口径), 失败全文透传; 引擎守阵 test_engine.py 靠本声明测解析
 when    = "改完代码要验一遍"

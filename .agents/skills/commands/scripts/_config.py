@@ -33,7 +33,9 @@ PACK_ENV = "COMMAND_FLOW_PACK_DIR"  # 调包脚本时注入: 本包目录(让脚
 # 那比直接报错坏得多。付的价钱: 新增键必须先加进这里。
 PACK_KEYS = {"name", "when", "enabled", "version", "origin", "scripts_dir", "confirmed"}
 SUBPACK_KEYS = {"enabled"}
-TASK_KEYS = {"run", "script", "args", "when", "note", "doc", "timeout", "requires", "risky", "pin", "silent_success", "stream"}
+TASK_KEYS = {
+    "run", "script", "args", "when", "note", "doc", "timeout", "requires", "risky", "pin", "silent_success", "stream"
+}
 
 DEFAULT_TIMEOUT = 600
 MAX_DEPTH = 8  # 层级上限: 套得太深会让人下钻到迷路
@@ -77,7 +79,8 @@ class Task:
     # W2-4(计划 26-09-28-0157 §10): 成功路径只出结论行、不打「略过 N 行」提示 —— 给"成功即静默"
     # 的任务(test.full / test.quick)声明; 信息类命令(kb.active 等)**不加**, 它们的有损摘要靠提示兜底。
     silent_success: bool = False
-    # 前台长跑任务(kb.nav 这类常驻服务): stdio 直连终端 —— 输出实时可见、Ctrl-C 直达子进程, timeout 不生效
+    # 前台长跑任务(kb.nav 这类常驻服务): stdio 直连终端 —— 输出实时可见、Ctrl-C 直达子进程;
+    # 与默认捕获式路径(capture_output=True, 跑完才见输出)互斥, 且 timeout 不生效。
     stream: bool = False
     scripts_dir: Path | None = None  # 脚本所在目录(继承而来)
 
@@ -178,9 +181,9 @@ def load_tree(root: Path | None = None) -> Tree:
 
 
 def _pin_warnings(tree: Tree) -> list[str]:
-    """标 ★(pin)的命令过多 → WARN。
+    """标 *(pin)的命令过多 → WARN。
 
-    2026-09-29 起 list 默认平铺, pin 不再有"浮到父级"的行为, 只剩 ★ 记号 —— ★ 太多会稀释
+    2026-09-29 起 list 默认平铺, pin 不再有"浮到父级"的行为, 只剩 * 记号 —— * 太多会稀释
     "高频命令"的锚点价值。这是纪律问题不是结构错误, 故 WARN 不 STOP。
     """
     out: list[str] = []
@@ -190,8 +193,8 @@ def _pin_warnings(tree: Tree) -> list[str]:
         pinned = [t.id for sub in subs.values() if sub.enabled for t in sub.tasks.values() if t.pin]
         if len(pinned) > MAX_PIN_PER_LEVEL:
             out.append(
-                f"{where} 有 {len(pinned)} 条 ★ 常显标记(上限 {MAX_PIN_PER_LEVEL}): "
-                "pin 只给「每次会话都要用」的命令 —— 滥用会让 ★ 失去锚点价值"
+                f"{where} 有 {len(pinned)} 条 * 常显标记(上限 {MAX_PIN_PER_LEVEL}): "
+                "pin 只给「每次会话都要用」的命令 —— 滥用会让 * 失去锚点价值"
             )
         stack += [(pack.path, pack.subs) for pack in subs.values() if pack.subs]
     return out
