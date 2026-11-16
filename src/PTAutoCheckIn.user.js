@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.16.1
+// @version      2026.11.17.1
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -2351,6 +2351,18 @@ const K = {
             padding: 12px 2px 4px; letter-spacing: 0.5px;
         }
         .g-head:first-child { padding-top: 8px; }
+        /* 「已签到」折叠区组头: 可点展开/收起(默认折叠), 三角指针由 border 画出, 展开时顺时针转向下 */
+        .g-head.done-head {
+            cursor: pointer; user-select: none;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .g-head.done-head:hover { color: var(--accent-1); }
+        .g-head.done-head .caret {
+            display: inline-block; width: 0; height: 0; flex-shrink: 0;
+            border-left: 4px solid currentColor; border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
+            transition: transform 0.15s ease;
+        }
+        .g-head.done-head .caret.open { transform: rotate(90deg); }
         .row {
             display: flex; align-items: center; gap: 10px;
             padding: 8px 2px; border-bottom: 1px dashed var(--border);
@@ -2467,6 +2479,7 @@ const K = {
         let host = null, fab, fabCore, fabBadge, chip, chipText, panel, summaryEl, bannerEl, barEl, barTextEl, listEl, btnBatch, forceToggle, forcePop, btnForce, btnSkin, skinBtns;
         let cancelObj = null;
         let batchBase = '';
+        let doneOpen = false; // 「已签到」折叠区展开态: 默认折叠; 仅本次页面内存, 不落盘
         let toastEl = null, toastTimer = null;
         let lastRetryAt = 0; // 单站重试发起时间戳: 8s 内同页防连点(焦点已切新标签, 防切回误触)
         let skin = 'chameleon'; // FAB 皮肤: 变色龙(chameleon)|图标数字(number)|信号灯(signal)|进度光环(ring)
@@ -2613,6 +2626,9 @@ const K = {
             });
             // 点击站点名 → 新标签页(前台)打开该站; 行内容每次 render 重建, 故用事件委托
             listEl.addEventListener('click', (e) => {
+                // 「已签到」折叠区组头 → 展开/收起(默认折叠, 见 doneOpen)
+                const doneHead = e.target && e.target.closest ? e.target.closest('.done-head') : null;
+                if (doneHead) { doneOpen = !doneOpen; render(); return; }
                 // 失败站行内「重试」badge → 前台新标签强制重试(单站, 执行完不关闭标签, 见 openRetryTab)
                 const retryEl = e.target && e.target.closest ? e.target.closest('.badge.retry') : null;
                 if (retryEl) {
@@ -2803,10 +2819,29 @@ const K = {
                     + `<span>记录显示今日已签但检测到可签按钮 → 已标「失败-待确认」; 不自动重签, 页面确认已签后自动恢复已成功并消除, 次日自然作废</span>`
                     + `<div class="alert-names">${alerts.map((a) => `${esc(a.unit.name)}(${esc(a.alert.btnText || '')})`).join('、')}</div></div>`;
             }
+            // 成功站分流: 今日已成功的行收进「已签到」折叠区, 未成功/未处理行留主列表一眼可见。
+            // doneChunks 按组分块缓存折叠区内容, 展开时按序拼接(保多单元组的归属头)
+            const doneChunks = [];
+            let doneCount = 0;
             for (const g of GROUPS) {
                 const isMulti = g.units.length > 1;
-                if (isMulti) html += `<div class="g-head">${esc(g.name)}</div>`;
-                for (const u of g.units) html += buildRowHtml(u);
+                const headHtml = isMulti ? `<div class="g-head">${esc(g.name)}</div>` : '';
+                let openRows = '', doneRows = '', doneInGroup = 0;
+                for (const u of g.units) {
+                    const rowHtml = buildRowHtml(u);
+                    if (isSuccessToday(u.id)) { doneRows += rowHtml; doneInGroup += 1; }
+                    else openRows += rowHtml;
+                }
+                doneCount += doneInGroup;
+                // 组内还有未成功行 → 组头照常留在主列表; 全组都已成功 → 组头随行移入折叠区
+                if (openRows) { if (isMulti) html += headHtml; html += openRows; }
+                else if (isMulti && doneInGroup) doneChunks.push(headHtml);
+                if (doneRows) doneChunks.push(doneRows);
+            }
+            if (doneCount > 0) {
+                html += `<div class="g-head done-head" title="${doneOpen ? '收起已签到站点' : '展开已签到站点'}">`
+                    + `<i class="caret${doneOpen ? ' open' : ''}"></i>已签到 ${doneCount} 站</div>`;
+                if (doneOpen) html += doneChunks.join('');
             }
             listEl.innerHTML = html;
             const running = batchActive();
