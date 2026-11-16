@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.11.1
+// @version      2026.11.16.1
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -2889,25 +2889,20 @@ const K = {
         }
 
         // 失焦自动关闭(2026.09.19.4): 面板是"用完即走"的浮层 —— 焦点离开它(点面板外 / 切标签页 /
-        // 切窗口)就收起, 不再常驻遮挡页面内容。三条约束:
+        // 切窗口)就收起, 不再常驻遮挡页面内容。两条约束:
         //  ① 只在面板展开期间挂监听(收起即摘), 不给宿主页面留常驻全局监听;
-        //  ② **面板内还有待决横幅时不自动收起** —— 「中断恢复」是一次性入口, 用户点了页面别处就把
-        //     它连同横幅一起弄丢, 下次只能靠刷新页面才看得到; 按钮型横幅由 showBanner 的 action 判定;
-        //  ③ Shadow DOM(closed)内部事件传播到外部时 target 会被重定向成 host → 用 host.contains
+        //  ② Shadow DOM(closed)内部事件传播到外部时 target 会被重定向成 host → 用 host.contains
         //     判定"这一下点在 UI 自己身上(FAB/面板/toast)", 点在页面任何别处都算失焦。
+        // (原第②条「有待决横幅不自动收起」的豁免已随断点续签机制移除(2026.11.16):
+        //   操作钮横幅不复存在, 点面板外 / 失焦一律收起。)
         let autoCloseOn = false;
-        function bannerHasAction() { // 有待用户决策的操作钮(如「恢复批量」)→ 不自动收起
-            return !!(bannerEl && bannerEl.style.display !== 'none' && bannerEl.querySelector('button'));
-        }
         function onOutsideDown(e) {
             if (!panel.classList.contains('show')) return;
             if (host && host.contains(e.target)) return; // 点在 UI 自身(shadow 内事件重定向到 host)
-            if (bannerHasAction()) return;
             closePanel();
         }
         function onWindowBlur() {   // 切标签页/切窗口/地址栏等真正的失焦
             if (!panel.classList.contains('show')) return;
-            if (bannerHasAction()) return;
             closePanel();
         }
         function armAutoClose() {
@@ -2927,18 +2922,12 @@ const K = {
             render();
             armAutoClose();
         }
-        function showBanner(msg, variant, actionText, onAction) {
+        function showBanner(msg, variant) {
             bannerEl.className = 'banner' + (variant ? ' ' + variant : '');
             bannerEl.textContent = '';
             const span = document.createElement('span');
             span.textContent = msg;
             bannerEl.appendChild(span);
-            if (actionText && onAction) {
-                const btn = document.createElement('button');
-                btn.textContent = actionText;
-                btn.addEventListener('click', onAction);
-                bannerEl.appendChild(btn);
-            }
             bannerEl.style.display = 'flex';
         }
         function hideBanner() {
@@ -2955,7 +2944,7 @@ const K = {
         function showBatchDone() {
             endBatch();
             openPanel();
-            showBanner('\u2713 批量签到完成', '', null, null);
+            showBanner('\u2713 批量签到完成', '');
             toast('批量签到完成');
             setTimeout(hideBanner, 8000);
         }
@@ -3399,24 +3388,6 @@ const K = {
         else UI.toast(`未触发点击: ${unit.name}(${res.msg || ''})`, 3200);
     }
 
-    // 中断恢复: 调度页消失(hb 陈旧)后, 用户回到任意匹配页 → 提供横幅一键恢复调度
-    function offerBatchResume(task) {
-        const unit = UNIT_MAP.get(task.list[task.index]) || null;
-        const name = unit ? unit.name : (task.list[task.index] || '');
-        UI.openPanel(); // 横幅在面板内, 需先展开面板才能让用户看到恢复入口
-        UI.showBanner(
-            `检测到中断的批量任务(第 ${task.index + 1}/${task.list.length} 站「${name}」)`,
-            'warn', '恢复批量', async () => {
-                UI.hideBanner();
-                task.hb = Date.now(); // 接管调度: 刷新心跳
-                saveTask(task);
-                UI.openPanel();
-                await runBatchScheduler(task);
-            }
-        );
-        UI.render();
-    }
-
     // ==================== 主流程 ====================
     async function main() {
         if (dayRollReload()) return; // 页面加载期间跨天(DOM 慢/大页面): 刷新后重走主流程
@@ -3496,13 +3467,13 @@ const K = {
                     await runPassiveMode(curUnitId ? [curUnitId] : []);
                 }
             } else {
-                // 调度者已中断(发起页被关/崩溃等): 提供恢复入口; 同时当前页仍正常被动
-                // 签到, 但跳过任务当前位置站点, 避免与"恢复批量"重复触发该站
-                console.log(`${ScriptName} 检测到中断的批量任务(调度心跳过期), 提供恢复入口`);
-                offerBatchResume(task);
-                if (!curHit) {
-                    await runPassiveMode(curUnitId ? [curUnitId] : []);
-                }
+                // 调度者已中断(发起页被关/崩溃/后台标签被节流休眠): 清掉死任务, 本页按
+                // 无任务被动签到。恢复入口已移除(2026.11.16): 想续签重新点「批量签到」
+                // 即可(remainingCandidates 天然过滤已签站); 与复活调度页的双点风险由
+                // 冷却机制兜底(runUnit 点击前必查今日已签+冷却, 见项目铁律 5)。
+                console.log(`${ScriptName} 检测到中断的批量任务(调度心跳过期), 清理后按普通访问处理`);
+                clearTask();
+                await runPassiveMode();
             }
         } else {
             await runPassiveMode();

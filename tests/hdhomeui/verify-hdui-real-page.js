@@ -88,6 +88,10 @@ function launch(port, profile) {
         '--disable-popup-blocking', '--no-first-run', '--no-default-browser-check',
         '--disable-extensions', '--disable-background-networking', '--disable-component-update',
         '--disable-sync', '--window-size=' + VW + ',' + VH,
+        // Chrome 新版默认 HTTPS-First 升级(HttpsUpgrades): 公网域名 http 导航强制升 https, 撞上
+        // 本地纯 HTTP 静态服务器失败后 http 回退再被拦(ERR_BLOCKED_BY_CLIENT) → 页面空壳 →
+        // 结构守卫误判卸妆。必须关掉升级, 本地 MAP 才能吃到导航(2026.11.17, 见 issue 26-11-17-0122)。
+        '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,HttpsFirstBalancedMode',
         '--host-resolver-rules=MAP * 127.0.0.1:' + port,
         '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'];
     const proc = spawn(findChrome(), args, { stdio: ['ignore', 'pipe', 'pipe'] });

@@ -20,8 +20,6 @@
  *         捕获标记不对称会静默漏摘 → 面板收起后监听器常驻, 每次点页面都多跑一次判定。
  *      A4 「点在 UI 自身」要豁免: 处理函数里必须有 host.contains(e.target) 之类的自身判定,
  *         否则点面板里的按钮(批量签到/外观)会把自己关掉。
- *      A5 待决横幅豁免: 两个处理函数都要先查 bannerHasAction() —— 「中断恢复」是一次性入口,
- *         用户点了页面别处就被收起就再也找不回来了。
  *   B. 重现提醒不弹主面板
  *      B1 按钮重现复核分支(runUnitInner 第 1 步)内不得出现 openPanel
  *      B2 该分支的页面级呈现必须走统一入口 presentReappearedOnPage(不得绕过)
@@ -108,8 +106,6 @@ if (!openBody || !closeBody || !armBody || !disarmBody || !downBody) {
         'A3', '摘除 window blur');
 
     has(/host\.contains\(/, downBody, 'A4', '点在 UI 自身(shadow 事件重定向到 host)时不关闭');
-    has(/bannerHasAction\(\)/, downBody, 'A5', '有待决横幅时 mousedown 不自动关闭');
-    has(/bannerHasAction\(\)/, bodyOf('onWindowBlur'), 'A5', '有待决横幅时失焦不自动关闭');
 }
 
 // ---------- B. 重现提醒不弹主面板 ----------

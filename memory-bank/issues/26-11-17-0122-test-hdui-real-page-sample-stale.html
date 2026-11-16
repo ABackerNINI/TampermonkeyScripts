@@ -11,7 +11,7 @@
 <meta name="doc-topic" content="hdui-real-page-sample-stale">
 <meta name="doc-refs" content="">
 <meta name="issue-tier" content="standard">
-<meta name="issue-status" content="Open">
+<meta name="issue-status" content="Done">
 <meta name="issue-title" content="真站整页验收 verify-hdui-real-page.js 恒红: 样本结构与 HDHomeUI 预期锚点不符">
 <meta name="issue-summary" content="全量测试 1/37 恒红(E_ANCHOR_MISSING), 需用户重新保存真站整页样本才能修">
 <style>
@@ -91,7 +91,7 @@
   <div class="item"><div class="k">编号</div><div class="v">26-11-17-0122-test-hdui-real-page-sample-stale</div></div>
   <div class="item"><div class="k">报告时间</div><div class="v">2026-11-17 01:22</div></div>
   <div class="item"><div class="k">类型</div><div class="v"><span class="badge type">test</span></div></div>
-  <div class="item"><div class="k">状态</div><div class="v"><span class="badge">Open</span></div></div>
+  <div class="item"><div class="k">状态</div><div class="v"><span class="badge">Done</span></div></div>
   <div class="item"><div class="k">涉及模块</div><div class="v">未分类</div></div>
   <div class="item"><div class="k">发现者</div><div class="v">未署名</div></div>
 </div>
@@ -133,6 +133,7 @@ ERR waitFor 超时(applied) 最后=false</code></pre>
 <section id="s5">
   <h2><span class="no">§05</span>根因<span class="opt">（可选）</span></h2>
   <div class="callout">已排除：当轮代码改动（批次未触 JS）；浏览器缺失、样本缺失（SKIP 门禁未触发）。<br>高置信假设（待复验）：默认样本路径下的真站整页样本为旧版存盘，站点此后改版，页面结构与 HDHomeUI 预期锚点（<code>table.mainouter</code> 等四处）不再相符 —— 修复需用户重新另存当前真站整页（私有资源，agent 不自制样本），属用户侧动作，故先入池。</div>
+  <div class="callout"><strong>〔2026-11-17 复验推翻上述假设〕真实根因</strong>：样本并<strong>没有</strong>过期 —— 四个锚点在样本活标记里全部存在（非注释/CSS 文本）。实测链（探针取证 2026-11-17 03:xx 前后）：① 复刻测试驱动的静态服务器+Chrome，导航 <code>http://hdhome.org/torrents.php</code> 得到<strong>空文档</strong>（<code>outerHTML</code> 仅 39 字符），锚点全缺 → HDHomeUI 结构守卫卸妆报 <code>E_ANCHOR_MISSING</code>；② <code>Page.navigate</code> 返回 <code>errorText: "net::ERR_BLOCKED_BY_CLIENT"</code>，本地服务器零请求命中；③ 拦截面为「公网域名 + 明文 http」：<code>hdhome.org</code>/<code>example.org</code>/<code>example.com</code>/<code>gitee.com</code> 全被拦，<code>hdhome.test</code>/<code>foo.invalid</code> 正常；④ 直连 <code>127.0.0.1:&lt;port&gt;</code> 同一样本完整渲染、四锚点全中（docLen 397120）；⑤ 启动参数补 <code>--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,HttpsFirstBalancedMode</code> 后全部域名立即正常。结论：本机 Chrome 自动更新后默认启用 HTTPS-First 升级，公网域名 http 导航强制升 https、撞本地纯 HTTP 静态服务器失败后 http 回退再被客户端拦截 → 空文档误判卸妆。深层原因：<code>verify-hdui-real-page.js</code> 自带 <code>launch()</code> 未复用 <code>tests/lib/sim/harness.js</code> 的启动参数（后者已带 <code>--disable-features=HttpsFirstBalancedMode,TranslateUI</code>，但清单也缺新版 feature 名），Chrome 默认行为变化后暴露。</div>
 </section>
 
 <section id="s6">
@@ -147,11 +148,12 @@ ERR waitFor 超时(applied) 最后=false</code></pre>
   <h2><span class="no">§07</span>状态变更日志</h2>
   <ul>
     <li>2026-11-17 01:22 — 入池，状态 <strong>Open</strong>（计划外，未修）</li>
-  </ul>
+    <li>2026-11-17 — 状态 Open → Done（kb.status）</li>
+</ul>
   <h3>复验</h3>
-  <p class="todo">TODO: 认领后先重跑锚点，补一行「复验：&lt;时间&gt; 仍复现 / 已消失」。</p>
+  <p>复验：2026-11-17 探针复现（空文档 + <code>ERR_BLOCKED_BY_CLIENT</code>），且推翻「样本过期」假设 —— 样本四锚点完整（直连 IP 渲染全中）。原假设与主路修法不采信；真实根因与改道见 §05 补充与下方「修复后补充」。</p>
   <h3>修复后补充</h3>
-  <p class="todo">TODO: 修完时写「实际修法 / 验证方式 / 测试数字」；与建议修法不同则保留建议原文并说明改道原因。</p>
+  <p><strong>实际修法</strong>（改道：不换样本，改测试驱动启动参数，一行修复）：① <code>tests/hdhomeui/verify-hdui-real-page.js</code> 自带 <code>launch()</code> 补 <code>--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,HttpsFirstBalancedMode</code>；② <code>tests/lib/sim/harness.js</code> 的 <code>--disable-features</code> 清单同步补 <code>HttpsUpgrades</code>、<code>HttpsFirstBalancedModeAutoEnable</code>（防御面加固，sim 测试此前已绿）。<strong>验证方式</strong>：单跑 <code>node tests/hdhomeui/verify-hdui-real-page.js</code> 16/16 断言全绿（上妆/文档宽/CSS 272 条/图标/药丸/置顶/五档扫描/color-scheme）；全量全绿（见 kb.baseline 最新切片 <code>26-11-17-0346-test</code>）。<strong>与建议修法不同</strong>：主路「用户另存真站样本」不成立，样本未过期，无需用户侧动作；原建议保留原文如上。</p>
 </section>
 
 <footer>

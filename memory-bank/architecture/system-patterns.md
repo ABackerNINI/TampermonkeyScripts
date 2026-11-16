@@ -56,7 +56,7 @@ boot() → main()
 ├─ URL 带 ptacTask（后台任务标签）→ runBatchTabPage（只写状态不渲染）
 └─ 普通访问（含落地页）
    ├─ 任务心跳新鲜 + 命中当前 unit → settleUnitOnLandingPage
-   ├─ 心跳过期 → offerBatchResume 横幅
+   ├─ 心跳过期 → clearTask 清死任务, 按普通访问被动签到
    └─ 无任务 → 被动 runUnit（40s 整流程超时保护 + 内部预算 deadline）
 发起页 runBatchScheduler: GM_openInTab 后台标签 → 轮询 GM 状态(1s) + 读进度心跳
   → pending 观察 10s（有新鲜心跳则延后）/ success·failed·skipped·unconfirmed 即结算

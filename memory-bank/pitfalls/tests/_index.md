@@ -10,6 +10,7 @@
 
 | 主题 | 一句话 | 触发词 |
 |---|---|---|
+| [chrome-https-first-blocks-offline-verify.md](chrome-https-first-blocks-offline-verify.md) | Chrome 新版 HTTPS-First 升级把离线真站验收拦成空文档(ERR_BLOCKED_BY_CLIENT) | HTTPS-First, HttpsUpgrades, ERR_BLOCKED_BY_CLIENT, 离线验收, host-resolver-rules, 空文档, 卸妆 |
 | [p14-test-discipline.md](p14-test-discipline.md) | 禁止给测试留生产通道、禁止为过测试弱化断言或改生产代码。 | 写测试, 测试失败排障, 改生产代码, 加测试钩子 |
 | [p41-ispointinfill-ascii-map.md](p41-ispointinfill-ascii-map.md) | 图片读取不可用时，用 `isPointInFill()` + 栅格扫描 + ASCII 地图程序化校验图标轮廓，比肉眼更可靠。 | 图标校验, 看不了图片, isPointInFill, ASCII 地图, 栅格扫描 |
 | [p48-prototype-vs-realsite.md](p48-prototype-vs-realsite.md) | 「原型」≠「真站」—— 照着理想化设计稿写选择器，真站上会大面积打空；原型只定「目标观感」，不用来定「页面长什么样」。 | 原型 vs 真站, 选择器打空, ground truth, 类名差集, 特异性碰撞 |

@@ -71,7 +71,10 @@ function browserArgs(port) {
         '--disable-background-networking',
         '--disable-component-update',
         '--disable-sync',
-        '--disable-features=HttpsFirstBalancedMode,TranslateUI',
+        // HttpsUpgrades/HttpsFirstBalancedModeAutoEnable: Chrome 新版默认 HTTPS-First 升级会把
+        // 公网域名 http 导航撞死在本地纯 HTTP 仿真服务器上(ERR_BLOCKED_BY_CLIENT 空文档),
+        // 必须与 HttpsFirstBalancedMode 一起显式关闭(2026.11.17, 见 issue 26-11-17-0122)。
+        '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,HttpsFirstBalancedMode,TranslateUI',
         '--window-size=1280,900',
         `--host-resolver-rules=MAP * 127.0.0.1:${port}`,
         '--remote-debugging-port=0',

@@ -9,7 +9,6 @@
  *   ② 点 UI 自身 → 面板**不**收起(host.contains(e.target) 豁免)
  *   ③ window 失焦(切标签页) → 面板收起
  *   ④ 检测到「签到按钮重现」→ **不弹主面板**, 只有页面级横条 + 零点击
- *   ⑤ 中断恢复横幅(带操作钮)在用户点页面别处时**不**被收起(一次性入口不能丢)
  *
  * 怎么在不破坏 closed shadow 的前提下观测面板开合:
  *   面板挂在 closed shadow 下, 页面脚本与 CDP **都拿不到 panel 元素**(这正是 S05 那条安全
@@ -105,21 +104,6 @@ runCase('主面板失焦自动关闭 + 重现不弹面板', async () => {
         assertEq(sim.requests({ host: 'www.tangpt.top', path: '/attendance.php' }).length, 0,
             '重现(失败-待确认)不得自动重签');
         console.log(`  实测: 重现 → 状态 ${st.status}(${st.msg || ''}) + 页面横条, 面板保持收起、零点击`);
-        await page.close();
-
-        // ---------- ⑤ 待决横幅豁免: 中断恢复入口不得被误关 ----------
-        sim.reset();
-        sim.seed({
-            ptac_task: { taskId: 'tsim', list: [UID], index: 0, startedAt: Date.now() - 120000, hb: Date.now() - 60000 }
-            // 心跳 60s 前: 已过期(>15s)但未 stale(<30min) → 应提供「恢复批量」横幅
-        });
-        page = await openSite(sim, 'already', 2500);
-        await sim.sleep(800); // 等 offerBatchResume 弹面板
-        assertEq(await page.eval(PANEL_OPEN), true, '中断恢复应弹出带横幅的面板');
-        await click(sim, page, 60, 60); // 用户去点页面别处
-        await sim.sleep(400);
-        assertEq(await page.eval(PANEL_OPEN), true, '待决横幅(恢复批量)存在时, 点页面别处不应收起面板');
-        console.log('  实测: 中断恢复横幅在外部点击后仍保留(一次性入口未被误关)');
         await page.close();
     });
 });
