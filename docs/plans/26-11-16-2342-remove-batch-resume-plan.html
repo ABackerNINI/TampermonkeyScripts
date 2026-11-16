@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="doc-added" content="26-11-16-2342">
+<meta name="doc-updated" content="26-11-16-2342">
+<meta name="doc-status" content="Open">
+<meta name="doc-refs" content="">
+<title>移除批量签到断点续签与横幅操作钮机制 · 计划</title>
+<style>
+    :root {
+        --bg: #121211;
+        --ink: #d8d5cf;
+        --ink-dim: #8f8b82;
+        --accent: #d9a441;
+        --hairline: #2e2c28;
+        --code-bg: #1a1916;
+        --code-ink: #c9c5bc;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+        font-size: 15px;
+        line-height: 1.75;
+        padding: 72px 24px 96px;
+    }
+    .page { max-width: 860px; margin: 0 auto; }
+    .kicker {
+        font-size: 12px;
+        letter-spacing: 0.22em;
+        color: var(--accent);
+        text-transform: uppercase;
+        margin-bottom: 14px;
+    }
+    h1 {
+        font-family: "Songti SC", "SimSun", "Noto Serif CJK SC", serif;
+        font-weight: 700;
+        font-size: 34px;
+        line-height: 1.35;
+        margin-bottom: 18px;
+    }
+    .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 28px;
+        font-size: 13px;
+        color: var(--ink-dim);
+        padding-bottom: 26px;
+        border-bottom: 1px solid var(--hairline);
+    }
+    .badge {
+        display: inline-block;
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        padding: 1px 10px;
+        border-radius: 3px;
+    }
+    h2 {
+        font-family: "Songti SC", "SimSun", "Noto Serif CJK SC", serif;
+        font-size: 22px;
+        font-weight: 700;
+        margin: 56px 0 18px;
+        padding-top: 10px;
+        border-top: 1px solid var(--hairline);
+    }
+    h2 .no { color: var(--accent); margin-right: 12px; font-size: 15px; font-family: inherit; letter-spacing: 0.1em; }
+    h3 { font-size: 16px; font-weight: 600; margin: 28px 0 10px; color: var(--ink); }
+    p { margin-bottom: 14px; }
+    p.dim { color: var(--ink-dim); }
+    ul, ol { margin: 0 0 14px 1.6em; }
+    li { margin-bottom: 7px; }
+    strong { color: var(--ink); font-weight: 600; }
+    .accent { color: var(--accent); }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13.5px;
+        margin: 18px 0 22px;
+    }
+    th, td {
+        border: 1px solid var(--hairline);
+        padding: 9px 12px;
+        text-align: left;
+        vertical-align: top;
+    }
+    th {
+        color: var(--ink-dim);
+        font-weight: 600;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+    }
+    td code, p code, li code {
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+        font-size: 12.5px;
+        color: var(--accent);
+        background: var(--code-bg);
+        padding: 1px 5px;
+        border-radius: 3px;
+        white-space: nowrap;
+    }
+    pre {
+        background: var(--code-bg);
+        border: 1px solid var(--hairline);
+        border-radius: 4px;
+        padding: 14px 16px;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--code-ink);
+        overflow-x: auto;
+        margin: 12px 0 22px;
+    }
+    pre code { background: none; padding: 0; color: inherit; white-space: pre; }
+    .code-label {
+        font-size: 12px;
+        color: var(--ink-dim);
+        letter-spacing: 0.14em;
+        margin: 20px 0 -6px;
+    }
+    .toc {
+        border: 1px solid var(--hairline);
+        border-radius: 4px;
+        padding: 18px 22px;
+        margin: 30px 0 8px;
+        font-size: 13.5px;
+    }
+    .toc-title { color: var(--ink-dim); font-size: 12px; letter-spacing: 0.18em; margin-bottom: 10px; }
+    .toc a { color: var(--ink); text-decoration: none; display: block; padding: 3px 0; }
+    .toc a:hover { color: var(--accent); }
+    .toc a .no { color: var(--accent); margin-right: 10px; }
+    .anchor { color: var(--accent); text-decoration: none; }
+    .flow {
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.7;
+        color: var(--ink-dim);
+        white-space: pre;
+        overflow-x: auto;
+        margin: 12px 0 22px;
+    }
+    .divider-rule { margin-top: 64px; border-top: 1px solid var(--hairline); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+    <div class="kicker">计划文档 · PTAutoCheckIn · grilling 会话产出</div>
+    <h1>移除批量签到断点续签<br>与横幅操作钮机制</h1>
+    <div class="meta-row">
+        <span><span class="badge">Open</span></span>
+        <span>建档 26-11-16-2342</span>
+        <span>对象 <code>src/PTAutoCheckIn.user.js</code> <code>tests/ptautocheckin/</code></span>
+        <span>决策 Q1–Q5 · 用户逐项确认</span>
+    </div>
+
+    <div class="toc">
+        <div class="toc-title">目 录</div>
+        <a href="#s1"><span class="no">1</span>背景与动机</a>
+        <a href="#s2"><span class="no">2</span>决策记录（grilling 五问）</a>
+        <a href="#s3"><span class="no">3</span>改动清单</a>
+        <a href="#s4"><span class="no">4</span>行为不变式核对</a>
+        <a href="#s5"><span class="no">5</span>文档同步清单</a>
+        <a href="#s6"><span class="no">6</span>验证</a>
+        <a href="#s7"><span class="no">7</span>边界（本次不做）</a>
+        <a href="#s8"><span class="no">8</span>提交口径</a>
+    </div>
+
+    <h2 id="s1"><span class="no">§ 1</span>背景与动机</h2>
+    <p>「断点续签」即批量调度的中断恢复入口 <code>offerBatchResume</code>（<code>src/PTAutoCheckIn.user.js:3403</code>，调用点 <code>:3502</code>）：批量发起页的心跳 <code>hb</code> 过期 15 秒（<code>HEARTBEAT_FRESH_MS</code>，<code>:66</code>）且任务未满 30 分钟（<code>TASK_STALE_MS</code>，<code>:54</code>）时，<strong>任意</strong>匹配站的普通访问页都会强制展开 FAB 面板（<code>UI.openPanel()</code>，<code>:3406</code>）并弹出「检测到中断的批量任务 + 恢复批量」横幅。</p>
+
+    <h3>1.1 痛点一：逢站必弹</h3>
+    <p>中断极易发生且往往无感——关掉发起页、在发起页导航走、浏览器对后台标签的定时器节流、标签休眠插件冻结页面，都会让心跳在 15 秒内停写。此后 30 分钟窗口内，用户每访问一个匹配站点就弹一次面板，恰好违背项目「零打扰」的用户体验目标（<code>projectbrief.md</code>）。「总在其它站点弹出」的根因即发起页切后台后心跳被节流停写，其它页面的访问被误判为「调度者已离开」。</p>
+
+    <h3>1.2 痛点二：功能冗余，且恢复路径劣于重新点击</h3>
+    <p>各站签到状态早已逐站落 GM 存储、跨页共享；恢复入口续跑用的是<strong>发起时的旧任务快照</strong>，而重新点一次「批量签到」走 <code>startBatch</code> → <code>remainingCandidates</code>（<code>:3148</code>），会实时过滤掉今日已成功、冷却中 pending 的站——生成的就是新鲜续签清单，调度循环里还有 <code>isSuccessToday</code> 二次跳过（<code>:3209</code>）兜底。<strong>重新点击严格优于恢复入口</strong>。被动签到本就随处兜底。</p>
+    <p>恢复入口剩下的独特价值只有「通知中断过」与「省一次点击」：前者由 FAB 面板的既有状态展示覆盖，后者价值甚微。结论：<strong>整体移除，恢复路径归一为「重新点批量 + 被动兜底」</strong>。</p>
+
+    <div class="flow">中断后现状:  任意匹配页 → 弹面板+横幅(唯一恢复入口) ──► 用旧快照续跑
+移除后:      任意匹配页 → 清死任务, 按普通访问被动签到
+             想主动续签 → 重按 FAB「批量签到」(remainingCandidates 天然过滤已签站)</div>
+
+    <h2 id="s2"><span class="no">§ 2</span>决策记录（grilling 五问）</h2>
+    <table>
+        <tr><th style="width:56px">编号</th><th style="width:150px">决策点</th><th>结论与依据</th></tr>
+        <tr>
+            <td>Q1</td><td>处置方向</td>
+            <td><strong>整体移除</strong>（备选：降级为轻提示 / 保持现状）。冗余已被代码证实；降级方案会留下半套死逻辑再加一种新提示形态，复杂度不值。</td>
+        </tr>
+        <tr>
+            <td>Q2</td><td>中断通知</td>
+            <td><strong>完全静默</strong>——不新增任何「任务中断过」的提示 UI（无 toast、无横幅、无面板条目），中断信息只留 console 日志。中断不是需要用户行动的异常，加提示违背零打扰目标。</td>
+        </tr>
+        <tr>
+            <td>Q3</td><td>死任务处理</td>
+            <td><strong>立即清算</strong>——心跳过期分支改为 <code>clearTask()</code> 后按无任务跑被动签到，<strong>不再跳过</strong>「中断现场那个站」。「跳过」的原始理由（避免与恢复批量重复触发）随入口消失；与「休眠后复活的调度页」的双点风险由冷却机制结构性兜底（见 §4）。好处：GM 不留 15s–30min 的任务尸体，任务分支只剩「调度中」一种情况。</td>
+        </tr>
+        <tr>
+            <td>Q4</td><td>交付形态</td>
+            <td><strong>计划立档</strong>为本件（<code>docs/plans/</code> 单文件 HTML，时间取 <code>commands run kb.time</code>）。</td>
+        </tr>
+        <tr>
+            <td>Q5</td><td>横幅操作钮机制</td>
+            <td><strong>机制一并摘除</strong>——<code>bannerHasAction</code> 豁免（<code>:2899</code>）、两处豁免守卫（<code>:2905</code>/<code>:2910</code>）、<code>showBanner</code> 的 <code>actionText/onAction</code> 参数与按钮渲染分支、静态校验器 A5 规则，全部移除。该机制的唯一消费者就是被删的恢复入口（<code>showBatchDone</code> 的横幅无操作钮，豁免从未为它触发过）；删后行为零变化，不留行为测试永远覆盖不到的休眠分支。端态：代码里不再存在「带操作钮的横幅」概念，面板自动收起一律收起。</td>
+        </tr>
+    </table>
+
+    <h2 id="s3"><span class="no">§ 3</span>改动清单</h2>
+    <p>行号为建档时快照，实施时以函数名为准。版本号铁律：脚本头 <code>@version</code> 由 <code>2026.11.11.1</code> 递增为 <code>2026.11.16.1</code>（跨天重置 N），与代码改动同次提交。</p>
+
+    <h3>3.1 <code>src/PTAutoCheckIn.user.js</code></h3>
+    <p><strong>A1 · 删除 <code>offerBatchResume</code> 函数</strong>（<code>:3402</code>–<code>:3418</code>，含注释行）——整函数连同「中断恢复」注释一起删。</p>
+
+    <p><strong>A2 · <code>main()</code> 心跳过期分支改造</strong>（<code>:3498</code>–<code>:3506</code>）：</p>
+    <div class="code-label">改 前</div>
+    <pre><code>} else {
+    // 调度者已中断(发起页被关/崩溃等): 提供恢复入口; 同时当前页仍正常被动
+    // 签到, 但跳过任务当前位置站点, 避免与"恢复批量"重复触发该站
+    console.log(`${ScriptName} 检测到中断的批量任务(调度心跳过期), 提供恢复入口`);
+    offerBatchResume(task);
+    if (!curHit) {
+        await runPassiveMode(curUnitId ? [curUnitId] : []);
+    }
+}</code></pre>
+    <div class="code-label">改 后</div>
+    <pre><code>} else {
+    // 调度者已中断(发起页被关/崩溃/后台标签被节流休眠): 清掉死任务, 本页按
+    // 无任务被动签到。恢复入口已移除(2026.11.16): 想续签重新点「批量签到」
+    // 即可(remainingCandidates 天然过滤已签站); 与复活调度页的双点风险由
+    // 冷却机制兜底(runUnit 点击前必查今日已签+冷却, 见项目铁律 5)。
+    console.log(`${ScriptName} 检测到中断的批量任务(调度心跳过期), 清理后按普通访问处理`);
+    clearTask();
+    await runPassiveMode();
+}</code></pre>
+
+    <p><strong>A3 · 删除 <code>bannerHasAction</code> 与两处豁免守卫</strong>——<code>:2899</code>–<code>:2901</code> 函数体删除；<code>onOutsideDown</code>（<code>:2905</code>）与 <code>onWindowBlur</code>（<code>:2910</code>）中的 <code>if (bannerHasAction()) return;</code> 两行删除；失焦自动关闭注释块的约束 ②（<code>:2894</code>–<code>:2895</code>，「待决横幅不自动收起」）改写为历史说明或直接归并为两条约束。改后自动收起语义：<strong>点面板外 / 失焦一律收起</strong>。</p>
+
+    <p><strong>A4 · <code>showBanner</code> 签名收缩</strong>——<code>(msg, variant, actionText, onAction)</code> → <code>(msg, variant)</code>，删除按钮渲染分支（<code>:2936</code>–<code>:2941</code>）；唯一传参方 <code>showBatchDone</code>（<code>:2958</code>）同步为 <code>showBanner('\u2713 批量签到完成', '')</code>。<code>hideBanner</code> 与 8 秒自动隐藏不变。</p>
+
+    <h3>3.2 <code>tests/ptautocheckin/sim-panel-autoclose.js</code></h3>
+    <p>删除用例 ⑤（<code>:110</code>–<code>:123</code>，「待决横幅豁免：中断恢复入口不得被误关」——其行为主体已不存在）与文件头说明的第 ⑤ 条（<code>:12</code>）。用例 ①–④（失焦自动关闭 / 点 UI 自身豁免 / blur 收起 / 重现不弹面板）保留不动。</p>
+
+    <h3>3.3 <code>tests/ptautocheckin/check-ptac-panel.js</code></h3>
+    <p>删除 A5 规则：头注释（<code>:23</code>）与两条 <code>has(/bannerHasAction\(\)/, …)</code> 断言（<code>:111</code>–<code>:112</code>）。A0–A4（armAutoClose 接线 / host.contains 自身豁免等）全部保留。该文件为开发期校验工具，无 <code>@version</code> 头，随代码同次提交即可。</p>
+
+    <h2 id="s4"><span class="no">§ 4</span>行为不变式核对</h2>
+    <table>
+        <tr><th style="width:220px">不变式</th><th>核对结论</th></tr>
+        <tr><td>调度中（<code>hbFresh</code>）分支不动</td><td>落地页结算、被动签到跳过任务当前站的语义原样保留——调度页存活时的协作协议不变。</td></tr>
+        <tr><td><code>runRetryUnitPage</code> 互斥判断不动</td><td>「批量调度正在处理该站」的放弃逻辑读的是 <code>hbFresh</code>，与恢复入口无关；死任务被任意页清除后该判断自然走不到，无需改动。</td></tr>
+        <tr><td><code>isTaskStale</code> 30 分钟兜底保留</td><td><code>main()</code> 开头的过期清理（<code>:3425</code>–<code>:3429</code>）保留：覆盖后台任务标签页加载等不经普通页分支的路径，以及复活调度页写回的极端残留。</td></tr>
+        <tr><td>双点安全（铁律 5）</td><td>清任务后若调度页只是被冻结而非真死，其复活后仍持内存任务继续调度；与被动签到可能并发点击同站——由 <code>runUnit</code> 点击前必查今日已签 + 冷却（<code>isPendingClickInCooldown</code> / <code>MIN_INTERVAL</code>）结构性兜住，后到者跳过。该风险现状已存在（被动跳过只覆盖当前一站，其余站本来就靠冷却兜并发），本次改动不扩大风险面。</td></tr>
+        <tr><td><code>showBatchDone</code> 行为零变化</td><td>完成横幅无操作钮，豁免从未为它触发；删除豁免分支后其「弹出 → 点外可收起 / 8 秒自动隐藏」行为完全不变。</td></tr>
+        <tr><td>零新增 UI / 零新增请求</td><td>纯删除向改动：无新提示形态、无新网络请求、无新存储键。</td></tr>
+    </table>
+
+    <h2 id="s5"><span class="no">§ 5</span>文档同步清单</h2>
+    <p>知识库同步铁律（铁律 4）：以下条目与代码改动<strong>同次提交</strong>。行号为建档时快照。</p>
+    <table>
+        <tr><th style="width:330px">文件 · 位置</th><th>动作</th></tr>
+        <tr><td><code>memory-bank/scripts/PTAutoCheckIn/engine.md</code> <code>:2</code> / <code>:16</code> / <code>:33</code></td><td>摘要中「批量中断恢复」措辞更新；特性 8 整段重写为「中断即清算」语义；主流程图中 <code>offerBatchResume</code> 分支行改为「心跳过期 → 清任务按普通访问处理」。</td></tr>
+        <tr><td><code>memory-bank/scripts/PTAutoCheckIn/fab-ui.md</code> <code>:13</code> / <code>:14</code> / <code>:15</code> / <code>:17</code></td><td>「面板内有待决横幅时不自动收起」机制条目改写为「操作钮横幅机制已随断点续签移除(2026.11.16)，自动收起一律收起」；「目前两处」改为仅 <code>showBatchDone</code>；实测清单尾项同步；<code>:17</code> 中断恢复横幅描述句删除。</td></tr>
+        <tr><td><code>memory-bank/scripts/PTAutoCheckIn/calibration.md</code> <code>:11</code> / <code>calibration-detail.md</code> <code>:20</code></td><td>校准步骤中「调度中途关闭发起页 → 横幅提示恢复批量」改写为「清理后按普通访问处理、其它站不再弹面板」；校准项 23 中带操作钮横幅不收起的验证步骤删除。</td></tr>
+        <tr><td><code>memory-bank/architecture/system-patterns.md</code> <code>:59</code></td><td>流程图「心跳过期 → offerBatchResume 横幅」行同步改写。</td></tr>
+        <tr><td><code>memory-bank/pitfalls/site-adapt/p23-crossday-dom-snapshot.md</code> <code>:13</code></td><td>场景 ② 触发者示例中「恢复批量横幅」已不存在，措辞微调（保留跨天守卫本身的事实正文）。</td></tr>
+        <tr><td><code>memory-bank/active-context/</code>（ptautocheckin 切片）</td><td>实施完成后按 memory-bank skill 回写本任务终态。</td></tr>
+        <tr><td><code>memory-bank/tasks/TASK001</code></td><td>冻结档案，<strong>不动</strong>。</td></tr>
+    </table>
+
+    <h2 id="s6"><span class="no">§ 6</span>验证</h2>
+    <ul>
+        <li><code>node --check src/PTAutoCheckIn.user.js</code> —— 语法通过。</li>
+        <li><code>node tests/run-all.js</code> —— 全量测试通过（仿真用例需真浏览器，按 <code>tests/README.md</code> 约定跑）；重点确认 <code>sim-panel-autoclose.js</code> 余下用例 ①–④ 与 <code>check-ptac-panel.js</code> A0–A4 全绿。</li>
+        <li>预算自检不受影响（未触碰任何 unit 配置与成本声明）。</li>
+        <li>手测要点（对齐校准单）：① 批量中途关闭发起页 → 之后访问任意匹配站<strong>不弹面板</strong>，console 出现「清理后按普通访问处理」；② 重新点「批量签到」→ 只后台打开未签站，已签站被过滤；③ 批量正常完成 → 完成面板照常弹出，点面板外可收起；④ 行内「失败 → 重试」入口不受影响。</li>
+    </ul>
+
+    <h2 id="s7"><span class="no">§ 7</span>边界（本次不做）</h2>
+    <ul>
+        <li>不动 <code>hbFresh</code> 分支、<code>runRetryUnitPage</code>、<code>isTaskStale</code> 兜底、<code>showBatchDone</code>、单站预算与 unit 配置。</li>
+        <li>不改 <code>.gitignore</code>，不触碰 <code>resources-do-not-track/</code>。</li>
+        <li>实施中撞见的范围外缺陷一律按 scope-guard 入池 <code>memory-bank/issues/</code>，不顺手修（铁律 6）。</li>
+    </ul>
+
+    <h2 id="s8"><span class="no">§ 8</span>提交口径</h2>
+    <ul>
+        <li><strong>实施授权</strong>：本计划经用户审核后，须用户显式授权才开始改码（铁律 1 / 请求边界 7：本轮为计划任务，未动任何代码）。</li>
+        <li><strong>提交触发</strong>：改完汇报后由用户审核；用户说「提交 / 入库 / 推上去」才走 <code>my-commit-flow</code> 的 <code>ship.commit</code> / <code>ship.push</code>（先 Gitee 必成，再尝试一次 GitHub 直连）。</li>
+        <li><strong>提交信息</strong>：中文一句话概述 + 详细描述；正文包含本计划的取舍（恢复路径归一 / 机制一并摘除的理由 / 测试与文档同步面）。</li>
+    </ul>
+
+    <div class="divider-rule">
+        <p class="dim" style="font-size:13px">变更记录</p>
+        <p style="font-size:13px">R1 · 26-11-16-2342 &nbsp;grilling 五轮决策落定成文（Q1–Q5 用户逐项确认，机制摘除口径按 Q5 裁决）</p>
+    </div>
+
+</div>
+</body>
+</html>
