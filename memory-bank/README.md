@@ -33,7 +33,7 @@
 | 查未修项 / 待办方向 / 已知问题 | `conventions/known-issues.md` |
 | 查某个脚本的职责与用法 | `memory-bank/scripts/<脚本>/`（5 个分包目录） |
 | 写 / 跑测试 | `tests/README.md`；全量走 `commands run test.full` |
-| 看计划 / 方案 | `memory-bank/plans/`（四工位 plan 工位; `docs/plans/` 为历史落点, 存量保留不动） |
+| 看计划 / 方案 | `memory-bank/plans/`（四工位 plan 工位; 2026-11-17 起 `docs/plans/` 旧落点已整体迁入本目录, 该路径不再存在） |
 | 查任务档案 | `memory-bank/tasks/`（存量 TASK001–020 + 新档 `kb.new task` 立档） |
 | 看审计 / 取证 / 可行性报告 | `memory-bank/reports/` |
 
@@ -58,7 +58,7 @@
 
 ## 本项目特有落点（别走错）
 
-- **计划**在 `memory-bank/plans/`（HTML 制品, `kb.new plan` 建; 历史落点 `docs/plans/` 存量保留不动）；**报告**在 `memory-bank/reports/`（出厂即冻结）；
+- **计划**在 `memory-bank/plans/`（HTML 制品, `kb.new plan` 建; 旧落点 `docs/plans/` 已于 2026-11-17 整体迁入, 勿再重建）；**报告**在 `memory-bank/reports/`（出厂即冻结）；
 - **脚本文档**在 `memory-bank/scripts/`：`PTAutoCheckIn/` / `BTSchoolHelper/` / `BilibiliEnterFullscreen/` / `EnhanceVisitedLinks/` / `HDHomeUI/`，与 `src/*.user.js` 一一对应；
 - **任务档案**在 `memory-bank/tasks/`：TASK001–020 为存量档案（仅补 `**Topics:**` / `**Refs:**` 元数据行，事实正文不动）；新专题经 `commands run kb.new task` 立档（唯一滚动更新件），待办方向另见 `conventions/known-issues.md`；
 - 脚本速查表、约定、检查清单、测试约定、开发与发布工作流、HDHomeUI 两条铁律等**事实性内容**仍完整保存在 `conventions/`（按主题分件）与上述脚本文档 / `pitfalls/_index.md`，本文件只做路由、不复述。

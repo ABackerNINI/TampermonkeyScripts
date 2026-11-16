@@ -53,7 +53,6 @@ EXEMPT = (
     "memory-bank/reports/",  # 同上
     "memory-bank/issues/",  # 同上
     "memory-bank/tasks/",  # 档案纪要: 记的是"当时做了什么", 不是"现在该跑什么"
-    "docs/plans/",
     "resources/",
     # 注意: `.commands/` 豁免的理由是"命令的单点定义就在这里" —— 但 **README.md 不是定义处**
     # (定义处是 `<包>/config.toml`): 它是包内散文, 一旦被当入口就只能整读, 里面手抄的命令

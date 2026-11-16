@@ -46,7 +46,7 @@
 
 ## 产出口径
 
-- **四工位制品一律单文件 HTML、一律 `kb.new` 建**（决策树见 `conventions/doc-forms.md`）：**计划**落 `memory-bank/plans/`（拍板后冻结）、**报告**落 `memory-bank/reports/`（出厂即冻结）、**issue** 落 `memory-bank/issues/`、**任务档案**落 `memory-bank/tasks/`（Markdown，唯一滚动更新）；渲染/骨架规格单点在 memory-bank skill 模板自身，**不走 delivery-artifact skill**（它只管四工位外的可视化交付物）。历史落点 `docs/plans/` 存量保留不动。
+- **四工位制品一律单文件 HTML、一律 `kb.new` 建**（决策树见 `conventions/doc-forms.md`）：**计划**落 `memory-bank/plans/`（拍板后冻结）、**报告**落 `memory-bank/reports/`（出厂即冻结）、**issue** 落 `memory-bank/issues/`、**任务档案**落 `memory-bank/tasks/`（Markdown，唯一滚动更新）；渲染/骨架规格单点在 memory-bank skill 模板自身，**不走 delivery-artifact skill**（它只管四工位外的可视化交付物）。
 - **测试基线数字只写一处**：权威在 `memory-bank/testing/baselines/` 最新切片，其余一律引用不手抄（`commands run kb.baseline`）。
 - 时间统一 `commands run kb.time`（UTC+8 钉死，禁止凭记忆写日期）。
 
