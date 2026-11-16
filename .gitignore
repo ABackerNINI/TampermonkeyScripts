@@ -32,3 +32,6 @@ __pycache__/
 # 生成物不入库 —— 单点定义在生成器里，入库就变成第 N+1 处副本
 /commands
 /commands.cmd
+
+# W3C v.Nu 校验 jar: HTML 闸门/kb.html-audit 首跑自动下载(~32MB), 不入库(对齐 auto-qb)
+.tools/

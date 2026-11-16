@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>真站整页验收 verify-hdui-real-page.js 恒红: 样本结构与 HDHomeUI 预期锚点不符 · test · 计划外问题</title>
+<meta name="issue-slug" content="hdui-real-page-sample-stale">
+<meta name="issue-stamp" content="26-11-17-0122">
+<meta name="issue-type" content="test">
+<meta name="doc-topic" content="hdui-real-page-sample-stale">
+<meta name="doc-refs" content="">
+<meta name="issue-tier" content="standard">
+<meta name="issue-status" content="Open">
+<meta name="issue-title" content="真站整页验收 verify-hdui-real-page.js 恒红: 样本结构与 HDHomeUI 预期锚点不符">
+<meta name="issue-summary" content="全量测试 1/37 恒红(E_ANCHOR_MISSING), 需用户重新保存真站整页样本才能修">
+<style>
+  :root {
+    --bg: #10151a;
+    --ink: #e4eaef;
+    --dim: #a2b0bd;
+    --faint: #6f7d8a;
+    --hair: #26313a;
+    --hair-soft: #1c252d;
+    --accent: #6db3c9;
+    --accent-ink: #8fd0e0;
+    --warn: #e2a86e;
+    --ok: #8fc98f;
+    --no: #d98a8a;
+    --code-bg: #151d25;
+    --mark: #161e26;     /* issue 特有: callout 底色 (plan.html 不用) */
+    --warn-bg: #2a2119;  /* issue 特有: 状态徽标底色 */
+    --sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --display: "Bahnschrift", "Segoe UI", "Microsoft YaHei", sans-serif;
+    --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); color-scheme: dark; font-family: var(--sans); font-size: 15px; line-height: 1.65; margin: 0; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #2c3944; border-radius: 5px; }
+  /* 单栏流式版面: 与 plan.html 同一套 .sheet (封顶 1280px, 侧距 clamp(18~44px)); 旧双栏+粘性目录已删 */
+  .sheet { max-width: 1280px; margin: 0 auto; padding: 48px clamp(18px, 3.2vw, 44px) 80px; }
+
+  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+  h1 { font-family: var(--display); font-size: 33px; line-height: 1.18; letter-spacing: -0.01em; font-weight: 600; margin: 10px 0 6px; }
+  .lede { color: var(--dim); font-size: 16px; margin: 0 0 22px; }
+
+  /* 封面 meta 行: issue 特有, DOM 形态别改 —— 状态徽标 <span class="badge"> 被
+     flip_status (W4) 与 check_status_drift 的 BADGE_RE 机读 (k/v div 结构在判据里) */
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px 28px; font-family: var(--mono); font-size: 11.5px; color: var(--faint); border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); padding: 10px 0; margin-bottom: 40px; }
+  .meta-row .item .k { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .meta-row .item .v { font-size: 13.5px; color: var(--dim); }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 2px; font-family: var(--display); font-size: 11px; letter-spacing: 0.06em; background: var(--warn-bg); color: var(--warn); border: 1px solid #4a3a2c; }
+  .badge.type { background: #16232a; color: var(--accent-ink); border-color: #2b4048; }
+
+  h2 { font-family: var(--display); font-size: 21px; font-weight: 600; letter-spacing: -0.005em; margin: 52px 0 4px; padding-top: 18px; border-top: 1px solid var(--hair); }
+  h2 .no { font-family: var(--mono); font-size: 12px; color: var(--accent-ink); letter-spacing: 0.08em; display: block; margin-bottom: 6px; font-weight: 400; }
+  h2 .opt { font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: 0; margin-left: 8px; }
+  h3 { font-family: var(--display); font-size: 16.5px; font-weight: 600; margin: 28px 0 6px; }
+  p { margin: 10px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; color: var(--accent-ink); }
+  pre { background: var(--code-bg); border: 1px solid var(--hair-soft); padding: 13px 16px; overflow-x: auto; margin: 12px 0; }
+  pre code { background: none; padding: 0; color: var(--ink); font-size: 12.5px; line-height: 1.6; }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.5px; }
+  th { text-align: left; font-weight: 600; color: var(--dim); font-size: 11.5px; letter-spacing: 0.08em; padding: 6px 10px; border-bottom: 1px solid var(--hair); }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--hair-soft); vertical-align: top; }
+  td code, th code { white-space: nowrap; }
+  /* 窄视口 (<=1180px): 表格单元格内的长路径允许断行, 换取表格不溢出页面; 宽屏不受影响 */
+  @media (max-width: 1180px) { td code, th code { white-space: normal; overflow-wrap: anywhere; } }
+
+  .good { color: var(--ok); }
+  .bad { color: var(--no); }
+  .wr { color: var(--warn); }
+  .todo { color: var(--warn); font-family: var(--mono); font-size: 13px; }
+  .hint { color: var(--faint); font-size: 13px; }
+  .callout { background: var(--mark); border-left: 3px solid var(--accent); padding: 12px 16px; margin: 14px 0; font-size: 14px; }
+  footer { margin-top: 44px; padding-top: 14px; border-top: 1px solid var(--hair); color: var(--faint); font-family: var(--mono); font-size: 12px; }
+  a { color: var(--accent-ink); }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<div class="kicker">计划外问题（未修）· test</div>
+<h1>真站整页验收 verify-hdui-real-page.js 恒红: 样本结构与 HDHomeUI 预期锚点不符</h1>
+<p class="lede">全量测试 1/37 恒红(E_ANCHOR_MISSING), 需用户重新保存真站整页样本才能修</p>
+<div class="meta-row">
+  <div class="item"><div class="k">编号</div><div class="v">26-11-17-0122-test-hdui-real-page-sample-stale</div></div>
+  <div class="item"><div class="k">报告时间</div><div class="v">2026-11-17 01:22</div></div>
+  <div class="item"><div class="k">类型</div><div class="v"><span class="badge type">test</span></div></div>
+  <div class="item"><div class="k">状态</div><div class="v"><span class="badge">Open</span></div></div>
+  <div class="item"><div class="k">涉及模块</div><div class="v">未分类</div></div>
+  <div class="item"><div class="k">发现者</div><div class="v">未署名</div></div>
+</div>
+
+<section id="s1">
+  <h2><span class="no">§01</span>现象与发现场景</h2>
+  <p>2026-11-17 在「AGENTS.md 对齐 auto-qb 口径」任务的提交闸门预跑与本地全量测试中，<code>hdhomeui/verify-hdui-real-page.js</code> 恒红（全量 1/37 失败）。当轮批次为纯文档/配置改动（未触 <code>src/</code>、<code>tests/</code>），与本失败无因果；摘出单独复跑同样失败，可稳定复现。</p>
+  <p>该测试的环境分级门禁（缺真站整页样本 / 缺浏览器 → 打印 SKIP 并退 0）未触发，说明样本与浏览器均在盘，走的是「有样本时必须真过」的验收路径 —— 红的是验收判据本身。</p>
+</section>
+
+<section id="s2">
+  <h2><span class="no">§02</span>证据</h2>
+  <p>单独复跑输出原文（取证 2026-11-17 01:22 前后，本地 Windows）：</p>
+<pre><code>真站整页验收(脱敏样本, 离线) —— HDHome __ 种子 高清家园 - Powered by NexusPHP.html
+  ✗ 真站页面应当正常上妆; 实测 {"state":"fallback","err":"[HDHomeUI] 页面结构与预期不符(E_ANCHOR_MISSING), 已恢复站点默认界面。 缺少: 页面主框架 table.mainouter / 导航容器 #nav_block / 用户信息栏 #info_block / 主导航 ul#mainmenu重新尝试知道了"}
+ERR waitFor 超时(applied) 最后=false</code></pre>
+  <p class="hint">样本文件名随测试输出原样保留（站点存盘标题，非凭据）；样本本体在私有资源目录内，按铁律 5 本报告不落其路径与内容。</p>
+</section>
+
+<section id="s3">
+  <h2><span class="no">§03</span>影响面</h2>
+  <table>
+    <tr><th>维度</th><th>结论</th></tr>
+    <tr><td>触发条件</td><td>本地全量测试（<code>commands run test.full</code>）必现；提交闸门在改动命中 JS 面（<code>src/</code> / <code>tests/</code> 子路径）时同样必现</td></tr>
+    <tr><td>影响范围</td><td>全量测试 1/37 红；JS 面提交被闸门拦死直到修复 —— HDHomeUI 主题脚本本身的回归验收（P49 硬要求）处于不可信状态</td></tr>
+    <tr><td>严重度</td><td>中 —— 不是 HDHomeUI 脚本回归，是验收样本过期；但实际挡提交，恢复手段在用户侧</td></tr>
+  </table>
+</section>
+
+<section id="s4">
+  <h2><span class="no">§04</span>定位锚点</h2>
+  <ul>
+    <li><code>tests/hdhomeui/verify-hdui-real-page.js</code>（取证 2026-11-17 01:22）· 驱动入口：本地静态服务器 + 一次性 Chrome（<code>--host-resolver-rules</code> 指到本机）+ 注入生产脚本；grep 关键词 <code>E_ANCHOR_MISSING</code>（仓库级 grep，命中 <code>src/HDHomeUI.user.js</code>，驱动文件内不出现 —— 驱动只消费 waitFor 失败并回读提示）</li>
+    <li>锚点判据清单：grep <code>mainouter</code> / <code>nav_block</code> / <code>info_block</code> / <code>mainmenu</code> → <code>src/HDHomeUI.user.js:71-74</code> 的 <code>ANCHORS</code> 数组（取证 2026-11-17 01:22；label 与本报告 §02 引文逐字一致），缺失清单由其抛错点拼接；<code>tests/lib/hdui-scan.js</code> 只做五档扫描、不含结构锚点</li>
+    <li>验收口径上游依据：<code>memory-bank/pitfalls/tests/p49-sim-from-prototype.md</code>（P49：动过底色/图标/布局必须过真站）</li>
+  </ul>
+</section>
+
+<section id="s5">
+  <h2><span class="no">§05</span>根因<span class="opt">（可选）</span></h2>
+  <div class="callout">已排除：当轮代码改动（批次未触 JS）；浏览器缺失、样本缺失（SKIP 门禁未触发）。<br>高置信假设（待复验）：默认样本路径下的真站整页样本为旧版存盘，站点此后改版，页面结构与 HDHomeUI 预期锚点（<code>table.mainouter</code> 等四处）不再相符 —— 修复需用户重新另存当前真站整页（私有资源，agent 不自制样本），属用户侧动作，故先入池。</div>
+</section>
+
+<section id="s6">
+  <h2><span class="no">§06</span>建议修法<span class="opt">（可选）</span></h2>
+  <ul>
+    <li>主路：用户重新另存一份当前真站整页覆盖默认样本路径的旧样本（仍留私有目录、不入 Git、注意铁律 5），重跑 <code>node tests/hdhomeui/verify-hdui-real-page.js</code> 确认四处锚点全中、用例转绿。</li>
+    <li>若换新样本后仍 E_ANCHOR_MISSING：说明站点结构本身改版（锚点选择器失效），按 P49 口径对照仿真页与真站差异，修 <code>src/HDHomeUI.user.js</code> 的 <code>ANCHORS</code> 判据（与上妆结构契约对齐；<code>tests/lib/hdui-scan.js</code> 仅在五档扫描误报时才是修点）后再验收。</li>
+  </ul>
+</section>
+
+<section id="s7">
+  <h2><span class="no">§07</span>状态变更日志</h2>
+  <ul>
+    <li>2026-11-17 01:22 — 入池，状态 <strong>Open</strong>（计划外，未修）</li>
+  </ul>
+  <h3>复验</h3>
+  <p class="todo">TODO: 认领后先重跑锚点，补一行「复验：&lt;时间&gt; 仍复现 / 已消失」。</p>
+  <h3>修复后补充</h3>
+  <p class="todo">TODO: 修完时写「实际修法 / 验证方式 / 测试数字」；与建议修法不同则保留建议原文并说明改道原因。</p>
+</section>
+
+<footer>
+  26-11-17-0122-test-hdui-real-page-sample-stale.html · 由 create-issue skill 入池；入池不等于已修，状态随修复推进在上面「状态变更日志」里留痕
+</footer>
+
+</div>
+</body>
+</html>
