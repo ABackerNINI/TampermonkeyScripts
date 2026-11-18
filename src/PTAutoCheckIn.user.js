@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.19.1
+// @version      2026.11.19.2
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -192,13 +192,18 @@ const K = {
             //   :focus-within 均可显示 .nx-user-card), 头像按钮未注册点击切换 → 程序化 click
             //   无效, 必须派发 mouseenter 走站点自身逻辑; 不派发 mouseleave, 220ms 延迟收起
             //   不触发, 卡片保持展开。定位不依赖 nx-uc-banner class(批量去 class 教训), 仍走
-            //   href 选择器(整页唯一 attendance 链接); 已签态横幅文案无样本, alreadyCheckedInContent
-            //   沿用旧口径待真站校准
+            //   href 选择器(首页唯一 attendance 链接)。
+            //   2026.11.19 真站已签样本校准: 横幅未签态 <b>签到得魔力</b>(去签到 ›)/已签态
+            //   <b>今日已签到</b>(连续签到，继续保持/查看), 已签检测走按钮文案通道;
+            //   attendance.php 落地页上该 href 选择器文档序首中是顶栏通知铃(占位 href
+            //   attendance.php#), 按钮文案通道在落地页读到铃铛必失效 → 落地结算另配
+            //   landingCheckedInContent(签到后才出现的 <h2>签到成功</h2>, 同 PTT 机制)
             id: 'railgun', name: 'Railgun',
             url: 'https://bilibili.download/',
             checkInSelector: 'a[href*="attendance.php"]',
             checkInContent: '签到得魔力', // 新版横幅文案无方括号(旧版直挂链接才是 [签到得魔力])
-            alreadyCheckedInContent: '签到已得',
+            alreadyCheckedInContent: '今日已签到', // 真站已签横幅文案(旧口径「签到已得」真站匹配不中 → 已签检测恒失败)
+            landingCheckedInContent: '签到成功', // 落地页确认标记: attendance.php 签到后才出现的 h2 文本(落地页 href 选择器首中是通知铃, 按钮文案通道失效)
             steps: [
                 { // 展开头像用户卡(点-验-重试): 派发 mouseenter 后轮询签到横幅可见(getClientRects>0
                     //   —— 横幅常驻 DOM 但 display:none, 隐藏元素程序化 .click() 不触发导航), 未现

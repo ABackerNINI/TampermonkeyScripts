@@ -10,7 +10,7 @@
 |------|---------|-----------|-------------------|------|
 | 躺平 | tangpt.top | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | PTTime | pttime.org | `a.fcb[href*="attendance.php"]` | `签到领魔力` / `签到详情` | 落地页标记 `总签到记录`(见下) |
-| Railgun | bilibili.download | `a[href*="attendance.php"]`(头像用户卡 `.nx-user-card` 内横幅) | `签到得魔力`(**无方括号**, 2026.11.19 改版) / `签到已得` | 两步流程(照 HHCLUB): 先派发 mouseenter 展开 `.nx-avatar-wrap`(站点 topbar.js 是 hover 展开, 头像按钮未注册 click; 兜底直接加 `.is-open`)再点横幅; 已签态横幅文案无样本待校准 |
+| Railgun | bilibili.download | `a[href*="attendance.php"]`(头像用户卡 `.nx-user-card` 内横幅) | `签到得魔力`(**无方括号**, 2026.11.19 改版) / `今日已签到`(2026.11.19 真站已签样本校准) | 两步流程(照 HHCLUB): 先派发 mouseenter 展开 `.nx-avatar-wrap`(站点 topbar.js 是 hover 展开, 头像按钮未注册 click; 兜底直接加 `.is-open`)再点横幅; 落地页标记 `签到成功`(attendance.php 签到后 h2, 同 PTTime 行约定; 落地页 href 选择器首中是通知铃占位 href, 按钮文案通道在落地页失效, 见 P33) |
 | PTZone | ptzone.xyz | `a[href*="attendance.php"]` | `[簽到得魔力]`(繁) / `簽到已得` | — |
 | PTSBao | ptsbao.club | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
 | HDClone | pt.hdclone.top | `a[href*="attendance.php"]` | `[签到得魔力]` / `签到已得` | — |
