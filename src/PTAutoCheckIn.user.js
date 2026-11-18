@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.19.2
+// @version      2026.11.19.3
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -155,7 +155,11 @@ const K = {
     //     状态留待人工站内签到(面板提示"需人工签到"); 该站不参与批量(remainingCandidates 排除)
     //   batchDelayMs: 批量模式本站处理完后、跳转下一站前的缓冲(ms)
     //   enabled: 是否参与批量签到
-    //   steps: 步骤数组(click_checkin/click/wait/check/function), 缺省为 [CLICK_CHECK_IN]
+    //   steps: 步骤数组(click_checkin/click/wait/check/function), 缺省为 [CLICK_CHECK_IN];
+    //     function 步骤签名 func(unit) 且可返回 {alreadyHit:true}/{refused:true} 标记(与
+    //     click_checkin 同语义: 已签→全流程成功 / 站外护栏拒点→failed, 其余返回值仍丢弃),
+    //     供"展开+守卫+点击"原子步复用引擎判据(guardCheckInEntry), 如 Railgun 防 hover
+    //     卡片跨步骤收起(见 26-11-19-0618)
     //   budgetMs(function 步骤) / alreadyCheckBudgetMs(unit): 不透明成本的预算声明(见 P28)。
     //     click/click_checkin/check/wait 步骤的超时可静态求和, 无需声明; 但 function 步骤与自定义
     //     alreadyCheck 内部是任意代码, 引擎无法知道它最坏会等多久 → 必须显式声明最坏耗时(ms)。
@@ -187,12 +191,17 @@ const K = {
             steps: [CLICK_CHECK_IN]
         },
         { // Railgun: 2026.11.19 站点改版 — 签到入口从页面直挂链接收进头像用户卡(nx-user-card),
-            //   流程照 HHCLUB 两步: 先展开卡片再点 attendance 横幅。开合机制实测(站点 topbar.js):
-            //   卡片由 .nx-avatar-wrap 的 mouseenter 监听加 .is-open 展开(CSS .is-open/:hover/
-            //   :focus-within 均可显示 .nx-user-card), 头像按钮未注册点击切换 → 程序化 click
-            //   无效, 必须派发 mouseenter 走站点自身逻辑; 不派发 mouseleave, 220ms 延迟收起
-            //   不触发, 卡片保持展开。定位不依赖 nx-uc-banner class(批量去 class 教训), 仍走
-            //   href 选择器(首页唯一 attendance 链接)。
+            //   开合机制实测(站点 topbar.js): 卡片由 .nx-avatar-wrap 的 mouseenter 监听加
+            //   .is-open 展开(CSS .is-open/:hover/:focus-within 均可显示 .nx-user-card), 头像
+            //   按钮未注册点击切换 → 程序化 click 无效, 必须派发 mouseenter 走站点自身逻辑;
+            //   不派发 mouseleave, 220ms 延迟收起不触发。定位不依赖 nx-uc-banner class(批量
+            //   去 class 教训), 仍走 href 选择器(首页唯一 attendance 链接)。
+            //   2026.11.19.3 原子化(修 26-11-19-0618): 旧两步流程(function 展开 →
+            //   CLICK_CHECK_IN)在首步返回与次步重新等待之间存在间隙, 真站卡片不保证展开态跨
+            //   步骤保持(被动模式真实鼠标移开 → mouseleave 220ms 收起), 次步等满超时记
+            //   unconfirmed 而该次点击未发生。现展开→轮询横幅可见→引擎三重守卫→立即点击合为
+            //   单 function 步, 无跨步骤间隙; 横幅未现则重展开重试(最多 3 轮), 已签横幅
+            //   (今日已签到)经守卫识别为 alreadyHit 记成功。
             //   2026.11.19 真站已签样本校准: 横幅未签态 <b>签到得魔力</b>(去签到 ›)/已签态
             //   <b>今日已签到</b>(连续签到，继续保持/查看), 已签检测走按钮文案通道;
             //   attendance.php 落地页上该 href 选择器文档序首中是顶栏通知铃(占位 href
@@ -205,20 +214,22 @@ const K = {
             alreadyCheckedInContent: '今日已签到', // 真站已签横幅文案(旧口径「签到已得」真站匹配不中 → 已签检测恒失败)
             landingCheckedInContent: '签到成功', // 落地页确认标记: attendance.php 签到后才出现的 h2 文本(落地页 href 选择器首中是通知铃, 按钮文案通道失效)
             steps: [
-                { // 展开头像用户卡(点-验-重试): 派发 mouseenter 后轮询签到横幅可见(getClientRects>0
-                    //   —— 横幅常驻 DOM 但 display:none, 隐藏元素程序化 .click() 不触发导航), 未现
-                    //   则重试, 最多 3 次; 事件未生效时兜底直接加 .is-open(CSS 按类显示卡片)
+                { // 原子签到步: 展开(mouseenter + .is-open 兜底)→ 轮询签到横幅可见(getClientRects>0
+                    //   —— 横幅常驻 DOM 但 display:none, 隐藏元素程序化 .click() 不触发导航)→
+                    //   guardCheckInEntry 三重守卫(已签/文案/站外 href, 与 click_checkin 共用
+                    //   判据不漂移)→ 立即点击, 全程无跨步骤间隙; 横幅未现重展开重试, 最多 3 轮
                     type: 'function',
-                    description: '展开头像用户卡(hover/is-open, 最多3次)',
-                    // 预算声明(见 P28): 3 轮 × (waitForElement 2500 + 卡片动画 sleep 300) = 8400ms
-                    budgetMs: 8400,
-                    func: async () => {
+                    description: '展开头像卡并点击签到横幅(原子, 最多3轮)',
+                    // 预算声明(见 P28): 3 轮 × waitForElement 2500 = 7500ms(展开/守卫/点击均为同步 DOM 操作)
+                    budgetMs: 7500,
+                    func: async (unit) => {
                         const linkVisible = () => {
                             const a = document.querySelector('a[href*="attendance.php"]');
                             if (!a) return null;
                             const r = a.getClientRects();
                             return r && r.length > 0 ? a : null;
                         };
+                        setProgress(unit, 'wait_element', '等待签到按钮');
                         for (let i = 0; i < 3; i++) {
                             const wrap = document.querySelector('.nx-avatar-wrap');
                             if (wrap) {
@@ -229,8 +240,15 @@ const K = {
                                 console.warn(`${ScriptName} [Railgun] 未找到头像卡容器 .nx-avatar-wrap`);
                             }
                             try {
-                                await waitForElement(linkVisible, 2500);
-                                await sleep(300); // 卡片展开动画就位
+                                const a = await waitForElement(linkVisible, 2500);
+                                // 可见即守卫+点击, 不留 300ms 动画 sleep/步骤间隙(26-11-19-0618:
+                                // 间隙内站点可能收起卡片, 横幅回 display:none)
+                                const g = guardCheckInEntry(unit, a);
+                                if (g.alreadyHit || g.refused) return g;
+                                if (!g.ok) return; // 文案不匹配: 不点不标, 与 click_checkin 口径一致
+                                console.log(`${ScriptName} 点击按钮: ${visibleText(a).trim()}`);
+                                a.click();
+                                setProgress(unit, 'clicked', '已点击签到按钮');
                                 return;
                             } catch (e) {
                                 console.warn(`${ScriptName} [Railgun] 签到横幅不可见, 重试 (${i + 1}/3)`);
@@ -238,8 +256,7 @@ const K = {
                         }
                         throw new Error('头像用户卡展开失败(签到横幅 3 次重试后仍不可见)');
                     }
-                },
-                CLICK_CHECK_IN
+                }
             ]
         },
         {
@@ -1506,10 +1523,35 @@ const K = {
 
     // ==================== 步骤执行引擎 ====================
 
+    // 签到入口三重守卫(已签文案 / 内容校验 / 站外 href) —— click_checkin 步骤与 function
+    // 原子步(如 Railgun 展开即点)共用, 判据单点不漂移(见 26-11-19-0618)。返回:
+    //   {ok:true}         三关全过, 可点击
+    //   {alreadyHit:true} 入口呈已签文案(不点, 全流程视为成功)
+    //   {refused:true}    href 指向站外, 疑似伪造入口(不点, 按护栏拒绝处置, 见 P29/S09)
+    //   {mismatch:true}   文案与 checkInContent 不符(不点, 交由点击后确认流程落 unconfirmed)
+    function guardCheckInEntry(unit, el) {
+        if (unit.alreadyCheckedInContent && visibleText(el).includes(unit.alreadyCheckedInContent)) {
+            console.log(`${ScriptName} 按钮已显示已签到状态, 不再点击`);
+            return { alreadyHit: true };
+        }
+        if (unit.checkInContent && !visibleText(el).includes(unit.checkInContent)) {
+            console.warn(`${ScriptName} 签到按钮内容不匹配: expected ${unit.checkInContent}, got ${visibleText(el)}`);
+            return { mismatch: true };
+        }
+        // 站外链接护栏: 文案与选择器都对, 但 href 指向别的域 → 疑似伪造入口, 不点(见 P29/S09)
+        const rawHref = el.getAttribute ? el.getAttribute('href') : null;
+        if (rawHref && hrefIsOffSite(rawHref)) {
+            console.warn(`${ScriptName} 签到按钮 href 指向站外, 拒绝点击: ${rawHref}`);
+            return { refused: true };
+        }
+        return { ok: true };
+    }
+
     /**
      * 执行单个步骤, 返回标记:
      *   undefined           正常继续
      *   {alreadyHit: true}  检测到已签到(不再点击, 全流程视为成功)
+     *   {refused: true}     被站外护栏拒绝(未执行点击, 全流程按 failed 处置)
      */
     async function executeStep(unit, step) {
         console.log(`${ScriptName} 执行步骤: ${step.description || step.type}`);
@@ -1523,20 +1565,9 @@ const K = {
                     console.warn(`${ScriptName} 未找到签到按钮: ${unit.checkInSelector} (已签到?)`);
                     return;
                 }
-                if (unit.alreadyCheckedInContent && visibleText(el).includes(unit.alreadyCheckedInContent)) {
-                    console.log(`${ScriptName} 按钮已显示已签到状态, 不再点击`);
-                    return { alreadyHit: true };
-                }
-                if (unit.checkInContent && !visibleText(el).includes(unit.checkInContent)) {
-                    console.warn(`${ScriptName} 签到按钮内容不匹配: expected ${unit.checkInContent}, got ${visibleText(el)}`);
-                    return;
-                }
-                // 站外链接护栏: 文案与选择器都对, 但 href 指向别的域 → 疑似伪造入口, 不点(见 P29/S09)
-                const rawHref = el.getAttribute ? el.getAttribute('href') : null;
-                if (rawHref && hrefIsOffSite(rawHref)) {
-                    console.warn(`${ScriptName} 签到按钮 href 指向站外, 拒绝点击: ${rawHref}`);
-                    return { refused: true };
-                }
+                const g = guardCheckInEntry(unit, el);
+                if (g.alreadyHit || g.refused) return g;
+                if (!g.ok) return; // 文案不匹配: 不点不标, 与旧口径一致(交点击后确认流程)
                 console.log(`${ScriptName} 点击按钮: ${visibleText(el).trim()}`);
                 el.click();
                 setProgress(unit, 'clicked', '已点击签到按钮');
@@ -1573,7 +1604,12 @@ const K = {
                 break;
             }
             case 'function': {
-                await step.func();
+                // function 步骤签名 func(unit)(传 unit 供原子步复用引擎守卫, 见 26-11-19-0618),
+                // 可返回 {alreadyHit}/{refused} 标记与 click_checkin 同语义; 其余返回值仍丢弃
+                // (向后兼容: 旧 function 步均不依赖返回值)
+                const marker = await step.func(unit);
+                if (marker && marker.alreadyHit) return { alreadyHit: true };
+                if (marker && marker.refused) return { refused: true };
                 break;
             }
             default:

@@ -33,7 +33,7 @@
 | `batchDelayMs` | 批量模式本站处理完后、跳下一站前的缓冲(贴吧吧间 3s 防风控) |
 | `enabled` | 是否参与批量 |
 | `favicon` | 可选, 显式指定站点图标 URL(默认自动取用: 路过收集真实 icon → 站点根 /favicon.ico 兜底) |
-| `steps` | 步骤数组, 缺省 `[CLICK_CHECK_IN]` |
+| `steps` | 步骤数组, 缺省 `[CLICK_CHECK_IN]`。`function` 步骤签名 `func(unit)`(unit 传入供原子步复用引擎守卫), 可返回 `{alreadyHit:true}`/`{refused:true}` 标记(与 `click_checkin` 同语义: 已签→全流程成功 / 站外护栏拒点→failed), 其余返回值丢弃(向后兼容); 供「展开+守卫+点击」原子步复用 `guardCheckInEntry` 判据(如 Railgun 防 hover 卡片跨步骤收起, 26-11-19-0618) |
 | `budgetMs` | **`function` 步骤必填(P28)**: 该步骤内部的最坏耗时(ms)。`function` 步骤内部是任意代码, 引擎无法静态求和 → 必须声明; 未声明则运行时预算自检报 UNKNOWN 判为不通过 |
 | `alreadyCheckBudgetMs` | **配了 `alreadyCheck` 时必填(P28)**: 自定义已签判定的最坏耗时(ms); **纯同步 DOM 判定写 `0`**(如 NodeLoc), 含 `waitForTrue` 的按实际写(如 HHCLUB `3000`) |
 
@@ -62,6 +62,7 @@
 | unit | 检测 | 步骤 | 预留 | 合计 / 40000 |
 |------|------|------|------|--------------|
 | HHCLUB | 3000 | 13400(头像 3×(2500+300)=8400 + click_checkin 5000) | 18000 | **34400** |
+| Railgun | 0 | 7500(原子步 3×2500) | 18000 | 25500 |
 | 蜂巢 pting | 0 | 15800(5000+5000+1000+2000+800+2000) | 18000 | **33800** |
 | HDBao / MuXueGe | 0 | 11500(5000+1500+5000) | 18000 | 29500 |
 | NodeLoc | 0(同步判定) | 10000(`waitForElement` 10s) | 18000 | 28000 |

@@ -11,7 +11,7 @@
 <meta name="doc-topic" content="ptac-railgun-card-open-gap">
 <meta name="doc-refs" content="">
 <meta name="issue-tier" content="standard">
-<meta name="issue-status" content="Open">
+<meta name="issue-status" content="Done">
 <meta name="issue-title" content="Railgun 头像卡展开态不保证跨步骤保持, 点击步骤可能等超时记未确认">
 <meta name="issue-summary" content="两步流程首步展开成功后, CLICK_CHECK_IN 重新等横幅可交互时卡片可能已被站点收起, 5s 超时记未确认; 修法方向=展开与点击原子化(需引擎小改)">
 <style>
@@ -91,7 +91,7 @@
   <div class="item"><div class="k">编号</div><div class="v">26-11-19-0618-bug-ptac-railgun-card-open-gap</div></div>
   <div class="item"><div class="k">报告时间</div><div class="v">2026-11-19 06:18</div></div>
   <div class="item"><div class="k">类型</div><div class="v"><span class="badge type">bug</span></div></div>
-  <div class="item"><div class="k">状态</div><div class="v"><span class="badge">Open</span></div></div>
+  <div class="item"><div class="k">状态</div><div class="v"><span class="badge">Done</span></div></div>
   <div class="item"><div class="k">涉及模块</div><div class="v">PTAutoCheckIn</div></div>
   <div class="item"><div class="k">发现者</div><div class="v">2026-11-19 用户真站实测排障</div></div>
 </div>
@@ -143,11 +143,20 @@
   <h2><span class="no">§07</span>状态变更日志</h2>
   <ul>
     <li>2026-11-19 06:18 — 入池，状态 <strong>Open</strong>（计划外，未修）</li>
-  </ul>
+    <li>2026-11-19 — 状态 <strong>Fixed</strong>（2026.11.19.3 原子化修复，见「修复后补充」）</li>
+    <li>2026-11-19 — 状态 Fixed → Done（kb.status）</li>
+</ul>
   <h3>复验</h3>
-  <p class="todo">TODO: 认领后先重跑锚点，补一行「复验：&lt;时间&gt; 仍复现 / 已消失」。</p>
+  <p><strong>复验</strong>：2026-11-19 — 锚点复核：Railgun steps 现为单个 function 原子步（grep 「展开头像卡并点击签到横幅」唯一命中），旧两步结构（展开步 + CLICK_CHECK_IN）已不存在，§04 两处症状锚点均被本次修复改写；「跨步骤间隙」结构上消除，无需真站复现即可判定不再复现（间隙已不存在）。真站行为待用户下次未签日批量验证。</p>
   <h3>修复后补充</h3>
-  <p class="todo">TODO: 修完时写「实际修法 / 验证方式 / 测试数字」；与建议修法不同则保留建议原文并说明改道原因。</p>
+  <p><strong>实际修法</strong>（采纳 §06 建议方向，三件引擎小改全部落地）：</p>
+  <ul>
+    <li><strong>守卫抽取</strong>：click_checkin 的三重守卫（已签文案 / checkInContent 校验 / 站外 href）抽成 <code>guardCheckInEntry(unit, el)</code> 共用函数，原步骤与原子步两处复用不漂移；文案不匹配分支返回 <code>{mismatch:true}</code>，click_checkin 内语义与旧口径一致（不点不标）。</li>
+    <li><strong>function 步契约</strong>：签名改 <code>func(unit)</code>（传 unit），可返回 <code>{alreadyHit}</code>/<code>{refused}</code> 标记并由 executeStep 向上传导（HHCLUB/NodeLoc 旧 function 步返回值仍丢弃，向后兼容零改动）。</li>
+    <li><strong>Railgun 原子步</strong>：展开（mouseenter + .is-open 兜底）→ 轮询横幅可见（getClientRects&gt;0）→ 守卫 → 立即点击合为单 function 步，无 300ms 动画 sleep、无跨步骤间隙；横幅未现重展开重试 3 轮；已签横幅（今日已签到）经守卫识别 alreadyHit 记成功。保留替代方案否决理由：keepAlive 重 assert 展开态无点击跟随时卡片反复弹开，被动模式观感差。</li>
+  </ul>
+  <p><strong>与建议修法的差异</strong>：无改道。§06 的「复用引擎守卫并点击（不留 300ms/步骤间隙）」按字面落地——连成功路径上的 300ms 卡片动画 sleep 也一并去除（可见即可点，横幅 display:none 时隐藏元素点击本就不触发导航，无需等动画）。</p>
+  <p><strong>验证方式与测试数字</strong>：① <code>node tests/ptautocheckin/check-ptac-budget.js</code> 全绿（A1–A6/B1–B6/C1–C2/D1–D2；C1=3 个 function 步均声明 budgetMs，Railgun 声明 7500 = 3×2500，无 300ms sleep 后相应收紧）；② <code>commands run test.full</code> 全量 37/37 通过；③ <code>node --check</code> 语法冒烟通过。预算表：Railgun 检测 0 + 步骤 7500 + 预留 18000 = 25500/40000ms（余量 14500ms）。</p>
 </section>
 
 <footer>
