@@ -28,3 +28,4 @@
 | [p26-notext-icon-button.md](p26-notext-icon-button.md) | 按钮无可见文本时引擎文本通道全不可用，走 `alreadyCheck` 属性判定 + 自定义点击步骤。 | 接入 no-text 按钮站, 排查点击不执行, 配 alreadyCheck |
 | [p27-carrier-agnostic-signals.md](p27-carrier-agnostic-signals.md) | 「文本专用」判定重构为「载体无关信号」时，用翻译层保旧站零改动、用 flavor 参数保调用方语义差异。 | 重构判定通道, 接入属性态站, 改 readEntryState, 跑场景矩阵 |
 | [p31-nobutton-means-checkedin.md](p31-nobutton-means-checkedin.md) | 「已签后入口消失」别一律套 `noButtonMeansCheckedIn`，先用 `alreadyCheck` 把「入口消失」升级为「入口消失且已登录」。 | 接入入口消失型站, 排查批量漏签, 配 alreadyPageCheck |
+| [p32-hover-expand-card.md](p32-hover-expand-card.md) | 卡片/菜单由 mouseenter 监听加 `.is-open` 类展开、按钮未注册 click 时, 程序化 click 完全无效; 自动化要先派发 mouseenter 走站点自身逻辑(兜底直接加开合类), 内层入口可见后再点。 | 站点改版签到入口进弹层, 排查点击无效, 适配 hover 展开菜单 |

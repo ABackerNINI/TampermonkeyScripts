@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.17.1
+// @version      2026.11.19.1
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -186,13 +186,56 @@ const K = {
             landingCheckedInContent: '总签到记录', // 落地页确认标记: 签到按钮导向页(路径由按钮 href 推导)整页文本命中才判已签
             steps: [CLICK_CHECK_IN]
         },
-        {
+        { // Railgun: 2026.11.19 站点改版 — 签到入口从页面直挂链接收进头像用户卡(nx-user-card),
+            //   流程照 HHCLUB 两步: 先展开卡片再点 attendance 横幅。开合机制实测(站点 topbar.js):
+            //   卡片由 .nx-avatar-wrap 的 mouseenter 监听加 .is-open 展开(CSS .is-open/:hover/
+            //   :focus-within 均可显示 .nx-user-card), 头像按钮未注册点击切换 → 程序化 click
+            //   无效, 必须派发 mouseenter 走站点自身逻辑; 不派发 mouseleave, 220ms 延迟收起
+            //   不触发, 卡片保持展开。定位不依赖 nx-uc-banner class(批量去 class 教训), 仍走
+            //   href 选择器(整页唯一 attendance 链接); 已签态横幅文案无样本, alreadyCheckedInContent
+            //   沿用旧口径待真站校准
             id: 'railgun', name: 'Railgun',
             url: 'https://bilibili.download/',
             checkInSelector: 'a[href*="attendance.php"]',
-            checkInContent: '[签到得魔力]',
+            checkInContent: '签到得魔力', // 新版横幅文案无方括号(旧版直挂链接才是 [签到得魔力])
             alreadyCheckedInContent: '签到已得',
-            steps: [CLICK_CHECK_IN]
+            steps: [
+                { // 展开头像用户卡(点-验-重试): 派发 mouseenter 后轮询签到横幅可见(getClientRects>0
+                    //   —— 横幅常驻 DOM 但 display:none, 隐藏元素程序化 .click() 不触发导航), 未现
+                    //   则重试, 最多 3 次; 事件未生效时兜底直接加 .is-open(CSS 按类显示卡片)
+                    type: 'function',
+                    description: '展开头像用户卡(hover/is-open, 最多3次)',
+                    // 预算声明(见 P28): 3 轮 × (waitForElement 2500 + 卡片动画 sleep 300) = 8400ms
+                    budgetMs: 8400,
+                    func: async () => {
+                        const linkVisible = () => {
+                            const a = document.querySelector('a[href*="attendance.php"]');
+                            if (!a) return null;
+                            const r = a.getClientRects();
+                            return r && r.length > 0 ? a : null;
+                        };
+                        for (let i = 0; i < 3; i++) {
+                            const wrap = document.querySelector('.nx-avatar-wrap');
+                            if (wrap) {
+                                console.log(`${ScriptName} [Railgun] 展开头像用户卡 (尝试 ${i + 1}/3)`);
+                                wrap.dispatchEvent(new MouseEvent('mouseenter'));
+                                if (!wrap.classList.contains('is-open')) wrap.classList.add('is-open');
+                            } else {
+                                console.warn(`${ScriptName} [Railgun] 未找到头像卡容器 .nx-avatar-wrap`);
+                            }
+                            try {
+                                await waitForElement(linkVisible, 2500);
+                                await sleep(300); // 卡片展开动画就位
+                                return;
+                            } catch (e) {
+                                console.warn(`${ScriptName} [Railgun] 签到横幅不可见, 重试 (${i + 1}/3)`);
+                            }
+                        }
+                        throw new Error('头像用户卡展开失败(签到横幅 3 次重试后仍不可见)');
+                    }
+                },
+                CLICK_CHECK_IN
+            ]
         },
         {
             id: 'ptzone', name: 'PTZone',
