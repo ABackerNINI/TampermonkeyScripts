@@ -25,6 +25,7 @@ code-review skill 的配套脚本(八节规程见 .agents/skills/code-review/SKI
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
@@ -115,8 +116,10 @@ def _load_gate_lines(root: Path) -> tuple[list[str], list[str]]:
 
 
 def _match_rule(path: str, pattern: str) -> bool:
-    # 与提交闸门同口径: commit.py 按子串匹配(any(r in p)), 这里保持同源, 避免嵌套路径下预警漏报
-    return pattern in path
+    # 与提交闸门同口径(2026-11-20 S4 glob 迁移): commit.py:hit 与 _pipeline.fnmatchcase 同源,
+    # 大小写敏感、`*` 跨 `/`; 裸串 = 精确相等, `""` 哨兵在 gates_for 前置消费(这里不处理)。
+    # 旧「子串 any(r in p)」口径随 red_lines glob 化退役 —— 不同步会让红线预警静默失效。
+    return fnmatch.fnmatchcase(path, pattern)
 
 
 def _hit_rules(paths: list[str], rules: list[str]) -> list[str]:

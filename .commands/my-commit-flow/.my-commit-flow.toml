@@ -3,6 +3,17 @@
 # 协作主线 Gitee develop, GitHub 只作镜像(与 AGENTS.md 一致)。本分支无 upstream, 提交走 --no-push。
 # 生效值与来源: python .commands/my-commit-flow/scripts/_pipeline.py --show-config
 
+# ---------------------------------------------------------------------------
+# 匹配语义(2026-11-17 S4, 计划 26-11-17-0010 D9): red_lines / warn_lines / gates[].match
+# 的条目一律是 fnmatch glob(整路径匹配, 大小写敏感, `*` 跨 `/`):
+#   前缀意图写 `foo*`   子串意图写 `*foo*`   精确相等写 `foo`
+# 正例: `*config.yml*` 命中 config.yml / src/config.yml / config.yml.bak; `src/*` 命中 src/a.py
+#       与 src/auto_qb/a.py; `*.html` 只命中 .html 结尾路径
+# 反例: 裸串 `config.yml` 只精确命中同名路径(不再有旧的前缀/子串双口径);
+#       `*.cookies*` 这类写法现在**会**命中(旧实现下永不命中且无告警 —— T4 面 A 已修);
+#       glob 元字符(? [ ])有特殊含义, 字面量须转义(如 `data[[]1[]].txt`)
+# ---------------------------------------------------------------------------
+
 confirmed = true
 
 branch = ""                       # 留空 = 跟当前分支
@@ -18,9 +29,9 @@ mirror_host_mark = "github.com"   # GitHub 只作镜像
 pitfalls_index = "memory-bank/pitfalls/git/_index.md"
 
 # 出现即 STOP —— 铁律 5: resources-do-not-track/ 里的私有整页与凭据永不入 Git
-red_lines = ["resources-do-not-track/", "config.yml"]
+red_lines = ["*resources-do-not-track/*", "*config.yml*"]
 # 出现需人工确认: 用户自己的在途改动 / 不该入库的项目数据
-warn_lines = ["想法.md", ".workbuddy-ai/", ".codebuddy/"]
+warn_lines = ["*想法.md*", "*.workbuddy-ai/*", "*.codebuddy/*"]
 
 # 跨平台风险: Windows 本地全绿不等于 CI(ubuntu)绿
 platform_hints = ["child_process", "spawn", "spawnSync", "fs.rmSync", "process.platform", "path.sep"]
@@ -43,19 +54,22 @@ generated_regen_cmd = "python <skill-dir:memory-bank>/scripts/gen_all.py"
 # ---------------------------------------------------------------------------
 
 [[gates]]
-# match 用 tests/ 的直接子路径枚举而非裸 "tests/": hit() 是子串语义, "tests/" 会误中
+# match 用 tests/ 的直接子路径枚举而非裸 "tests/": 旧 hit() 是子串语义, "tests/" 会误中
 # memory-bank/pitfalls/tests/*.md(本仓 pitfalls 有 tests 类, auto-qb 没有) —— 纯文档改动
 # 会误触全量 JS 测试闸门。新增 tests/ 顶层子目录或顶层散文件(如 tests/check-x.js)时同样要加进本清单。
-match   = ["src/", "tests/lib/", "tests/ptautocheckin/", "tests/hdhomeui/", "tests/run-all.js"]
+# S4 起逐条写显式 glob: 目录前缀 → `x/*`, 文件名精确 → 原名(零意图漂移, 见 plan A4 迁移表)。
+match   = ["src/*", "tests/lib/*", "tests/ptautocheckin/*", "tests/hdhomeui/*", "tests/run-all.js"]
 run     = ["python <skill-dir:commands>/scripts/run.py run test.full"]
 note    = "全量测试: 经 commands 引擎跑 test.full(node tests/run-all.js, 零依赖; 无浏览器时 SKIP 仿真用例), 红了即 STOP"
 auto    = true
 timeout = 900
 
 [[gates]]
-match = ["memory-bank/"]
+match = ["memory-bank/*"]
 run   = ["python <skill-dir:memory-bank>/scripts/gen_kb_index.py --check",
-         "python <skill-dir:memory-bank>/scripts/gen_doc_map.py --check",
+         # 2026-11-17 S2 起 gen_doc_map --check 摘出 kb.check 默认链(fail-closed), 本项目侧经
+         # kb 包 `kb.docmap` task 显式挂载 —— 走 commands 引擎单点, 拦截行为不变(计划 26-11-20-0045 A4)。
+         "python <skill-dir:commands>/scripts/run.py run kb.docmap",
          "python <skill-dir:memory-bank>/scripts/gen_baseline_recent.py --check",
          "python <skill-dir:memory-bank>/scripts/check_wording.py --check",
                   "python <skill-dir:memory-bank>/scripts/check_doc_templates.py --check",
@@ -67,14 +81,14 @@ timeout = 60
 note  = "知识库索引 + 制品索引与专题视图 + 日期守卫 + 基线切片结构 + 回写措辞: 覆盖面与 kb.check 对齐(缺一条就是静默红 —— 能判红却不在闸门里 = 静默红)"
 
 [[gates]]
-match = ["memory-bank/active-context/"]
+match = ["memory-bank/active-context/*"]
 run   = ["python <skill-dir:memory-bank>/scripts/gen_active_recent.py --check"]
 auto  = true
 timeout = 60
 note  = "会话切片: 命名定宽前缀 / 三行头 / cap —— 该脚本只校验, 不写文件"
 
 [[gates]]
-match = ["memory-bank/", "docs/", "AGENTS.md"]
+match = ["memory-bank/*", "docs/*", "AGENTS.md"]
 run   = ["python <skill-dir:memory-bank>/scripts/check_doc_links.py --quiet"]
 auto  = true
 timeout = 60
@@ -84,7 +98,7 @@ note  = "相对链接存在性: 改名 / 搬家后的坏链不会让任何测试
 # HTML 结构守卫: L1+L2 零依赖常驻判据随上一条 memory-bank 闸门全库跑; 本条是规范级
 # 增量面: 本次改动的 HTML 才过 W3C v.Nu —— 改谁谁达标, 存量 error 不进闸门。
 # vnu.jar 在 <root>/.tools/(gitignored, 缺时自动下载, 需 java); 无 HTML 改动时跳过。
-match = [".html"]
+match = ["*.html"]
 run   = ["python <skill-dir:memory-bank>/scripts/check_html.py --vnu --strict <changed:**/*.html>"]
 auto  = true
 timeout = 120
@@ -94,7 +108,7 @@ note  = "HTML 规范级增量检查(v.Nu): 全仓改动 HTML 都查; 有 error �
 # 两处都扫: `.agents/skills/`(skill 的家) 与 `.commands/`(包内脚本)。
 # |--with-safety: --help 未必被脚本认 —— 把陌生参数当无参处理时, 无参=真动作的脚本会被真跑一次;
 # 让展开先问每个脚本自己的 --safety 探针, 把「无参即真动作」的摘出去(摘掉会在输出里写明)。
-match = [".agents/skills/", ".commands/"]
+match = [".agents/skills/*", ".commands/*"]
 run   = ["python <each:.agents/skills/**/scripts/*.py|--with-safety> --help",
          "python <each:.commands/**/scripts/*.py|--with-safety> --help"]
 auto  = true
@@ -126,7 +140,7 @@ note  = "skill 链接同步(幂等): 拉取来的改动靠每次提交兜一次"
 # cap 债务制: AGENTS.md 是硬规定(超 8000 注入尾部被静默截断, 超了且本次改动命中 → STOP,
 # 不套收缩、不进债务); 其余尺寸(SKILL.md / KB 角色 cap)是债务 —— 派生输出, 只报告不拦。
 # <changed:> 无匹配即静默跳过; 债务只算本次改动的文件。
-match = ["AGENTS.md", ".agents/skills/", ".commands/", "memory-bank/"]
+match = ["AGENTS.md", ".agents/skills/*", ".commands/*", "memory-bank/*"]
 run   = ["python scripts/check_context_caps.py --files <changed:AGENTS.md>",
          "python scripts/check_context_caps.py --files <changed:.agents/skills/**>",
          "python scripts/check_context_caps.py --files <changed:.commands/**>",

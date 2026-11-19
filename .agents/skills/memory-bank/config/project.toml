@@ -1,0 +1,28 @@
+# memory-bank skill 的项目绑定配置 (统一落点 <skill>/config/project.toml, 计划 26-11-17-0010 S1/D12)。
+# 口径: 项目词汇与项目路径全部外置到这里, 代码只读配置 —— 换项目/改枚举只改本文件, 不触 scripts/*.py;
+# 节缺失或值为空 → 脚本宽容回落 (跳过对应校验 + 必打提示行, 禁静默降级, D13)。
+
+[domains]
+# 任务档案领域枚举 (文件名首段; `kb.new task --topic <领域>-<专题>` 按**最长前缀**匹配, 枚举项可含短横线)。
+# 本项目档案首段尚无领域语义 (TASKxxx- 命名), 默认留空数组 = 跳过领域校验 + 必打 [KB-CONFIG] 提示行;
+# 待确立 `<领域>-<专题>` 命名后再收编词表 —— 改这里即生效, 不触代码。
+
+values = []
+
+[siblings]
+# 跨 clone 档案查重的兄弟工作区目录名**显式列表** (只读 ls 各自的 memory-bank/tasks/, 忽略日期前缀
+# 按 slug 比对; 自身 clone 自动排除)。每项相对本仓库根的 parent 目录解析 (与旧 glob `../auto-qb-*`
+# 同锚点); 空列表 = 单 clone, 不查跨 clone (跳过校验 + 必打 [KB-CONFIG] 提示行, D13)。
+# 本项目 AGENTS.md 口径「只动当前这一个 clone」—— 无兄弟工作区, 留空列表。
+tasks_dirs = []
+
+[nav]
+# kb.nav 的项目绑定面 (计划 26-11-17-0010 S11 批9b 外置, S1 同款模式)。
+# repo_deny: 仓库根下这些**首段**不进导航 (红线排除表, 判据 nav_data._denied; 越界面独立拒绝)。
+#   本仓实例 = AGENTS.md 红线清单 (resources-do-not-track/ 是用户真实站点整页与凭据, config.yml 是真生产配置);
+#   缺失回落通用默认 (.git/.env) + 必打提示 (D13/R-7)。
+repo_deny = ["resources-do-not-track/", "config.yml", ".git", ".env"]
+# remotes: 主线远端候选序 (kb.nav 顶栏「拉取」按序取第一个存在的远端, 与 my-commit-flow
+#   main_candidates 同构)。本仓实例 = Gitee 主线优先 (GitHub 只作镜像, 与 AGENTS.md 一致);
+#   缺失回落单远端通用 ("origin",) + 必打提示 (D13/R-7)。空列表 = 不按候选序挑, 直接取第一个。
+remotes = ["gitee", "origin", "github"]

@@ -171,7 +171,7 @@ def test_warn_lines_note_only_gates_still_run(repo, monkeypatch, capsys):
     (repo / "src").mkdir()
     (repo / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
     _patch_changed(monkeypatch, staged=["src/a.py"])
-    _patch_cfg(monkeypatch, warn_lines=["src/"])
+    _patch_cfg(monkeypatch, warn_lines=["src/*"])
     spy = _GateSpy(ran=1)
     monkeypatch.setattr(gate_mod, "run_gates", spy)
     ok, line, _ = gate_mod.run_gate_prerun([])
