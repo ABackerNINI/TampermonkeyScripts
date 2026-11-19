@@ -9,7 +9,7 @@
 
 ## 会话协议
 
-完整规程(会话开始/收尾 DoD/立档阈值/任务档案模板)见 memory-bank skill(`.agents/skills/memory-bank/SKILL.md`)。本节只留入口。
+完整规程(会话开始/收尾 DoD/立档阈值 4 条/任务档案模板)见 memory-bank skill(`.agents/skills/memory-bank/SKILL.md`)。本节只留入口。
 
 - **开始**: ①**先同步(硬性, 无豁免——问答/只读分析轮次也必须先同步)**——`commands run my-commit-flow.sync`: 自动 fetch+快进/分叉自动 rebase(保线性), 结果行「已同步 <hash>」贴进回复; 真改写 HEAD 的步骤(快进/rebase)按「旧 hash→新 hash」各留一行在它上面; 失败一行含原因与步骤(树脏/冲突已自动回滚), 照做后重跑, **禁止在落后的分支上工作——只读分析同样禁止**。**只读评审子代理豁免本步**(同步是主会话开工动作; 其 git 状态不动, 自检锚=任务提示给的 head hash); **可写子代理不豁免**(照常同步, 或在任务提示里钉死基线)。②看会话滚动状态: `commands run kb.active` 列 `memory-bank/active-context/` 切片; 该读哪份文档走上面的路由。③**只动当前这一个 clone**——跨仓库操作**绝对禁止**, 须用户显式说「授权」(见「🔴 跨仓库操作」节)。
 - **建件与改版**: 一律命令化创建(`kb.new <族>` / `kb.status` / `kb.bump` / `kb.wrap`), 派生面零手写; 四工位与决策树见 `memory-bank/conventions/doc-forms.md`「四工位」「决策树」节, 族清单与口径见其「创建/更新方式」。
@@ -50,7 +50,7 @@
 
 ## 命令
 
-**想跑测试/自检/提交/推送/包内脚本, 第一步是找 task id, 不是拼裸命令**——裸跑等价物会丢掉包里单点定义的环境陷阱。引擎用法见 commands skill `.agents/skills/commands/SKILL.md`; `<task>` 映射表在 `.commands/` 各包的 `config.toml`。常用:
+**想跑测试/自检/提交/推送/包内脚本, 第一步是找 task id, 不是拼裸命令**——裸跑等价物会丢掉包里单点定义的环境陷阱。引擎用法(task id 写法 / 先试跑再装 wrapper / `list` / `show` / 收录协议)见 commands skill `.agents/skills/commands/SKILL.md`; `<task>` 映射表在 `.commands/` 各包的 `config.toml`。常用:
 
 ```text
 commands run test.full   # 全量测试(零依赖 Node 运行器; 无浏览器时 SKIP 仿真用例)
@@ -62,10 +62,6 @@ commands run doc.drift   # 命令漂移: 文档手抄已收录命令判红
 ```
 
 - 本项目无 npm/pip 依赖面: 测试零依赖 Node; 被改的 Python 脚本 `--help` 冒烟由闸门自动做。
-
-## 🔴 进程安全: 禁止一切 taskkill
-
-- AI 代理在 shell 直接执行 `taskkill` 一律禁止(误杀面不可控)。进程清理一律走**脚本内部**定点实现: 引擎超时杀整棵进程树(`_pipeline._kill_tree`)与 kb.nav 拉取超时收尸(`nav_server._kill_tree`)都是先核身份再定点杀的脚本内路径, agent 不得在 shell 手工照搬。
 
 ## 🔴 Skill 代码禁读
 

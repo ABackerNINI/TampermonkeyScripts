@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>移植 auto-qb 自制 skill 轨道可移植性改造成果进本项目</title>
+<meta name="doc-type" content="plan">
+<meta name="doc-topic" content="skill-track-port">
+<meta name="doc-status" content="Open">
+<meta name="doc-added" content="26-11-20-0045">
+<meta name="doc-updated" content="26-11-20-0053">
+<meta name="doc-refs" content="">
+<style>
+  :root {
+    --bg: #10151a;
+    --ink: #e4eaef;
+    --dim: #a2b0bd;
+    --faint: #6f7d8a;
+    --hair: #26313a;
+    --hair-soft: #1c252d;
+    --accent: #6db3c9;
+    --accent-ink: #8fd0e0;
+    --warn: #e2a86e;
+    --ok: #8fc98f;
+    --no: #d98a8a;
+    --code-bg: #151d25;
+    --sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --display: "Bahnschrift", "Segoe UI", "Microsoft YaHei", sans-serif;
+    --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); color-scheme: dark; font-family: var(--sans); font-size: 15px; line-height: 1.65; margin: 0; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #2c3944; border-radius: 5px; }
+  /* 版面自适应: sheet 随视口流动 (封顶 1280px), 侧距 clamp(18~44px) 随宽度伸缩;
+     正文与表格同宽 —— 右缘不再参差 (2026-10-17 用户反馈「宽度不统一不协调」) */
+  .sheet { max-width: 1280px; margin: 0 auto; padding: 48px clamp(18px, 3.2vw, 44px) 80px; }
+
+  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+  h1 { font-family: var(--display); font-size: 33px; line-height: 1.18; letter-spacing: -0.01em; font-weight: 600; margin: 10px 0 6px; }
+  .lede { color: var(--dim); font-size: 16px; margin: 0 0 22px; }
+  .meta { font-family: var(--mono); font-size: 11.5px; color: var(--faint); line-height: 1.9; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); padding: 10px 0; margin-bottom: 40px; }
+  .meta b { color: var(--dim); font-weight: 400; }
+
+  h2 { font-family: var(--display); font-size: 21px; font-weight: 600; letter-spacing: -0.005em; margin: 52px 0 4px; padding-top: 18px; border-top: 1px solid var(--hair); }
+  h2 .no { font-family: var(--mono); font-size: 12px; color: var(--accent-ink); letter-spacing: 0.08em; display: block; margin-bottom: 6px; font-weight: 400; }
+  h3 { font-family: var(--display); font-size: 16.5px; font-weight: 600; margin: 28px 0 6px; }
+  h4 { font-family: var(--display); font-size: 14.5px; font-weight: 600; margin: 20px 0 4px; color: var(--dim); }
+  p { margin: 10px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; color: var(--accent-ink); }
+  pre { background: var(--code-bg); border: 1px solid var(--hair-soft); padding: 13px 16px; overflow-x: auto; margin: 12px 0; }
+  pre code { background: none; padding: 0; color: var(--ink); font-size: 12.5px; line-height: 1.6; }
+  .cm { color: var(--faint); }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.5px; }
+  th { text-align: left; font-weight: 600; color: var(--dim); font-size: 11.5px; letter-spacing: 0.08em; padding: 6px 10px; border-bottom: 1px solid var(--hair); }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--hair-soft); vertical-align: top; }
+  td code, th code { white-space: nowrap; }
+  /* 窄视口 (<=1180px): 表格单元格内的长路径允许断行, 换取表格不溢出页面; 宽屏不受影响 */
+  @media (max-width: 1180px) { td code, th code { white-space: normal; overflow-wrap: anywhere; } }
+  .good { color: var(--ok); }
+  .bad { color: var(--no); }
+  .wr { color: var(--warn); }
+  .aside { border-left: 2px solid var(--hair); padding: 2px 0 2px 14px; color: var(--dim); margin: 14px 0; }
+  .tag { font-family: var(--mono); font-size: 11px; color: var(--accent-ink); letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<div class="kicker">PLAN · memory-bank · doc-topic: skill-track-port</div>
+<h1>移植 auto-qb 自制 skill 轨道可移植性改造成果进本项目</h1>
+<p class="lede">本篇只回答: 怎么把 auto-qb 已完成的「轨道级可移植性改造」(S1–S11)成果搬进本项目并让 AGENTS.md 的通用口径增量补齐 —— 搬哪些、按什么批次、怎么验收; 不回答具体代码怎么写, 也不在本篇实施。</p>
+<div class="meta">
+  <b>doc-added</b> 26-11-20-0045 · <b>doc-updated</b> 26-11-20-0053 · <b>doc-status</b> Open · <b>载体</b> 单文件 HTML(dark)<br>
+  <b>来源</b> 用户指令「auto-qb 中的 skill 有大更新, 根据移植方案将最新版本移植进本项目; AGENTS.md 通用口径复制过来; grilling 然后出一个方案」+ 一轮 grilling(6 项全按推荐, 记 §06) + 只读事实盘点; 依据 = auto-qb 计划 <code>D:\Projects\auto-qb\memory-bank\plans\26-11-17-0010-plan-skill-portability.html</code>(doc-status Done, doc-updated 26-11-18-0234) 与其任务档案 <code>memory-bank/tasks/26-11-17-memory-bank-skill-portability.md</code>(Status Done, S1–S11 全绿)。跨仓仅只读, 写入限本 clone。
+</div>
+
+<h2><span class="no">§01</span>目标与设计原则</h2>
+<p><b>目标</b> — 把 auto-qb 已落地的轨道改造能力(配置/数据外置、宽容回落 + 必打提示、fail-closed 守卫显式挂载、PORTING 轨道 runbook、glob 化闸门匹配、环境中立模板)移植到本项目的同名轨道, 使本项目自身也满足「拷轨道 + 填少量配置 + 零代码 diff 可移植」; 同时把 auto-qb AGENTS.md 中<b>真正通用</b>的口径增量补齐。成态判据: 本项目的既有行为、项目铁律与用户可见默认值零漂移。</p>
+<p><b>不变量(硬约束)</b>:</p>
+<ol>
+<li><b>本轮零实施</b> — 本篇是计划; 不改代码、不改配置、不入池 issue、不 commit/push; 实施须用户逐项授权(新建文件 / 入池 / 认领 / commit 四类动作分别确认)。</li>
+<li><b>项目身份不动摇</b> — 本项目是「长期装机使用的个人生产脚本 + 纯 Node 零依赖测试栈 + 无 package.json」; auto-qb 的 uv / Docker testbed / qB 真机 / pytest TMPDIR 自举一律不进本项目。</li>
+<li><b>行为零漂移</b> — 现有 `commands run` 入口、`test.full`、闸门触发面、`AGENTS.md` 项目铁律 1–5、红线清单在移植后保持原语义; 任何变更须有迁移对照表证明意图未丢。</li>
+<li><b>跨仓红线零消耗</b> — 只读 auto-qb 的文档/配置/清单; 不复写、不在其目录跑 git; 移植产物只落本 clone。</li>
+<li><b>版本与知识库同步</b> — 实施轮每批改任何脚本/元数据必须同批递增脚本头 <code>@version</code> 并回写 <code>memory-bank/</code> 受影响条目(项目铁律 3/4); 本批只写方案文档, 无脚本改动故不触发。</li>
+</ol>
+<p><b>取舍口径</b>(源自 grilling, 详见 §06): 移植单位是<b>改造涉及、两仓共有</b>的轨道件, 不是整套 auto-qb 目录; 配置值从本项目现状推导、不为移植而改行为; 缓行项只登记不实施; 验收绑定本项目五道闸 + 沙箱重放。</p>
+
+<h2><span class="no">§02</span>现状与痛点</h2>
+<p>上游计划的改造在 auto-qb 侧已 Done(任务档案 2026-11-18 00:39 结项, 全链推送 Gitee); 本项目的对应件仍停在改造前形态。下表是只读盘点实测(行号与计数可复跑):</p>
+<table>
+<tr><th>改造项</th><th>auto-qb(源)</th><th>本项目(目标)</th><th>处置</th></tr>
+<tr><td>计划/任务状态</td><td>计划 Done; S1–S11 全绿, 分批评审闭环</td><td>无对应档案</td><td>本篇即本仓移植方案的起点</td></tr>
+<tr><td><code>memory-bank/config/project.toml</code></td><td>存在:<code>[domains]</code> 八域 / <code>[siblings]</code> 两 clone / <code>[nav]</code> repo_deny+remotes</td><td>无 <code>config/</code> 目录</td><td>建, 填本项目值(§04 A1)</td></tr>
+<tr><td><code>memory-bank/SKILL.md</code> 路径口径</td><td>读 <code>[siblings]</code> 显式列表</td><td>第 100 行仍硬编码 <code>../auto-qb-*/memory-bank/tasks/</code></td><td>换成配置读法 + 宽容回落</td></tr>
+<tr><td>脚本面(配置读取/回落)</td><td>改造后 <code>_common.py</code> 读配置; 清理路径校验、<code>sys.executable</code> 派生等卫生面已复核</td><td>同 23 个脚本文件名, 内容仍是旧版(未读配置)</td><td>按 skill 规程移植换版, 不改脚本本体以外逻辑(§04 A2)</td></tr>
+<tr><td><code>kb.check</code> 默认链</td><td>8 成员;<code>gen_doc_map</code> / <code>check_mutation_anchor</code> 已摘链到显式 task</td><td>9 成员, 含 <code>gen_doc_map.py --check</code>; 无 <code>kb.anchor</code>/<code>kb.docmap</code></td><td>摘 <code>gen_doc_map</code> 到 <code>kb.docmap</code>; <b>不建</b> <code>kb.anchor</code>(守卫脚本 <code>check_mutation_anchor.py</code> 现存 161 行, 但本项目无锚 HTML 数据文件 <code>issues/*-test-mutation-audit-standing.html</code>, 挂 <code>kb.anchor</code> 会恒红)</td></tr>
+<tr><td><code>.my-commit-flow.toml</code></td><td>S4 glob 语义 + 12 gates + 显式 <code>kb.docmap</code>/<code>kb.anchor</code> 引用</td><td>头部已声明「2026-11-17 对齐移植」; 仍是裸子串匹配 + 10 gates, 直接调 <code>gen_doc_map</code></td><td>只做 S2/S4 差量; 保留本项目既有值与闸门意图</td></tr>
+<tr><td>PORTING 覆盖</td><td>10 份; memory-bank 一份 211 行(轨道 runbook + 双场景指导)</td><td>仅 1 份、48 行(三步拷贝骨架)</td><td>升级为 runbook + 按交集补薄件(§04 B3)</td></tr>
+<tr><td><code>.config/sync.toml</code></td><td>存在:<code>[exclude]</code> / <code>[link_targets]</code></td><td>无; <code>.codebuddy/skills</code> 目录已存在</td><td>建, 填本项目值(§04 B1)</td></tr>
+<tr><td>最小模板与数据骨架</td><td>3 份 <code>config.minimal.toml</code>(kb/my-commit-flow/test) + <code>review/lane.toml</code> + 3 件 <code>templates/</code> 骨架(doc-forms/collaboration/real-machine)</td><td>无 minimal 模板; <code>templates/</code> 缺那 3 件; 但本项目 <code>conventions/doc-forms.md</code> 已存在且 8,362 字符超 cap(存量债务)</td><td>按需拷入模板目录; <b>不覆盖</b>本项目既有 conventions; 真机骨架按有无真机轨决定(§04 B2)</td></tr>
+<tr><td>qB 领域包与 skill</td><td><code>dev/env/mutants/real/release</code> 包 + deps-upgrade/mutation-testing/release skill</td><td>不存在</td><td><b>不移植</b>(M2 / §01 不变量 2; 依赖 uv/Docker/qB, 与本项目栈冲突)</td></tr>
+<tr><td>AGENTS.md 通用口径</td><td>大部分通用条目本项目已有; 少量命令/协议措辞更细</td><td>移植前 <b>7915/8000 字符</b>, 余量 85(<code>doc.caps</code> 实测)</td><td><b>先装通用口径, 再压缩腾空间</b>(§04 B4): 已装命令节 task id 写法指针 + 会话协议「立档阈值 4 条」; 已移除「禁止 taskkill」段(206 字符)腾空间; qB 专属仍不搬</td></tr>
+<tr><td><code>memory-bank/reports/</code></td><td>存在</td><td>不存在, 但本项目 <code>memory-bank/README.md:38</code> 已引用它</td><td>计划外缺陷, 只登记待办(§05), 不修</td></tr>
+</table>
+<p class="aside">源侧 S11 收口的 grep 白名单审计(0 操作性命中)、D15 Windows 半条 transitional 声明、R-6 演进史下沉入池 issue <code>26-11-17-0620</code> 均为上游既有结论, 移植语义时沿用, 不在本仓重开。</p>
+
+<h2><span class="no">§03</span>方案总览</h2>
+<p><b>主线一句话</b> — 只把「配置外置 + 宽容回落 + 守卫摘挂 + runbook + glob 语义 + 中立模板」这四件事按本项目现状落进同名轨道, 让本项目具备可移植性, 而不是把 auto-qb 的整个工作流搬过来。</p>
+<table>
+<tr><th>批次</th><th>内容</th><th>验收法</th></tr>
+<tr><td><b>A · 内核(可移植性成立)</b></td><td>A1 项目配置 + A2 脚本换版 + A3 检查链摘挂 + A4 闸门 S2/S4 差量</td><td>空库 <code>kb.check</code> 绿; 本仓现有 <code>kb.check</code>/闸门意图逐条对照无漂移; 脚本 <code>--help</code> 冒烟绿</td></tr>
+<tr><td><b>B · 外围(降手工 + 口径对齐)</b></td><td>B1 sync 配置 + B2 minimal 模板/骨架 + B3 PORTING 升级 + B4 AGENTS.md 零净补齐</td><td>sync 幂等跑通且链接可见; 模板复制填空演练; <code>doc.caps</code> 硬规定仍 PASS</td></tr>
+<tr><td><b>C · 验收与收口</b></td><td>C1 沙箱重放(0 代码 diff)+ C2 五道闸实测 + C3 回写 DoD + C4 缓行项登记</td><td>报告五条验收标准全过; 数字只写基线切片; 待办清单入篇不入池</td></tr>
+</table>
+<p>每批独立可评审、可独立授权; 版本递增与 <code>memory-bank/</code> 回写随各批同批完成; 提交由用户审核后决定。决策映射见 §06 的 M1–M7(M7 为同日补拍)。</p>
+
+<h2><span class="no">§04</span>实施步骤</h2>
+<h3>批次 A · 内核</h3>
+<table>
+<tr><th>步</th><th>内容</th><th>验收判据</th></tr>
+<tr><td>A1</td><td>建 <code>.agents/skills/memory-bank/config/project.toml</code>。键来源:<code>[domains]</code> 从本项目 <code>memory-bank/tasks/TASKxxx-</code> 命名现状派生(现状首段无领域语义, 默认留空数组走宽容回落 + <code>[KB-CONFIG]</code> 提示, 见待拍板 P1);<code>[siblings]</code> 默认空列表(单 clone, 待确认是否有兄弟工作区);<code>[nav].repo_deny</code> 收编本项目红线 <code>resources-do-not-track/</code> + <code>.git</code>/<code>.env</code>;<code>[nav].remotes</code> 收编 Gitee 主线序 <code>gitee,origin,github</code>。删配置/空值 = 跳过校验 + 必打提示, 禁静默降级。</td><td>配置文件按模板建且无残留 SLOT;<code>kb.time</code> 三行正常; 空配置态脚本仍可用并打提示行; 领域/兄弟值不触代码即可改</td></tr>
+<tr><td>A2</td><td>按 skill 规程把源侧脚本改造面移植到本项目同名 <code>scripts/</code>: <code>_common.py</code>(配置加载 + 回落提示)、<code>new_doc.py</code>(去硬编码 <code>../auto-qb-*</code>, 读 <code>[siblings]</code>)、<code>nav_data.py</code>/<code>nav_server.py</code>(repo_deny/remotes 外置)、<code>gen_doc_map.py</code>(认领链 fail-closed 形态)、清理路径校验等卫生面。SKILL.md 第 100 行同步改为读配置口径。只移植改造语义, 不改业务行为; 改了哪个脚本就递增其 <code>@version</code>。</td><td>改后脚本逐个 <code>--help</code> 冒烟绿(经闸门 <code>|--with-safety</code> 形态); 本仓 <code>kb.new task</code> 行为零变化; 全包无「解析值未校验直接当路径」调用点</td></tr>
+<tr><td>A3</td><td>检查链摘挂:<code>.commands/kb/config.toml</code> 的 <code>kb.check</code> 摘掉 <code>gen_doc_map.py --check</code>(9→8 成员, 空库恒绿); 新增显式 <code>kb.docmap</code> task 承载该校验, 闸门里 <code>memory-bank/</code> 一条经 commands 引擎改指它。<b>不建</b> <code>kb.anchor</code>: 本项目突变锚守卫脚本 <code>check_mutation_anchor.py</code> 虽在(161 行), 但缺锚 HTML 数据文件, 挂它只会恒红 —— 这是「挂了会错」而非「没机制」。</td><td>仓内沙箱空库骨架首跑 <code>kb.check</code> 绿; 本仓真实库跑 <code>kb.check</code> 绿; 认领链校验经 <code>kb.docmap</code> 显式仍生效; 新增 task id 可被 <code>commands list</code> 列出</td></tr>
+<tr><td>A4</td><td><code>.my-commit-flow.toml</code> 只做 S2/S4 差量:<code>red_lines</code>/<code>warn_lines</code> 与 gates 的 <code>match</code> 从裸子串升级为 fnmatch glob(前缀显式写 <code>x*</code>), 保留本项目 <code>resources-do-not-track/</code> 等真值与「tests/ 直接子路径枚举避免误中 <code>memory-bank/pitfalls/tests/</code>」的既有注释; 闸门中 <code>gen_doc_map.py --check</code> 改指 <code>kb.docmap</code>。<b>不整份覆盖</b>(本仓头部已声明 2026-11-17 对齐移植, 10 gates 是本项目实况)。逐条出迁移对照表, 覆盖全部 10 个 gate。</td><td>迁移对照表逐条零意图漂移; 守阵红绿双验(该红仍红、不该红不红); 预检 <code>--show-config</code> 展开正常; 提交闸门冒烟不拦正常改动</td></tr>
+</table>
+<h3>批次 B · 外围与口径</h3>
+<table>
+<tr><th>步</th><th>内容</th><th>验收判据</th></tr>
+<tr><td>B1</td><td>建 <code>.agents/skills/.config/sync.toml</code>(点前缀防 skill 遍历误收):<code>[exclude].names</code> 收编 <code>autoclaw-design-capability</code>(本项目确有该 skill),<code>[link_targets].paths</code> 收编已存在的 <code>.codebuddy/skills</code>。同步脚本按源侧 S9 改造形态读配置、缺文件回落到原默认并打提示; 坏 TOML fail-fast。</td><td>跑一遍后 <code>.codebuddy/skills</code> 下可见各 skill 链接; 改配置可增删排除项/链接目标; 本仓 sync 行为零变化</td></tr>
+<tr><td>B2</td><td>拷 3 份 <code>config.minimal.toml</code>(my-commit-flow/test/kb)与 <code>review/lane.toml</code>(存量评审批次矩阵模板, 仅在启用 lane 时拷; 见 §05 P4), 另拷 3 件数据骨架(<code>doc-forms.md</code>/<code>collaboration.md</code>/<code>real-machine.md</code>)到 <b>skill 的 <code>templates/</code></b> 供未来移植填空。<b>不覆盖</b>本项目 <code>memory-bank/conventions/</code> 既有件(尤其 8,362 字符超 cap 的 doc-forms.md —— 存量债务另开会话清理); 真机骨架按本项目是否有真机轨决定, 不需要则不拷并摘 SKILL.md 引用段。</td><td>模板复制→改名→填空演练通; 不产生坏链(<code>doc.links</code> 绿); 不新增 cap 债务</td></tr>
+<tr><td>B3</td><td>把本项目 <code>.agents/skills/memory-bank/references/PORTING.md</code> 从 48 行骨架升级为轨道 runbook(移植单位清单、双场景指导、配置落点、可选守卫清单、模板清单、移植后自查); 按「自制+半自制且含项目绑定面」交集为本项目已有 skill 补薄 PORTING(3–10 行, 依赖面清单 + 双场景段), 第三方来源件零触碰, 源文件没有的 skill(deps-upgrade/mutation-testing/release)不凭空造。</td><td>runbook 照 §04 A/B 可复现; 薄件名单与本项目 skill 目录交集核对无漏; 每份含双场景段; 无坏链</td></tr>
+<tr><td>B4</td><td>AGENTS.md <b>先装后压缩</b>(用户 2026-11-20 纠正: 「装不下就不补」是错误行为): ①先把通用口径装进去 —— 命令节「引擎用法见 commands skill」补 task id 写法 / 先试跑再装 wrapper / <code>list</code> / <code>show</code> / 收录协议指针、会话协议「立档阈值」补「4 条」(本项目 SKILL.md:38 实测确为 4 条); ②再压缩腾空间 —— 移除「🔴 进程安全: 禁止一切 taskkill」整段(实测 206 字符, 其引用的 <code>_pipeline._kill_tree</code>/<code>nav_server._kill_tree</code> 属 auto-qb 脚本内路径, 本项目无对应实现)。<b>上述两步本轮已执行</b>, 余量从 85 提升到有余。属 qB 专属的(机械守卫 <code>tests/test_memory_bank_*.py</code> 四分 —— 本项目零依赖 Node 测试栈、无该文件; uv/Docker/TMPDIR)仍不装, 这是「装了会错」而非「装不下」。项目铁律 1–5、红线、项目定位、幽灵 diff、<code>--no-push</code> 等本项目更细的口径保留不覆盖。改后 <code>doc.caps</code> 硬规定仍须 PASS(≤8000)。</td><td><code>doc.caps</code> AGENTS.md PASS 且余量不为负; 通用/项目专属对照表逐条有结论(无落点项写明理由); <code>doc.drift</code>/<code>doc.links</code> 绿(新增措辞不手抄已收录命令、移除段不留坏链)</td></tr>
+</table>
+<h3>批次 C · 验收与收口</h3>
+<table>
+<tr><th>步</th><th>内容</th><th>验收判据</th></tr>
+<tr><td>C1</td><td>仓内沙箱重放(D5 场地): 从改后本仓拷轨道路径到 <code>/tmp</code> 干净目录模拟目标项目骨架, 照 B3 runbook 走通; 全程 0 行代码 diff。</td><td>沙箱里 <code>kb.time</code>/空库 <code>kb.check</code>/<code>doc.links</code> 绿; 记录实际命令与结果进任务档案; 不跨仓授权</td></tr>
+<tr><td>C2</td><td>五道闸实测:<code>test.full</code> / <code>kb.check</code> / <code>doc.caps</code> / <code>doc.links</code> / <code>doc.drift</code>, 数字从实测输出誊写进新基线切片(<code>kb.new baseline --total ..</code>), 其余文档一律引用不手抄裸数。</td><td>五道闸全绿(或债务/跳过项有明示理由); 基线切片已建; 本批改动经 code-review skill 分批评审闭环</td></tr>
+<tr><td>C3</td><td>收尾 DoD: 切片 <code>kb.wrap</code> → 达阈值 <code>kb.new task</code> 立档 → 代码事实回写 <code>memory-bank/</code> 与根 <code>README.md</code> → 新坑按动作入 <code>pitfalls/</code> 并重跑 <code>kb.index</code>。版本号铁律逐脚本核对。</td><td>回写与代码同批; <code>kb.check</code> 复跑绿; 提交由用户审核后决定, AI 不自动 commit/push</td></tr>
+<tr><td>C4</td><td>登记缓行/计划外待办(只写进本篇 §05 或任务档案, <b>不入池 issue</b>, 除非用户显式授权): D14 演进史下沉(源侧跟踪 issue 26-11-17-0620)、本项目 <code>memory-bank/reports/</code> 缺失、cap 债务 6 件、D15 Windows 半条 transitional(本项目为 Windows, 可实跑但需真实场地声明)。</td><td>待办清单逐条有触发条件与责任批次; 无未授权入池动作</td></tr>
+</table>
+
+<h2><span class="no">§05</span>待拍板清单</h2>
+<p>grilling 六项(M1–M6)已全拍板, 见 §06。下列是实施轮才需要、且不影响本篇成立的具体值; 默认(推荐)已给, 用户不纠正即按默认执行:</p>
+<table>
+<tr><th>#</th><th>待拍板</th><th>默认(推荐)</th><th>备选与影响</th></tr>
+<tr><td>P1</td><td><code>[domains]</code> 领域枚举填什么</td><td>留空数组 + 宽容回落提示; 待本项目确立 <code>&lt;领域&gt;-&lt;专题&gt;</code> 命名后收编</td><td>若现在就要枚举, 需用户给出领域词表; 硬填一个与 <code>TASKxxx-</code> 命名不符的枚举会让领域校验对新档全红</td></tr>
+<tr><td>P2</td><td><code>[siblings]</code> 是否有兄弟工作区</td><td>空列表(单 clone, 与本项目 AGENTS.md「只动当前 clone」一致)</td><td>若存在并行 clone, 需用户给出目录名; 漏填只影响跨 clone 查重, 不影响本仓建档</td></tr>
+<tr><td>P3</td><td><s>AGENTS.md 补齐装不下时怎么办</s> —— 已由用户 2026-11-20 拍板, 迁 §06 M7</td><td><b>先装后压缩</b>: 先装通用口径, 再用移除 taskkill 段(206 字符)腾空间; 本轮已执行, 余量为正</td><td>备选「装不下就不补」被否 —— 用户明确判为错误行为; 仅在「装了会错」(qB 专属无落点)时才不装</td></tr>
+<tr><td>P4</td><td>是否启用 review lane 存量评审</td><td><b>不启用</b>: 不建 <code>lane.toml</code>、不加 <code>review.lane.*</code> task(本项目 review 包仅 3 task, 无批次矩阵)</td><td>若启用, 需用户给冻结分支、R1–R5 批次矩阵与快照根目录; 矩阵缺失只会拿到引导性报错</td></tr>
+<tr><td>P5</td><td>薄 PORTING 的覆盖名单</td><td>源侧 10 份 ∩ 本项目已有 skill, 且属自制/半自制含绑定面者; 第三方件不配</td><td>扩大到全部 skill 会触碰第三方件, 违反 D17 零依赖对照基准</td></tr>
+</table>
+
+<h2><span class="no">§06</span>拍板记录</h2>
+<p>本移植拍板记为 M1–M6(2026-11-20, 一轮 grilling, 用户「按推荐」全收), M7 为同日用户纠正补拍; 上游 auto-qb 改造的 D1–D20 是其计划 §06 的既成结论, 本篇沿用其语义(配置分散自管、fail-closed 显式 opt-in、宽容回落、PORTING 每 skill 一份、双场景指导、包面跟包根先例), 不重开。</p>
+<table>
+<tr><th>M</th><th>拍板</th><th>落点</th></tr>
+<tr><td>M1</td><td>本轮只出方案, 不改代码/配置、不提交; 方案按族规约落单文件 HTML</td><td>§01 不变量 1; 本篇载体</td></tr>
+<tr><td>M2</td><td>移植范围 = 改造涉及且两仓共有的轨道件; auto-qb 专有 qB/uv/Docker 包与脚本不进本项目</td><td>§02 表末行; §04 A/B 全部步骤</td></tr>
+<tr><td>M3</td><td>AGENTS.md 增量补齐、不整份替换; 项目铁律/红线/项目定位保留</td><td>§04 B4; §05 P3</td></tr>
+<tr><td>M4</td><td>项目特定值从本项目现状推导、行为零漂移; 需用户拍板的留实施轮, 不在方案里编造</td><td>§04 A1/A4; §05 P1–P2/P4</td></tr>
+<tr><td>M5</td><td>照上游口径: 缓行项不实施只登记(入池另需授权); 锚守卫摘链 + 显式挂载 —— 本项目因缺锚 HTML 数据文件(守卫脚本在、挂 <code>kb.anchor</code> 恒红)裁定为<b>不建</b> <code>kb.anchor</code></td><td>§04 A3; §05 P4; §04 C4</td></tr>
+<tr><td>M6</td><td>验收绑定 <code>test.full</code>/<code>kb.check</code>/<code>doc.caps</code>/<code>doc.links</code>/<code>doc.drift</code> 五闸 + 仓内沙箱重放; 数字实测后只写基线切片</td><td>§04 C1–C2</td></tr>
+<tr><td>M7</td><td>(2026-11-20 用户纠正)「装不下就不补」是错误行为 —— AGENTS.md 通用口径<b>先装后压缩</b>: 先装, 超限就压缩非铁律段腾空间, 不以空间不足为由放弃; 本轮已执行(装命令节/立档阈值 4 条 + 移除 taskkill 段 206 字符)</td><td>§04 B4; §05 P3; §02 AGENTS 表行; §07 R-M3</td></tr>
+</table>
+
+<h2><span class="no">§07</span>风险与对策</h2>
+<table>
+<tr><th>#</th><th>风险</th><th>触发条件</th><th>处置</th></tr>
+<tr><td>R-M1</td><td>glob 升级误伤闸门(该红不红/不该红偏红)</td><td>A4 把裸子串换成 fnmatch 时, 前缀语义漂移或 <code>*</code> 跨目录误中</td><td>迁移对照表逐条保意图(前缀显式 <code>x*</code>); 红绿双验; 保留本项目 tests/ 子路径枚举注释; 对照表进任务档案</td></tr>
+<tr><td>R-M2</td><td>摘链后本仓认领链校验失效</td><td>A3 只摘 <code>gen_doc_map</code> 不挂 <code>kb.docmap</code>, 或闸门忘改指</td><td>摘挂同批完成; 空库绿 + 真实库绿双验; 闸门经 commands 引擎引用 task id 而非裸脚本</td></tr>
+<tr><td>R-M3</td><td>AGENTS.md 超限</td><td>B4 先装通用口径后净增超 8000</td><td><b>先装后压缩</b>(M7): 装完超限就压缩非铁律段腾空间(首个动作 = 移除 taskkill 段 206 字符, 已执行), 不是不装; 装了会错的 qB 专属项另一类处置(见 B4); 改后立刻跑 <code>doc.caps</code>; 项目铁律段一律不削</td></tr>
+<tr><td>R-M4</td><td>把 auto-qb 项目绑定面混进本项目</td><td>整目录拷贝 / 直接抄其配置值(config.yml、auto-qb-data、gitee-first 注释等)</td><td>只读盘点、按项过滤; A4 保留本仓既有值; 收口 grep 白名单审计 0 操作性命中; 跨仓红线零消耗</td></tr>
+<tr><td>R-M5</td><td>版本铁律与知识库回写漏批</td><td>A2 换脚本只改内容不递增 <code>@version</code>; C3 回写未随主提交</td><td>每批收尾按脚本清单逐项核对 <code>@version</code>; 回写 <code>memory-bank/</code> 与根 README 同批暂存; 提交交用户审核</td></tr>
+<tr><td>R-M6</td><td>宽容回落被误读为静默降级</td><td>A1/B1 缺配置时脚本跳过校验但不打提示</td><td>回落必打 <code>[KB-CONFIG]</code> 提示行; 提示文案进守阵; 运行必需数据缺失走引导性报错</td></tr>
+<tr><td>R-M7</td><td>沙箱重放场地越界</td><td>C1 想借「真实另一个项目」验证而触碰别的 clone</td><td>只用 <code>/tmp</code> 仓内沙箱(D5); 跨仓真移植留未来自然发生, 不为本计划授权</td></tr>
+<tr><td>R-M8</td><td>本轮越界成实施</td><td>把本篇当成开工令直接改文件/入池/提交</td><td>§01 不变量 1; 四类动作逐项等用户显式授权; 「继续/你看着办」不算授权</td></tr>
+</table>
+
+<h2><span class="no">§10</span>变更记录</h2>
+<ul>
+  <li><span class="tag">R0 · 26-11-20-0045</span> 初版: 用户指令「移植 auto-qb skill 大更新 + AGENTS.md 通用口径 + grilling 出方案」+ 一轮 grilling(M1–M6 全按推荐); 依据 auto-qb 计划 26-11-17-0010(Done)与其任务档案(S1–S11 全绿)+ 两仓只读盘点; 三批 A/B/C, A1–A4/B1–B4/C1–C4; 五待拍板 P1–P5 留实施轮; 本篇 Open, 零代码改动。</li>
+  <li><span class="tag">R1 · 26-11-20-0053</span> 用户纠正: 「装不下就不补」判为错误行为, AGENTS.md 通用口径改「先装后压缩」—— 先装命令节 task id 写法指针与「立档阈值 4 条」、再移除「禁止 taskkill」段(206 字符)腾空间, 本轮已执行; 方案 §02 表行 / B4 / P3 / R-M3 / §06 M7 同步, qB 专属无落点项(机械守卫/uv/Docker/TMPDIR)仍不装; 本篇 Open。</li>
+</ul>
+
+</div>
+</body>
+</html>
