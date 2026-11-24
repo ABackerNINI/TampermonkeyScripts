@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>PTAutoCheckIn FAB 皮肤精简与靠边模式改造（含静息 CPU 修复）</title>
+<meta name="doc-type" content="plan">
+<meta name="doc-topic" content="ptac-fab-skin-edge">
+<meta name="doc-status" content="Open">
+<meta name="doc-added" content="26-11-24-1409">
+<meta name="doc-updated" content="26-11-24-1409">
+<meta name="doc-refs" content="">
+<style>
+  :root {
+    --bg: #10151a;
+    --ink: #e4eaef;
+    --dim: #a2b0bd;
+    --faint: #6f7d8a;
+    --hair: #26313a;
+    --hair-soft: #1c252d;
+    --accent: #6db3c9;
+    --accent-ink: #8fd0e0;
+    --warn: #e2a86e;
+    --ok: #8fc98f;
+    --no: #d98a8a;
+    --code-bg: #151d25;
+    --sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --display: "Bahnschrift", "Segoe UI", "Microsoft YaHei", sans-serif;
+    --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); color-scheme: dark; font-family: var(--sans); font-size: 15px; line-height: 1.65; margin: 0; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #2c3944; border-radius: 5px; }
+  /* 版面自适应: sheet 随视口流动 (封顶 1280px), 侧距 clamp(18~44px) 随宽度伸缩;
+     正文与表格同宽 —— 右缘不再参差 (2026-10-17 用户反馈「宽度不统一不协调」) */
+  .sheet { max-width: 1280px; margin: 0 auto; padding: 48px clamp(18px, 3.2vw, 44px) 80px; }
+
+  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+  h1 { font-family: var(--display); font-size: 33px; line-height: 1.18; letter-spacing: -0.01em; font-weight: 600; margin: 10px 0 6px; }
+  .lede { color: var(--dim); font-size: 16px; margin: 0 0 22px; }
+  .meta { font-family: var(--mono); font-size: 11.5px; color: var(--faint); line-height: 1.9; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); padding: 10px 0; margin-bottom: 40px; }
+  .meta b { color: var(--dim); font-weight: 400; }
+
+  h2 { font-family: var(--display); font-size: 21px; font-weight: 600; letter-spacing: -0.005em; margin: 52px 0 4px; padding-top: 18px; border-top: 1px solid var(--hair); }
+  h2 .no { font-family: var(--mono); font-size: 12px; color: var(--accent-ink); letter-spacing: 0.08em; display: block; margin-bottom: 6px; font-weight: 400; }
+  h3 { font-family: var(--display); font-size: 16.5px; font-weight: 600; margin: 28px 0 6px; }
+  h4 { font-family: var(--display); font-size: 14.5px; font-weight: 600; margin: 20px 0 4px; color: var(--dim); }
+  p { margin: 10px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; color: var(--accent-ink); }
+  pre { background: var(--code-bg); border: 1px solid var(--hair-soft); padding: 13px 16px; overflow-x: auto; margin: 12px 0; }
+  pre code { background: none; padding: 0; color: var(--ink); font-size: 12.5px; line-height: 1.6; }
+  .cm { color: var(--faint); }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.5px; }
+  th { text-align: left; font-weight: 600; color: var(--dim); font-size: 11.5px; letter-spacing: 0.08em; padding: 6px 10px; border-bottom: 1px solid var(--hair); }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--hair-soft); vertical-align: top; }
+  td code, th code { white-space: nowrap; }
+  /* 窄视口 (<=1180px): 表格单元格内的长路径允许断行, 换取表格不溢出页面; 宽屏不受影响 */
+  @media (max-width: 1180px) { td code, th code { white-space: normal; overflow-wrap: anywhere; } }
+  .good { color: var(--ok); }
+  .bad { color: var(--no); }
+  .wr { color: var(--warn); }
+  .aside { border-left: 2px solid var(--hair); padding: 2px 0 2px 14px; color: var(--dim); margin: 14px 0; }
+  .tag { font-family: var(--mono); font-size: 11px; color: var(--accent-ink); letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<div class="kicker">PLAN · memory-bank · doc-topic: ptac-fab-skin-edge</div>
+<h1>PTAutoCheckIn FAB 皮肤精简与靠边模式改造（含静息 CPU 修复）</h1>
+<p class="lede">本篇只回答: 怎么把 <code>PTAutoCheckIn.user.js</code> 的 FAB 从四皮肤收敛为三皮肤、新增与皮肤正交的靠边模式，并把已定位的静息 CPU 高占用一并修掉 —— 改哪些点、分几批、怎么验收；不回答每个选择器具体怎么写，也不在本篇实施。</p>
+<div class="meta">
+  <b>doc-added</b> 26-11-24-1409 · <b>doc-updated</b> 26-11-24-1409 · <b>doc-status</b> Open · <b>载体</b> 单文件 HTML(dark)<br>
+  <b>来源</b> 用户指令「趁此机会改造脚本 UI：移除数字/光环皮肤、添加隐藏动效按钮、添加靠边模式（静态竖线/颜色跟随状态色/移入响应/移出恢复靠边），将修复一并纳入计划，grilling 然后出一个计划」+ 三轮 <code>grilling</code>（Q1–Q12 全拍板，见 §06）+ 上一轮只读根因分析（真凶确认见 §02）；事实取自 <code>src/PTAutoCheckIn.user.js</code> 与 <code>cpu-idle-high-handoff.md</code>（仓库外交接件，只读）。
+</div>
+
+<h2><span class="no">§01</span>目标与设计原则</h2>
+<p><b>目标</b> — 一次改造同时交付三件事：① 皮肤条从 4 选 1 收敛为「变色 / 信号灯 / 静态」3 选 1，删掉数字与光环；② 新增与皮肤正交的「靠边模式」——最小显示为右下角静态竖线、颜色跟随当前状态色、鼠标移入展开为原 FAB、移出恢复靠边；③ 从根上消除上一轮确认的静息态 CPU 高占用（非合成属性 infinite 动画逐帧全链路重绘）。成态判据：默认状态下不操作也不再持续触发 Recalculate Style → Pre-Paint → Paint → Composite 全链路；签到核心逻辑（UNITS / 批量调度 / GM 状态 / 面板交互）行为零漂移。</p>
+<p><b>不变量（硬约束）</b>:</p>
+<ol>
+<li><b>本轮零实施</b> — 本篇是计划；不改代码、不入池 issue、不认领、不 commit/push。实施须用户逐项授权（新建文件 / 入池 / 认领 / commit 四类动作分别确认）。</li>
+<li><b>核心逻辑零改动</b> — 签到、批量、冷却、重试、favicon、状态判定、后台页不注入 UI 等一律不碰；改动面只在 UI_CSS 的 FAB/皮肤条段、FAB 构建/皮肤应用/渲染段、GM 键表与新增开关处理。</li>
+<li><b>用户拍板为准</b> — §06 的 D1–D12 是决策单点；实施中若出现未覆盖的歧义，回到用户拍板，不自行假设。</li>
+<li><b>版本与知识库同步</b> — 实施轮每批改任何脚本/元数据必须同批递增脚本头 <code>@version</code>（<code>YYYY.MM.DD.N</code>，跨天重置 N）并回写 <code>memory-bank/</code> 受影响条目（项目铁律 3/4）：<code>scripts/PTAutoCheckIn/fab-ui.md</code>、<code>overview.md</code>、坑档 P17（皮肤语义）、<code>conventions/known-issues.md</code>；本批只写方案文档，无脚本改动故不触发。</li>
+<li><b>测试护栏保持</b> — <code>test.full</code> 全绿；新增静态断言与仿真用例随实现同批落地，测试基线数字只写 <code>testing/baselines/</code> 新切片。</li>
+</ol>
+<p><b>取舍口径</b>（源自 grilling）：性能修复不等同于「加开关让用户自己关」——长期装机脚本必须默认无感修复，开关是显式兜底而非责任转嫁；靠边与皮肤正交，因此竖线颜色直接复用当前皮肤的状态色语义，不另立规则。</p>
+
+<h2><span class="no">§02</span>现状与痛点</h2>
+<p><b>UI 现状</b>（只读实测，行号对应 <code>src/PTAutoCheckIn.user.js</code> @version 2026.11.19.3）：</p>
+<ul>
+<li>FAB 为 <code>&lt;button class="fab"&gt;</code>（第 2640–2641 行），挂在 <code>attachShadow({mode:'closed'})</code> 内（第 2634 行）——<b>外部 CSS 无法穿透</b>。交接文档给的 <code>document.head.appendChild(style)</code> 止血法对 closed shadow 无效，这正说明脚本内置开关是必需能力，不是锦上添花。</li>
+<li>皮肤 4 套：<code>chameleon</code>（默认）/ <code>number</code> / <code>signal</code> / <code>ring</code>，存 GM 键 <code>ptac_skin</code>（第 102 行），皮肤条在面板头部「外观」展开（第 2665–2671 行），点击走 <code>setSkin</code>（第 2796–2801 行）。</li>
+<li><code>applyFabSkin</code>（第 2805–2878 行）按 skin 分支改 class / innerHTML / 角标；<code>default</code> 分支即变色（第 2867–2872 行），天然兜底未知 skin 值。</li>
+</ul>
+<p><b>CPU 根因（上一轮已确认，本篇据此修）</b>:</p>
+<table>
+<tr><th>证据</th><th>实测结论</th></tr>
+<tr><td>交接件 Performance 火焰图</td><td>层根元素 <code>button.fab.chameleon</code>，约 8ms 一拍，链路「画图 → 分层 → 提交 → 计划样式重新计算 → 重新计算样式 → 预绘制」——含 Recalculate Style，说明是逐帧改<b>非合成属性</b>，不是纯 transform/opacity 合成层动画</td></tr>
+<tr><td><code>baseGlow</code> / <code>stateGlow</code>（第 2214–2217、2235–2238 行）</td><td><code>infinite</code> 动画改 <code>box-shadow</code>，每帧 Paint</td></tr>
+<tr><td><code>chameleonWave</code>（第 2247–2253 行）</td><td><code>infinite</code> 动画改 <code>transform + border-radius</code>，其中 border-radius 非合成 → 每帧 Recalculate Style + Pre-Paint；变色皮肤同时挂两条动画（第 2243–2244 行）</td></tr>
+<tr><td>定时器扫描（全文）</td><td>所有 <code>setInterval</code> 为 200ms/1000ms（第 1862、2996 行），唯一 <code>setTimeout</code> 最短 200ms；<b>无 8–16ms 定时器、无 requestAnimationFrame、无写样式的 MutationObserver 回环</b>——排除交接文档的定时器猜测</td></tr>
+<tr><td>交叉排除（交接件）</td><td>关闭 <code>ptskit-farm-helper</code> 与屏蔽统计脚本后 CPU 仍高；本脚本 <code>@match *://*.ptskit.org/*</code>（第 39 行）正好覆盖拾刻农场页，是注入该页的外来 FAB</td></tr>
+</table>
+<p class="aside">8ms 更可能是高刷屏帧节奏或两个不同周期动画（3.6s + 3.2s）错相叠加的采样间隔，不是人为定时器；不影响定性——元凶是 infinite 非合成属性动画本身。</p>
+
+<h2><span class="no">§03</span>方案总览</h2>
+<p><b>主线一句话</b> — 把 FAB 的动效从「JS 改非合成属性」的旧写法整体换成合成器友好写法（辉光走 opacity 伪元素、形变只留 transform），同时把皮肤条收敛为 3 项并把「靠边」作为正交开关塞进同一条皮肤条，用一个新 GM 键 <code>ptac_edge</code> 跨站记住靠边态。</p>
+<table>
+<tr><th>批次</th><th>内容</th><th>对应拍板</th><th>验收法</th></tr>
+<tr><td><b>A · 性能修复</b></td><td>A1 <code>baseGlow</code>/<code>stateGlow</code> 改为预渲染光晕伪元素 + 只动 <code>opacity</code>；A2 <code>chameleonWave</code> 去掉 <code>border-radius</code> 波动、只留 <code>transform</code>；A3 随数字/光环删除同步清掉 <code>numPulse</code>/<code>ringBreathe</code>/<code>rayPulse</code> 与射线 DOM 生成</td><td>D1 · D12</td><td>静态检查断言无 infinite 动画改 box-shadow / border-radius / filter；Performance 录 5s 静息，Recalculate Style 事件不再按帧出现</td></tr>
+<tr><td><b>B · 皮肤精简</b></td><td>B1 皮肤条删 number/ring 按钮，新增「静态」按钮（<code>data-skin="static"</code>）；B2 <code>applyFabSkin</code> 增 <code>static</code> 分支 = 变色语义 + 禁全部动画；B3 老用户 <code>ptac_skin=number|ring</code> 走 default 静默回退变色</td><td>D2 · D4 · D5</td><td>皮肤条恰 3 个单选钮；静态皮肤下状态色/角标与变色一致；注 number/ring 值后渲染为变色</td></tr>
+<tr><td><b>C · 靠边模式</b></td><td>C1 皮肤条内加独立布尔开关（<code>data-edge</code>，非 data-skin）；C2 存 <code>ptac_edge</code> GM 跨站；C3 竖线 CSS + hover/focus 展开 + 双锚点形变；C4 触屏两段式、批量/面板/键盘焦点边界</td><td>D3 · D6–D11</td><td>仿真：竖线态 → hover 展开 → 点开面板保持展开 → 关闭面板移出缩回；批量中不缩回；触屏点击先展开</td></tr>
+<tr><td><b>D · 验收与回写</b></td><td>D1 <code>test.full</code> 全绿 + 新基线切片；D2 分批评审；D3 回写 memory-bank 受影响条目 + 切片/档案收尾</td><td>全部</td><td>见 §04 D 批验收判据；数字只进基线切片</td></tr>
+</table>
+<p><b>落点清单</b>（实施时逐项对照，不扩大范围）：<code>src/PTAutoCheckIn.user.js</code> 的 K 键表（第 98–108 行）、UI_CSS 的 FAB/皮肤段（第 2204–2337 行）、面板皮肤条 HTML（第 2665–2671 行）、元素引用与事件绑定（第 2563、2696–2701 行）、<code>setSkin</code>（第 2796–2801 行）、<code>applyFabSkin</code>（第 2805–2878 行）、<code>openPanel</code>/<code>closePanel</code>（第 3039–3062 行）；测试在 <code>tests/ptautocheckin/</code> 新增静态与仿真用例。</p>
+
+<h2><span class="no">§04</span>实施步骤</h2>
+<table>
+<tr><th>步</th><th>内容</th><th>验收判据</th></tr>
+<tr><td>A1</td><td>把 <code>baseGlow</code>/<code>stateGlow</code> 的 box-shadow 呼吸改为「固定光晕伪元素 + <code>@keyframes</code> 只动 <code>opacity</code>」；保留原状态色语义与视觉幅度</td><td>grep 断言两个 keyframes 块内无 <code>box-shadow</code>；默认皮肤静息录屏仍见辉光呼吸</td></tr>
+<tr><td>A2</td><td><code>chameleonWave</code> 去掉全部 <code>border-radius</code> 关键帧，只留 <code>translateY</code>/<code>scale</code>（合成属性）</td><td>keyframes 内无 <code>border-radius</code>；Performance 静息不再逐帧 Recalculate Style</td></tr>
+<tr><td>A3</td><td>随 B 批删 number/ring，同步清 <code>numPulse</code>/<code>ringBreathe</code>/<code>rayPulse</code> CSS、<code>.ring-rays</code> 生成与移除逻辑、<code>--ring-grad</code> 设置</td><td>grep 无 <code>numPulse|ringBreathe|rayPulse|ring-rays|ring-grad</code> 残留；<code>test.full</code> 绿</td></tr>
+<tr><td>B1</td><td>皮肤条按钮改为 3 个：<code>chameleon</code> / <code>signal</code> / <code>static</code>，移除另两个按钮及说明</td><td>静态断言 <code>.skin-btn</code> 数为 3、data-skin 集合精确匹配</td></tr>
+<tr><td>B2</td><td><code>applyFabSkin</code> 增 <code>case 'static'</code>：走变色语义（紫/绿 + 剩余角标），并给 fab 加 <code>.static</code> 类使所有 animation 为 none</td><td>仿真三态：全完成绿✓ / 有未签紫✓+红角标 / 切换后无动画；状态色与变色皮肤逐态一致</td></tr>
+<tr><td>B3</td><td>保持 <code>default</code> 分支兜底；<code>applyFabSkin</code> 入口对 legacy skin 值（<code>number</code>/<code>ring</code>）做<b>内存归一</b>：局部显示用 skin 视为 <code>chameleon</code>（GM 存储值原样保留、不回写），使渲染与皮肤条高亮一致；不写 GM 迁移持久化代码</td><td>仿真注入 <code>ptac_skin=number</code> 与 <code>ring</code>，均渲染为变色且 active 高亮落在变色钮；GM 值仍为原 legacy 串（不回写）</td></tr>
+<tr><td>C1</td><td>皮肤条内加 <code>&lt;button data-edge&gt;</code> 布尔开关（文案「靠边/展开」），与 3 个单选钮视觉分隔；点击切 <code>ptac_edge</code> 并即时应用</td><td>开关不参与 data-skin 单选；切换不重置皮肤；GM 值可在任意匹配站读到</td></tr>
+<tr><td>C2</td><td>新增 GM 键 <code>edge: 'ptac_edge'</code>；初始化时 <code>gmGet(K.edge, false)</code>，靠边态给 fab 加 <code>.edge</code></td><td>跨站仿真：A 站开靠边 → B 站加载即竖线态</td></tr>
+<tr><td>C3</td><td>竖线 CSS：<code>right:20px; bottom:20px; width:4px; height:120px</code> 向上延伸、颜色取当前状态色、不带数字；透明命中区扩至约 24px；hover/focus-within 时就地向左侧展开为原 52px 圆钮，right/bottom 双锚点不变</td><td>几何断言四值与现状 FAB 对齐；hover 展开前后 fab 的 right/bottom 计算值不变（不跳位）；竖线态无角标数字</td></tr>
+<tr><td>C4</td><td>状态机：面板打开期间保持展开；关闭面板且鼠标移出才缩回；<code>batchActive()</code> 期间不缩回；触屏点击竖线先展开（不直接开面板）再点开面板；键盘焦点落入竖线也展开</td><td>仿真六场景逐一通过；面板定位（<code>bottom:84px</code>）在竖线态不漂移；失焦自动关闭仍生效</td></tr>
+<tr><td>D1</td><td><code>commands run test.full</code> 全量；按实测数字新建基线切片</td><td>全绿(见 kb.baseline)；新切片数字与实测逐位一致</td></tr>
+<tr><td>D2</td><td>按 code-review skill ① 判定并派只读评审；blocker 修完；接缝终审</td><td>结论进进度日志；提交信息带 <code>Review:</code> trailer（提交轮）</td></tr>
+<tr><td>D3</td><td>回写 <code>fab-ui.md</code>/<code>overview.md</code>/P17/<code>known-issues.md</code>；<code>kb.wrap</code> 收尾（切片 + 档案按阈值）；新坑按动作写坑档并重跑 <code>kb.index</code></td><td><code>kb.check</code> / <code>doc.caps</code> / <code>doc.links</code> / <code>doc.drift</code> 全绿</td></tr>
+</table>
+<p class="aside">实施授权提示：以上 A/B/C/D 四批对应 4 个逻辑改动，按项目铁律应拆独立提交、每批自包含可回溯；版本号每批同批递增。本计划件不预设任何提交动作。</p>
+
+<h2><span class="no">§05</span>待拍板清单</h2>
+<p><b>无待拍板项</b> — 三轮 grilling 已把设计树走空，Q1–Q12 全部拍板并固化在 §06；实施轮若出现未覆盖的歧义，按 §01 不变量 3 回到用户，不自行假设。</p>
+
+<h2><span class="no">§06</span>拍板记录</h2>
+<table>
+<tr><th>编号</th><th>问题</th><th>结论</th><th>取舍理由</th></tr>
+<tr><td>D1 / Q1</td><td>CPU 修复如何生效</td><td class="good">改动画本身 + 提供开关</td><td>默认无感修复；开关是兜底而非把责任转嫁给用户去点</td></tr>
+<tr><td>D2 / Q2</td><td>隐藏动效按钮位置</td><td class="wr">皮肤条内选项（否决头部钮推荐）</td><td>用户偏好把所有 UI 开关集中在皮肤条；静态作为皮肤项表达</td></tr>
+<tr><td>D3 / Q3</td><td>靠边与皮肤关系</td><td class="good">正交独立开关</td><td>竖线自然跟随当前皮肤状态色，不另立语义</td></tr>
+<tr><td>D4 / Q4</td><td>老 skin 值迁移</td><td class="good">静默回退变色</td><td>default 分支兜底渲染；legacy 值在内存归一为变色以保证皮肤条高亮一致，GM 存储值原样保留、不写迁移持久化代码（见 B3）</td></tr>
+<tr><td>D5 / Q5</td><td>静态皮肤语义</td><td class="good">变色静态版</td><td>去 infinite 动画但保留紫/绿状态色与角标</td></tr>
+<tr><td>D6 / Q6</td><td>竖线位置</td><td class="wr">右下角竖线、与现有 UI 水平位置（否决右侧居中推荐）</td><td>沿用 FAB 原 right/bottom 锚点，展开缩回不跳位</td></tr>
+<tr><td>D7 / Q7</td><td>hover 响应</td><td class="good">透明命中区 + 展开成完整 52px FAB + 面板打开保持展开</td><td>复用现有开面板/角标逻辑，改动最小</td></tr>
+<tr><td>D8 / Q8</td><td>触屏/批量边界</td><td class="good">触屏两段式、批量/键盘焦点保持展开</td><td>覆盖无 hover 场景，批量进度不被 UI 收缩干扰</td></tr>
+<tr><td>D9 / Q9</td><td>靠边开关入口</td><td class="wr">皮肤条内开关项（否决头部钮推荐）</td><td>与 D2 同向：开关集中在皮肤条；用独立 data-edge 布尔项避免混淆单选</td></tr>
+<tr><td>D10 / Q10</td><td>竖线锚点尺寸</td><td class="good">right:20 bottom:20，4×120 向上，向左侧展开</td><td>双锚点与 FAB 一致，竖线最小显示不带数字</td></tr>
+<tr><td>D11 / Q11</td><td>靠边持久化</td><td class="good">新 GM 键 ptac_edge 跨站生效</td><td>与皮肤一致，设一次全站保持</td></tr>
+<tr><td>D12 / Q12</td><td>动画改造边界</td><td class="good">换合成属性写法、保留轻微动感</td><td>变色皮肤仍有呼吸但走合成器；静态皮肤=全静止，两者有区分度</td></tr>
+</table>
+<p class="aside">拍板日期均为 2026-11-24（三轮 grilling 同日完成）。标 <span class="wr">琥珀</span> 的两项为用户否决 AI 推荐、改选备选，实施时以用户结论为准。</p>
+
+<h2><span class="no">§07</span>风险与对策</h2>
+<table>
+<tr><th>风险</th><th>触发条件</th><th>处置</th></tr>
+<tr><td>hover 抖动 / 反复展开缩回</td><td>展开区域与 24px 命中区边界重叠，鼠标停在临界点时状态翻转</td><td>展开态保持到「面板关闭 且 指针离开命中区」，命中区用伪元素外向扩展而非缩小本体；仿真加入临界点连续移动用例</td></tr>
+<tr><td>面板定位漂移</td><td>竖线态把 fab 宽改成 4px，面板 <code>bottom:84px</code> 以 fab 高度为参照</td><td>面板定位改为不依赖 fab 当前尺寸的固定值（保持现状 84px）；C4 验收断言竖线态面板位置不变</td></tr>
+<tr><td>皮肤条拥挤</td><td>3 个单选钮 + 1 个开关塞进原皮肤条，窄面板下换行</td><td>皮肤条已有 <code>flex-wrap:wrap</code>（第 2381 行）；开关项与单选钮间加细分隔，允许折行但不遮挡列表</td></tr>
+<tr><td>关闭 shadow 导致验证盲区</td><td>页面脚本与 CDP 拿不到 closed shadow 内元素，现仿真靠 <code>elementFromPoint</code> 的 shadow 重定向</td><td>新用例沿用同法（见 <code>fab-ui.md</code> 校准项 23）；不为此改 open shadow，安全面不动</td></tr>
+<tr><td>静态皮肤与靠边组合的状态色</td><td>静态皮肤禁动画后，竖线颜色是否仍随状态更新</td><td>静态只禁 animation，不改 <code>applyFabSkin</code> 的 class/角标/状态色逻辑；组合态单独仿真一例</td></tr>
+<tr><td>静默回退后 UI 无提示</td><td>老用户 skin=number/ring，升级后皮肤变了却不知道原因</td><td>按 D4 接受静默；在文档与测试钉死行为，不加迁移提示代码</td></tr>
+<tr><td>批量进行中状态被靠边态遮蔽</td><td>用户开着靠边模式启动批量，进度芯片与 FAB 分离</td><td>C4 规定批量期间不缩回；chip 定位独立不随 fab 变形，仿真批量场景单独验证</td></tr>
+</table>
+
+<h2><span class="no">§10</span>变更记录</h2>
+<ul>
+  <li><span class="tag">R0 · 26-11-24-1409</span> 初版：三轮 grilling（Q1–Q12 全拍板，含两项否决推荐改选备选）+ 上一轮 CPU 根因确认（真凶 = 本脚本变色 FAB 的非合成属性 infinite 动画）落盘；四批实施 A 性能修复 / B 皮肤精简 / C 靠边模式 / D 验收回写，本轮零实施。</li>
+</ul>
+
+</div>
+</body>
+</html>
