@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.24.2
+// @version      2026.11.24.3
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -100,6 +100,7 @@ const K = {
     cooldown: (uid) => `ptac_cooldown_${uid}`, // 上次触发时间戳(ms)
     favicon: (uid) => `ptac_favicon_${uid}`,   // 路过收集的站点真实 icon URL(面板列表图标用)
     skin: 'ptac_skin',                          // FAB 外观皮肤: chameleon|signal|static(legacy number|ring 内存归一为变色)
+    edge: 'ptac_edge',                          // FAB 靠边模式(与皮肤正交的布尔开关): true=右下角静态竖线, false=完整圆钮; 跨站生效
     task: 'ptac_task',                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
     alert: (uid) => `ptac_alert_${uid}`,       // 签到按钮重现提醒 {date, btnText, ts, state:'on'|'off'}(见 P25)
     retryLock: (uid) => `ptac_retry_${uid}`,   // 单站前台重试一次性锁(时间戳 ms): 防同站重试页/落地页并发强点(30s 窗口)
@@ -2265,6 +2266,36 @@ const K = {
         /* FAB 皮肤: 静态(static) — 变色语义的静态版, 保留紫/绿状态色与角标, 关停本体与辉光伪元素的全部动画 */
         .fab.static { animation: none !important; }
         .fab.static::after { animation: none !important; }
+        /* 靠边模式(C1/C2/C3, 正交于皮肤): 右下角静态竖线; 右/底双锚点恒为 20px,
+           只收窄宽高向左上生长, 展开回 52px 时锚点计算值不变(不跳位).
+           颜色直接沿用状态 class 的渐变底与 --glow 辉光语义, 不另立色规则;
+           竖线态禁掉本体形变(chameleonWave 仅改 transform), 避免 4px 细线被逐帧晃动. */
+        .fab.edge {
+            right: 20px; bottom: 20px; width: 4px; height: 120px; border-radius: 2px;
+            animation: none !important;
+            transition: width 0.18s ease, height 0.18s ease, border-radius 0.18s ease,
+                        transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        /* 透明命中区: ::after 已用于辉光, ::before 空闲(ring 的旧 ::before 已在 W2 删除);
+           向左外扩 20px 加本体 4px 约 24px, 上下各留 10px, 覆盖整条竖线. */
+        .fab.edge::before {
+            content: ''; position: absolute; left: -20px; top: -10px;
+            width: 24px; height: 140px;
+        }
+        /* 竖线态只留色条: 图标与角标数字隐藏, 展开态恢复 */
+        .fab.edge .fab-core, .fab.edge .fab-badge {
+            opacity: 0; visibility: hidden; transition: opacity 0.15s ease;
+        }
+        /* hover / 键盘聚焦: 就地把宽高恢复到原 52px 圆钮, right/bottom 不改.
+           同时抵消 .fab:hover 的 translateY/scale, 保证展开前后实测几何严格一致(不跳位);
+           悬停反馈由 .fab.chameleon:hover 的 filter 亮度承担. */
+        .fab.edge:hover, .fab.edge:focus-within {
+            width: 52px; height: 52px; border-radius: 50%; transform: none;
+        }
+        .fab.edge:hover .fab-core, .fab.edge:focus-within .fab-core,
+        .fab.edge:hover .fab-badge, .fab.edge:focus-within .fab-badge {
+            opacity: 1; visibility: visible;
+        }
         /* FAB 皮肤: 感叹号主显示(信号灯失败态) — 白字辉光 */
         .fab-core { display: flex; align-items: center; justify-content: center; }
         .fab-core .mark { font-size: 21px; font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
@@ -2322,6 +2353,15 @@ const K = {
         }
         .skin-btn:hover { border-color: var(--accent-1); }
         .skin-btn.active { border-color: var(--accent-1); background: rgba(91, 108, 255, 0.12); color: var(--accent-1); font-weight: 600; }
+        /* 靠边开关: 与 3 个 data-skin 单选钮视觉分隔, 用独立类而非 .skin-btn(避免被单选数组收编) */
+        .skin-bar .edge-sep { width: 1px; height: 18px; background: var(--border); margin-left: 6px; }
+        .edge-btn {
+            border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
+            cursor: pointer; border-radius: 999px; padding: 3px 10px;
+            font-size: 11px; font-family: var(--font);
+        }
+        .edge-btn:hover { border-color: var(--accent-1); color: var(--text); }
+        .edge-btn[aria-pressed="true"] { border-color: var(--accent-1); background: rgba(91, 108, 255, 0.12); color: var(--accent-1); font-weight: 600; }
         .skin-dot {
             width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
             display: inline-flex; align-items: center; justify-content: center;
@@ -2492,13 +2532,14 @@ const K = {
     `;
 
     const UI = (function () {
-        let host = null, fab, fabCore, fabBadge, chip, chipText, panel, summaryEl, bannerEl, barEl, barTextEl, listEl, btnBatch, forceToggle, forcePop, btnForce, btnSkin, skinBtns;
+        let host = null, fab, fabCore, fabBadge, chip, chipText, panel, summaryEl, bannerEl, barEl, barTextEl, listEl, btnBatch, forceToggle, forcePop, btnForce, btnSkin, skinBtns, edgeBtn;
         let cancelObj = null;
         let batchBase = '';
         let doneOpen = false; // 「已签到」折叠区展开态: 默认折叠; 仅本次页面内存, 不落盘
         let toastEl = null, toastTimer = null;
         let lastRetryAt = 0; // 单站重试发起时间戳: 8s 内同页防连点(焦点已切新标签, 防切回误触)
         let skin = 'chameleon'; // FAB 皮肤: 变色龙(chameleon)|信号灯(signal)|静态(static); legacy number/ring 渲染时归一为变色
+        let edge = false; // FAB 靠边模式(与皮肤正交): true=静态竖线; 不参与皮肤单选, 切皮肤不重置
 
         const SVG_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.26"/></svg>';
 
@@ -2576,6 +2617,9 @@ const K = {
             fabCore = fab.querySelector('.fab-core');
             fabBadge = fab.querySelector('.fab-badge');
             skin = gmGet(K.skin, 'chameleon');
+            // 靠边态跨站持久: 与皮肤正交, 启动时按 GM 值给 FAB 加 .edge(渲染会保留此类)
+            edge = gmGet(K.edge, false);
+            if (edge) fab.classList.add('edge');
 
             // 批量状态条(芯片)
             chip = document.createElement('div');
@@ -2599,6 +2643,8 @@ const K = {
                     <button class="skin-btn" type="button" data-skin="chameleon" title="变色(默认): 全部完成→绿底✓无角标; 有站点未签→紫底✓ + 红底剩余数角标"><span class="skin-dot d1"></span>变色</button>
                     <button class="skin-btn" type="button" data-skin="signal" title="信号灯: 全部完成→绿底✓; 今日有失败→红底! + 失败数角标; 仅未完成→琥珀底✓ + 剩余数角标"><span class="skin-dot d3"></span>信号灯</button>
                     <button class="skin-btn" type="button" data-skin="static" title="静态: 变色静态版, 保留紫/绿状态色与剩余角标, 但关闭全部动画"><span class="skin-dot d5"></span>静态</button>
+                    <span class="edge-sep"></span>
+                    <button class="edge-btn" type="button" data-edge aria-pressed="false" title="靠边模式(与皮肤正交): 开=FAB 收成右下角静态竖线, 颜色跟随当前状态色, 移入或聚焦就地展开; 关=完整圆钮"><span class="edge-label">展开</span></button>
                 </div>
                 <div class="banner"></div>
                 <div class="batchbar"><span class="batchbar-text"></span><button class="stop">停止</button></div>
@@ -2626,10 +2672,17 @@ const K = {
             btnForce = panel.querySelector('.btn-force');
             btnSkin = panel.querySelector('.btn-skin');
             skinBtns = Array.prototype.slice.call(panel.querySelectorAll('.skin-btn'));
+            // 靠边开关独立取用: 该按钮绝不带 .skin-btn 类, 不会被上面的 skinBtns 收编;
+            // 若误带, 点击会走 setSkin(b.dataset.skin) 并传入 undefined, 皮肤被清空.
+            edgeBtn = panel.querySelector('.edge-btn');
+            // 初始化/刷新/跨站恢复: 按 GM 读回的 edge 同步按钮 UI; 只读恢复, 不写回存储
+            syncEdgeButton();
             panel.querySelector('.panel-close').addEventListener('click', () => closePanel());
             barEl.querySelector('.stop').addEventListener('click', requestCancel);
             btnSkin.addEventListener('click', () => panel.classList.toggle('skin-open'));
             skinBtns.forEach((b) => b.addEventListener('click', () => setSkin(b.dataset.skin)));
+            // 独立监听: 只切正交的 edge 状态并持久化, 不调用 setSkin / render, 皮肤不受影响
+            edgeBtn.addEventListener('click', () => setEdge(!edge));
             btnBatch.addEventListener('click', () => startBatch(false));
             forceToggle.addEventListener('click', () => {
                 if (batchActive()) return;
@@ -2729,6 +2782,20 @@ const K = {
             gmSet(K.skin, id);
             panel.classList.remove('skin-open');
             render();
+        }
+
+        // 把当前 edge 状态同步到开关按钮 UI(aria-pressed 与文案); 初始化恢复与点击切换共用同一份语义
+        function syncEdgeButton() {
+            edgeBtn.setAttribute('aria-pressed', edge ? 'true' : 'false');
+            edgeBtn.querySelector('.edge-label').textContent = edge ? '靠边' : '展开';
+        }
+
+        // 切换 FAB 靠边模式(正交开关: 与皮肤单选无关, 不触发 render, 皮肤高亮与 GM 值都不动)
+        function setEdge(on) {
+            edge = !!on;
+            fab.classList.toggle('edge', edge);
+            gmSet(K.edge, edge);
+            syncEdgeButton();
         }
 
         // 按当前皮肤与今日汇总刷新 FAB(c: countToday 结果; alertN: 按钮重现提醒站数)
