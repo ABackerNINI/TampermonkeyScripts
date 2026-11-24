@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.19.3
+// @version      2026.11.24.1
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -2207,13 +2207,21 @@ const K = {
             background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
             color: #fff; display: flex; align-items: center; justify-content: center;
             box-shadow: var(--shadow);
-            animation: baseGlow 3.2s ease-in-out infinite; /* 基础紫柔光呼吸(默认态, 所有皮肤共用) */
             transition: transform 0.15s ease, box-shadow 0.15s ease;
             font-family: var(--font); padding: 0;
         }
+        /* 预渲染光晕伪元素: 呼吸从改 box-shadow(非合成属性, 逐帧触发 Recalculate Style + Pre-Paint + Paint)
+           改为只动 opacity(合成属性); 紫色辉光常驻 ::after, 3.2s 明暗呼吸; ring 皮肤占用 ::before
+           且自带弱辉光与射线光效, 用 :not(.ring) 排除以免叠加 */
+        .fab:not(.ring)::after {
+            content: ''; position: absolute; inset: 0; border-radius: inherit;
+            box-shadow: 0 0 14px rgba(139, 92, 246, 0.45);
+            animation: baseGlow 3.2s ease-in-out infinite;
+            pointer-events: none;
+        }
         @keyframes baseGlow {
-            0%, 100% { box-shadow: var(--shadow), 0 0 5px rgba(139, 92, 246, 0.22); }
-            50% { box-shadow: var(--shadow), 0 0 14px rgba(139, 92, 246, 0.45); }
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
         }
         .fab:hover { transform: translateY(-2px) scale(1.04); }
         .fab:active { transform: scale(0.96); }
@@ -2231,25 +2239,29 @@ const K = {
         .fab.ok { background: linear-gradient(135deg, #22c55e, #15803d); --glow: rgba(74, 222, 128, 0.55); }
         .fab.warn { background: linear-gradient(135deg, #fbbf24, #d97706); --glow: rgba(251, 191, 36, 0.5); }
         .fab.err { background: linear-gradient(135deg, #f87171, #dc2626); --glow: rgba(248, 113, 113, 0.6); }
-        .fab.ok, .fab.warn, .fab.err { animation: stateGlow 2.4s ease-in-out infinite; }
-        @keyframes stateGlow {
-            0%, 100% { box-shadow: var(--shadow), 0 0 6px var(--glow, transparent), 0 0 2px var(--glow, transparent); }
-            50% { box-shadow: var(--shadow), 0 0 22px var(--glow, transparent), 0 0 8px var(--glow, transparent); }
+        /* 状态辉光: 沿用 ::after 预渲染, 双层同色辉光常驻, 2.4s 呼吸只动 opacity; --glow 语义不变 */
+        .fab.ok:not(.ring)::after, .fab.warn:not(.ring)::after, .fab.err:not(.ring)::after {
+            box-shadow: 0 0 22px var(--glow, transparent), 0 0 8px var(--glow, transparent);
+            animation: stateGlow 2.4s ease-in-out infinite;
         }
-        /* FAB 皮肤: 变色(chameleon) — 悬浮图标整体波纹荡漾:
-           本体周期性做轻微 scale 拉伸 + 上下浮动 + 圆角波浪起伏(transform/border-radius),
-           按钮连同图标整体如水波荡漾; 动画占用 transform, hover/active 的位移缩放互斥 → 改用 filter 亮度反馈;
-           辉光叠加: 未完成(紫底)→ baseGlow, 完成(.ok)→ stateGlow */
-        .fab.chameleon { animation: chameleonWave 3.6s ease-in-out infinite, baseGlow 3.2s ease-in-out infinite; }
-        .fab.chameleon.ok { animation: chameleonWave 3.6s ease-in-out infinite, stateGlow 2.4s ease-in-out infinite; }
+        @keyframes stateGlow {
+            0%, 100% { opacity: 0.35; }
+            50% { opacity: 1; }
+        }
+        /* FAB 皮肤: 变色(chameleon), 悬浮图标整体波纹荡漾:
+           本体周期性做轻微 scale 拉伸 + 上下浮动(仅 transform 合成属性), 按钮连同图标整体如水波荡漾;
+           动画占用 transform, hover/active 的位移缩放互斥, 改用 filter 亮度反馈;
+           辉光叠加: 未完成(紫底)走 baseGlow, 完成(.ok)走 stateGlow, 均由 ::after 承载 */
+        .fab.chameleon { animation: chameleonWave 3.6s ease-in-out infinite; }
+        .fab.chameleon.ok { animation: chameleonWave 3.6s ease-in-out infinite; }
         .fab.chameleon:hover { filter: brightness(1.12); }
         .fab.chameleon:active { filter: brightness(0.9); }
         @keyframes chameleonWave {
-            0%, 100% { transform: translateY(0) scale(1, 1); border-radius: 50%; }
-            12.5% { transform: translateY(-1.5px) scale(1.02, 0.98); border-radius: 49% 51% 54% 46% / 53% 47% 46% 54%; }
-            37.5% { transform: translateY(1px) scale(0.985, 1.02); border-radius: 52% 48% 45% 55% / 47% 53% 56% 44%; }
-            62.5% { transform: translateY(1.8px) scale(1.02, 0.985); border-radius: 46% 54% 52% 48% / 56% 44% 47% 53%; }
-            87.5% { transform: translateY(-1px) scale(0.99, 1.015); border-radius: 53% 47% 47% 53% / 45% 55% 54% 46%; }
+            0%, 100% { transform: translateY(0) scale(1, 1); }
+            12.5% { transform: translateY(-1.5px) scale(1.02, 0.98); }
+            37.5% { transform: translateY(1px) scale(0.985, 1.02); }
+            62.5% { transform: translateY(1.8px) scale(1.02, 0.985); }
+            87.5% { transform: translateY(-1px) scale(0.99, 1.015); }
         }
         /* FAB 皮肤: 数字/感叹号主显示(图标换脸/信号灯) — 白字辉光 + 轻微脉冲 */
         .fab-core { display: flex; align-items: center; justify-content: center; }
