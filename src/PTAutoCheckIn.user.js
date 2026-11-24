@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.24.1
+// @version      2026.11.24.2
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -99,7 +99,7 @@ const K = {
     status: (uid) => `ptac_status_${uid}`,     // {date:'YYYY-MM-DD', status:'success|failed|pending|skipped|suspect|unconfirmed', msg, ts}
     cooldown: (uid) => `ptac_cooldown_${uid}`, // 上次触发时间戳(ms)
     favicon: (uid) => `ptac_favicon_${uid}`,   // 路过收集的站点真实 icon URL(面板列表图标用)
-    skin: 'ptac_skin',                          // FAB 外观皮肤: chameleon|number|signal|ring
+    skin: 'ptac_skin',                          // FAB 外观皮肤: chameleon|signal|static(legacy number|ring 内存归一为变色)
     task: 'ptac_task',                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
     alert: (uid) => `ptac_alert_${uid}`,       // 签到按钮重现提醒 {date, btnText, ts, state:'on'|'off'}(见 P25)
     retryLock: (uid) => `ptac_retry_${uid}`,   // 单站前台重试一次性锁(时间戳 ms): 防同站重试页/落地页并发强点(30s 窗口)
@@ -2211,9 +2211,8 @@ const K = {
             font-family: var(--font); padding: 0;
         }
         /* 预渲染光晕伪元素: 呼吸从改 box-shadow(非合成属性, 逐帧触发 Recalculate Style + Pre-Paint + Paint)
-           改为只动 opacity(合成属性); 紫色辉光常驻 ::after, 3.2s 明暗呼吸; ring 皮肤占用 ::before
-           且自带弱辉光与射线光效, 用 :not(.ring) 排除以免叠加 */
-        .fab:not(.ring)::after {
+           改为只动 opacity(合成属性); 紫色辉光常驻 ::after, 3.2s 明暗呼吸; 静态皮肤用 .static 整体关停 */
+        .fab::after {
             content: ''; position: absolute; inset: 0; border-radius: inherit;
             box-shadow: 0 0 14px rgba(139, 92, 246, 0.45);
             animation: baseGlow 3.2s ease-in-out infinite;
@@ -2240,7 +2239,7 @@ const K = {
         .fab.warn { background: linear-gradient(135deg, #fbbf24, #d97706); --glow: rgba(251, 191, 36, 0.5); }
         .fab.err { background: linear-gradient(135deg, #f87171, #dc2626); --glow: rgba(248, 113, 113, 0.6); }
         /* 状态辉光: 沿用 ::after 预渲染, 双层同色辉光常驻, 2.4s 呼吸只动 opacity; --glow 语义不变 */
-        .fab.ok:not(.ring)::after, .fab.warn:not(.ring)::after, .fab.err:not(.ring)::after {
+        .fab.ok::after, .fab.warn::after, .fab.err::after {
             box-shadow: 0 0 22px var(--glow, transparent), 0 0 8px var(--glow, transparent);
             animation: stateGlow 2.4s ease-in-out infinite;
         }
@@ -2263,90 +2262,12 @@ const K = {
             62.5% { transform: translateY(1.8px) scale(1.02, 0.985); }
             87.5% { transform: translateY(-1px) scale(0.99, 1.015); }
         }
-        /* FAB 皮肤: 数字/感叹号主显示(图标换脸/信号灯) — 白字辉光 + 轻微脉冲 */
+        /* FAB 皮肤: 静态(static) — 变色语义的静态版, 保留紫/绿状态色与角标, 关停本体与辉光伪元素的全部动画 */
+        .fab.static { animation: none !important; }
+        .fab.static::after { animation: none !important; }
+        /* FAB 皮肤: 感叹号主显示(信号灯失败态) — 白字辉光 */
         .fab-core { display: flex; align-items: center; justify-content: center; }
-        .fab-core .num { font-size: 20px; font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.55); animation: numPulse 1.6s ease-in-out infinite; }
-        .fab-core .mark { font-size: 21px; font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.6); animation: numPulse 1.2s ease-in-out infinite; }
-        @keyframes numPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.15); text-shadow: 0 0 16px rgba(255, 255, 255, 0.9); }
-        }
-        /* FAB 皮肤: 进度光环(光环) — 中间圆本体透明, ::before 合成紫罩+彩环:
-           ①紫罩(径向 closest-side, 中心紫实→越边缘越透明, 实盖至圆缘)= 图标底兼"盖光层"
-           (sample.html 中 center-icon 盖住射线根的作用由此承担: 光芒沉在它下层, 根不外穿);
-           ②--ring-grad 全幅 conic 彩(成功绿/失败粉/待办灰段, 段弧长=站数占比)兼作彩带与
-           圆内透出色; 段色 alpha 低(0.34/0.26) → 常亮辉光弱。
-           辉光呼吸 ringBreathe(brightness 明暗 + drop-shadow 外扩收拢, 幅度小不抢戏)。
-           光芒动感 = 完全复刻 sample.html 太阳算法(逐条真实 DOM 射线; 不用 translateY 锚圆缘/
-           不用埋段+mask 挖孔/不用平台渐变——那几轮发挥都被证伪): 每条射线底边锚圆心、
-           rotate 绕圆心指向均分角+随机扰动(±7.5°), 全长 = 圆心到尖端(根部被 ::before 紫罩
-           盖住, 露出=圆缘外的渐变尾段); 渐变 sample 金档 0.9@0 → 0.6@30% → 0.2@70% →
-           0@100%(根亮尖透, 无平台), 顶部半圆帽弧形收窄, filter blur(1px) 羽化; 静态
-           opacity 0, 动画 rayPulse 三帧(sample solarPulse): 0.15 弱/blur2 → 0.9 峰/blur0 →
-           0.3 缓/blur1.5, alternate 往复 + 正 delay 错相 → 逐条呼吸闪烁(峰值锐利、低谷模糊
-           柔化); 主 18 束 + 4 日冕长细束(sample 同款数量, 长/细/慢/更长延迟)。层序:
-           ring-rays z-index:-1 沉到 ::before 之下(根被中心紫罩盖, 光从圆缘外浮出)、
-           fab-core(图标 z1)/fab-badge(z2)最上; 本体 background 透明 + animation:none(关
-           baseGlow) + box-shadow 换柔和紫光晕(透明圆上黑硬投影破坏光感)。中间圆不做波纹
-           (transform 留给 hover/active 反馈)。 */
-        .fab.ring {
-            background: transparent;
-            animation: none; /* 本体透明圆: 必须关掉 .fab 默认 baseGlow(外圈紫晕又强又与呼吸脱节), 辉光全交给 ::before 弱呼吸 + DOM 光芒 */
-            box-shadow: 0 0 14px rgba(139, 92, 246, 0.28), 0 0 42px rgba(139, 92, 246, 0.14); /* 透明圆上硬黑投影换成柔和紫环境光(贴 sample 中心太阳光效) */
-        }
-        .fab.ring .fab-core { position: relative; z-index: 1; }
-        .fab.ring .fab-badge { z-index: 2; }
-        .fab.ring::before { /* 紫罩蒙版(图标底 + 盖光层, 实盖至圆缘 26px 让光芒根不外穿) + 全幅分段彩光(彩带); 呼吸幅度已收敛(辉光勿过强) */
-            content: ''; position: absolute; inset: -13px; border-radius: 50%;
-            background:
-                radial-gradient(circle closest-side at 50% 50%,
-                        var(--accent-2) 0%, var(--accent-1) 42%, transparent 67%),
-                var(--ring-grad, rgba(148, 163, 184, 0.26));
-            -webkit-mask: radial-gradient(farthest-side,
-                    #000 0%, #000 calc(100% - 13px), transparent calc(100% - 5px));
-            mask: radial-gradient(farthest-side,
-                    #000 0%, #000 calc(100% - 13px), transparent calc(100% - 5px));
-            animation: ringBreathe 3.6s ease-in-out infinite;
-            pointer-events: none;
-        }
-        @keyframes ringBreathe { /* 辉光呼吸(弱): blur 重声明防被动画覆盖; 幅度小=呼吸仍在但辉光不刺眼 */
-            0%, 100% { filter: blur(2px) brightness(0.96) drop-shadow(0 0 2px rgba(167, 139, 250, 0.22)); }
-            50% { filter: blur(2px) brightness(1.07) drop-shadow(0 0 9px rgba(167, 139, 250, 0.42)); }
-        }
-        .fab.ring .ring-rays { /* 光芒容器: 仅作定位(射线底边 bottom:50% = fab 中心); 无 mask 无裁剪——
-                                   射线根部由 ::before 紫罩盖住(本容器 z-index:-1 沉于其下), 与 sample.html
-                                   中心图标盖射线根同构; 容器大小不影响显示(射线溢出可见) */
-            position: absolute; inset: -60px; pointer-events: none; z-index: -1;
-        }
-        .fab.ring .ray { /* 单条光芒(完全照 sample.html): 底边锚圆心、rotate(var(--a)) 绕圆心指向角度
-                            (勿加 translateY——rotate 绕 transform-origin=底边中心, 根会全叠圆正上一点
-                            呈折扇); 全长 --h = 圆心到尖端(根部被 ::before 盖住, 露出=圆缘外渐变尾段);
-                            渐变 sample 金档 0.9@0 → 0.6@30% → 0.2@70% → 透明(根亮尖透, 无平台) +
-                            顶部半圆帽弧形收窄 + filter blur(1px) 羽化; 静态 opacity 0(动画 0.15 起),
-                            三帧 rayPulse 呼吸 + 正 delay 错相 */
-            position: absolute; bottom: 50%; left: 50%;
-            transform-origin: bottom center;
-            width: var(--w, 3px); height: var(--h, 100px);
-            margin-left: calc(var(--w, 3px) / -2);
-            background: linear-gradient(to top,
-                    rgba(255, 220, 100, 0.9) 0%,
-                    rgba(255, 180, 50, 0.6) 30%,
-                    rgba(255, 120, 20, 0.2) 70%,
-                    transparent 100%);
-            border-radius: 50% 50% 0 0 / 100% 100% 0 0; /* 顶部半圆帽: 顶边弧形收窄(同 sample.html) */
-            filter: blur(1px);
-            transform: rotate(var(--a, 0deg));
-            opacity: 0;
-            animation: rayPulse var(--d, 2s) ease-in-out var(--del, 0s) infinite alternate;
-            pointer-events: none;
-        }
-        @keyframes rayPulse { /* 光芒呼吸(照 sample.html solarPulse 三帧): 低谷 0.15 弱且 blur2 柔化 →
-                                峰值 0.9 亮且 blur0 锐利 → 0.3 缓且 blur1.5; alternate 往复 + 正 delay
-                                错相 → 逐条闪烁(峰值时射线清晰带尖); 动画覆盖 transform/filter, 须重组 */
-            0% { opacity: 0.15; transform: rotate(var(--a, 0deg)) scaleY(0.6); filter: blur(2px); }
-            50% { opacity: 0.9; transform: rotate(var(--a, 0deg)) scaleY(1.1); filter: blur(0px); }
-            100% { opacity: 0.3; transform: rotate(var(--a, 0deg)) scaleY(0.8); filter: blur(1.5px); }
-        }
+        .fab-core .mark { font-size: 21px; font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
         .chip {
             position: fixed; right: 84px; bottom: 30px; z-index: 2147483000;
             display: none; align-items: center; gap: 8px; max-width: 300px;
@@ -2405,10 +2326,9 @@ const K = {
             width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
             display: inline-flex; align-items: center; justify-content: center;
         }
-        .skin-dot.d1 { background: linear-gradient(135deg, #16a34a, #5b6cff); }       /* 变色: 完成绿/未完紫 */
-        .skin-dot.d2 { background: #5b6cff; }                                          /* 数字: 主体紫 */
+        .skin-dot.d1 { background: linear-gradient(135deg, #16a34a, #5b6cff); } /* 变色: 完成绿/未完紫 */
         .skin-dot.d3 { background: conic-gradient(#16a34a 0 120deg, #d97706 120deg 240deg, #e5484d 240deg); } /* 信号灯三色 */
-        .skin-dot.d4 { background: conic-gradient(#6ee7b7 0 210deg, #fda4af 210deg 270deg, rgba(127, 133, 150, 0.6) 270deg); } /* 光环: 柔和淡绿多段/淡粉/灰示例 */
+        .skin-dot.d5 { background: linear-gradient(135deg, #5b6cff 50%, #16a34a 50%); } /* 静态: 紫绿硬分界, 与变色的渐变区分 */
         .banner {
             display: none; margin: 10px 14px 0; padding: 8px 12px; border-radius: 10px;
             background: rgba(22, 163, 74, 0.12); color: var(--ok); font-weight: 600;
@@ -2578,7 +2498,7 @@ const K = {
         let doneOpen = false; // 「已签到」折叠区展开态: 默认折叠; 仅本次页面内存, 不落盘
         let toastEl = null, toastTimer = null;
         let lastRetryAt = 0; // 单站重试发起时间戳: 8s 内同页防连点(焦点已切新标签, 防切回误触)
-        let skin = 'chameleon'; // FAB 皮肤: 变色龙(chameleon)|图标数字(number)|信号灯(signal)|进度光环(ring)
+        let skin = 'chameleon'; // FAB 皮肤: 变色龙(chameleon)|信号灯(signal)|静态(static); legacy number/ring 渲染时归一为变色
 
         const SVG_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.26"/></svg>';
 
@@ -2677,9 +2597,8 @@ const K = {
                 <div class="skin-bar">
                     <span class="lbl">FAB:</span>
                     <button class="skin-btn" type="button" data-skin="chameleon" title="变色(默认): 全部完成→绿底✓无角标; 有站点未签→紫底✓ + 红底剩余数角标"><span class="skin-dot d1"></span>变色</button>
-                    <button class="skin-btn" type="button" data-skin="number" title="数字: 有未签时 FAB 主体用大字直接显示剩余站数(绿角标=今日成功数); 全部完成→✓"><span class="skin-dot d2"></span>数字</button>
                     <button class="skin-btn" type="button" data-skin="signal" title="信号灯: 全部完成→绿底✓; 今日有失败→红底! + 失败数角标; 仅未完成→琥珀底✓ + 剩余数角标"><span class="skin-dot d3"></span>信号灯</button>
-                    <button class="skin-btn" type="button" data-skin="ring" title="光环: 分段彩光贴圆缘(成功绿/失败粉/待办灰段, 段长=站数占比)+弱辉光呼吸(明暗+光晕外扩收拢), 真实 DOM 日冕射线逐条独立呼吸(复刻 sample.html 太阳: 金色渐变长射线根部被中心圆盖住、从圆缘向外发散, 均分角+随机扰动, 长短/粗细/周期/延迟随机, blur 羽化+三帧呼吸峰值锐利, 逐条错相闪烁, 每页图案不同); 绿角标=成功数"><span class="skin-dot d4"></span>光环</button>
+                    <button class="skin-btn" type="button" data-skin="static" title="静态: 变色静态版, 保留紫/绿状态色与剩余角标, 但关闭全部动画"><span class="skin-dot d5"></span>静态</button>
                 </div>
                 <div class="banner"></div>
                 <div class="batchbar"><span class="batchbar-text"></span><button class="stop">停止</button></div>
@@ -2813,70 +2732,24 @@ const K = {
         }
 
         // 按当前皮肤与今日汇总刷新 FAB(c: countToday 结果; alertN: 按钮重现提醒站数)
-        // 语义统一: 全部完成 vs 有站点未签到 必须有明显差异, 四种皮肤各按自身语言表达
+        // 语义统一: 全部完成 vs 有站点未签到 必须有明显差异, 三种皮肤各按自身语言表达
+        // legacy number/ring 仅在此处内存归一为 chameleon(渲染与皮肤条高亮一致); GM 存储值原样保留不回写
         function applyFabSkin(c, alertN = 0) {
-            fab.classList.remove('ok', 'warn', 'err', 'ring', 'chameleon');
-            if (skin !== 'ring') fab.querySelectorAll('.ring-rays').forEach((el) => el.remove()); // 切走 ring 时移除 DOM 光芒(样式挂在 .fab.ring 下, 不清理会残留裸元素)
+            const viewSkin = (skin === 'number' || skin === 'ring') ? 'chameleon' : skin; // B3 内存归一
+            fab.classList.remove('ok', 'warn', 'err', 'ring', 'chameleon', 'static'); // .edge 是正交开关, 不在此清除
             const left = c.total - c.success;       // 未成功站数(含失败/pending/skipped/未处理)
             const allDone = c.total > 0 && left <= 0;
-            switch (skin) {
-                case 'number': { // 图标换脸: 全完成→✓; 有未签→主区大字剩余数; 绿角标=成功数(保进度)
-                    if (allDone) fabCore.innerHTML = SVG_ICON;
-                    else fabCore.innerHTML = `<span class="num">${left}</span>`;
-                    setFabBadge(c.success);
-                    break;
-                }
+            switch (viewSkin) {
                 case 'signal': { // 信号灯: 完成=绿✓; 今日有失败=红底!+失败角标; 其余=琥珀✓+剩余角标
                     if (allDone) { fab.classList.add('ok'); fabCore.innerHTML = SVG_ICON; setFabBadge(0); }
                     else if (c.failed > 0) { fab.classList.add('err'); fabCore.innerHTML = '<span class="mark">!</span>'; setFabBadge(c.failed, 'err'); }
                     else { fab.classList.add('warn'); fabCore.innerHTML = SVG_ICON; setFabBadge(left, 'warn'); }
                     break;
                 }
-                case 'ring': { // 进度光环: 弧按状态分段(成功绿/失败粉/待办灰, 段长=各状态站数占比, alpha 0.34/0.26 常亮弱); 辉光 ringBreathe 呼吸(brightness+drop-shadow 外扩收拢); 光芒=完全复刻 sample.html 太阳算法(射线底锚圆心 rotate 绕圆心, 不 translateY/不埋段/不 mask 挖孔): 全长=圆心到尖, 根部被 ::before 紫罩盖(rays z:-1 沉其下), 渐变 sample 金档 0.9@0→0.6@30→0.2@70→透明 + blur 羽化 + 半圆帽; rayPulse 三帧呼吸(0.15 blur2 → 0.9 峰 blur0 → 0.3 blur1.5)alternate + 正 delay 错相; 主 18 束均分±7.5° 扰动 + 日冕长细 4 束全随机角
-                    fab.classList.add('ring');
-                    fabCore.innerHTML = SVG_ICON;
-                    if (!fab.querySelector('.ring-rays')) { // DOM 光芒只生成一次(图案随机, 每次页面加载不同); 切走再切回时已移除会重建
-                        const raysBox = document.createElement('div');
-                        raysBox.className = 'ring-rays';
-                        let html = '';
-                        const ray = (a, h, w, dur, del) => { // 完全照 sample.html 生成: 角度/全长高/宽/周期/正延迟
-                            html += `<i class="ray" style="--a:${a.toFixed(1)}deg;--h:${h.toFixed(1)}px;--w:${w.toFixed(1)}px;--d:${dur.toFixed(2)}s;--del:${del.toFixed(2)}s"></i>`; // --del 正延迟(动画静止中等待, 各条错相闪烁); 全长 h=圆心到尖, 根部(0~26px)被 ::before 紫罩盖 → 露出=圆缘外渐变尾段(0.9→0.6→0.2→透明, 尖端渐隐)
-                        };
-                        const n = 18; // 主光芒 18 束(同 sample.html): 均分 360 + 随机扰动, 覆盖全周
-                        for (let i = 0; i < n; i++) {
-                            ray(i / n * 360 + (Math.random() * 15 - 7.5), // 均匀基准角 ±7.5° 扰动(破呆板对称)
-                                70 + Math.random() * 54,                  // 全长 70~124(圆心到尖; 圆缘外露段 ≈ 44~98)
-                                1.8 + Math.random() * 2.8,                // 宽 1.8~4.6px(柔光带)
-                                1.8 + Math.random() * 2.0,                // 周期 1.8~3.8s
-                                Math.random() * 2.5);                     // 延迟 0~2.5s
-                        }
-                        for (let i = 0; i < 4; i++) { // 日冕长细射线 4 束(同 sample.html): 全随机角, 更长更细更慢
-                            ray(Math.random() * 360,
-                                118 + Math.random() * 44,                 // 全长 118~162(露段 ≈ 92~136)
-                                1 + Math.random() * 1.6,                  // 更细 1~2.6px
-                                2.5 + Math.random() * 1.5,                // 更慢 2.5~4s
-                                Math.random() * 3);                       // 延迟 0~3s
-                        }
-                        raysBox.innerHTML = html;
-                        fab.insertBefore(raysBox, fabCore); // 插到图标之前; rays z:-1 沉 ::before 下 → 根被中心紫罩盖, 光从圆缘外浮出
-                    }
-                    const T = c.total > 0 ? c.total : 1;
-                    const segs = [];
-                    let cur = 0;
-                    const seg = (n, from, to) => {
-                        if (n <= 0 || cur >= 100) return;
-                        const end = Math.min(100, cur + n / T * 100);
-                        segs.push(from + ' ' + cur + '%', to + ' ' + end + '%');
-                        cur = end;
-                    };
-                    seg(c.success, 'rgba(110, 231, 183, 0.34)', 'rgba(52, 211, 153, 0.34)'); // 今日成功: 淡绿 mint(alpha 低=常亮辉光弱, 呼吸动效由光芒射线承担)
-                    seg(c.failed, 'rgba(253, 164, 175, 0.34)', 'rgba(251, 113, 133, 0.34)');  // 今日失败: 淡粉 rose(同上)
-                    if (cur < 100) segs.push('rgba(148, 163, 184, 0.26) ' + cur + '% 100%'); // 待办(含跳过/未处理): 灰段
-                    fab.style.setProperty('--ring-grad', 'conic-gradient(from -90deg, ' + segs.join(', ') + ')');
-                    setFabBadge(c.success);
-                    break;
-                }
-                default: { // chameleon 变色龙: 全完成→绿底✓(无角标); 有未签→紫底✓+红底剩余角标; 白色涟漪波纹(::before/::after)随皮肤常驻
+                case 'static': // 静态皮肤: 与变色逐态一致, 额外加 .static 关掉本体与辉光伪元素的全部动画
+                    fab.classList.add('static');
+                    // 继续执行 default 的变色渲染
+                default: { // chameleon 变色龙(default 兜底 legacy 归一后的 number/ring): 全完成→绿底✓(无角标); 有未签→紫底✓+红底剩余角标
                     fab.classList.add('chameleon');
                     fabCore.innerHTML = SVG_ICON;
                     if (allDone) { fab.classList.add('ok'); setFabBadge(0); }
@@ -2886,7 +2759,7 @@ const K = {
             // 按钮重现提醒优先角标: 存在告警且今日无失败(失败红标语义更紧急, 保持不动)时,
             // 琥珀 warn 角标改显告警站数, 提示用户开面板查看(面板内警示条/行标记常驻)
             if (alertN > 0 && c.failed === 0) setFabBadge(alertN, 'warn');
-            if (skinBtns) skinBtns.forEach((b) => b.classList.toggle('active', b.dataset.skin === skin));
+            if (skinBtns) skinBtns.forEach((b) => b.classList.toggle('active', b.dataset.skin === viewSkin));
         }
         function setFabBadge(n, cls) {
             fabBadge.classList.remove('err', 'warn');
