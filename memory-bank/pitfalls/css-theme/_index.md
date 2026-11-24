@@ -10,7 +10,7 @@
 
 | 主题 | 一句话 | 触发词 |
 |---|---|---|
-| [p17-fab-skin-semantics.md](p17-fab-skin-semantics.md) | FAB 角标颜色语义随皮肤/状态变，读代码勿假定「角标=成功数」。 | 改 FAB 皮肤, 排查角标含义, 改辉光动画, 启用 disabled 站 |
+| [p17-fab-skin-semantics.md](p17-fab-skin-semantics.md) | FAB 角标颜色语义随皮肤/状态变，读代码勿假定「角标=成功数」；静态皮肤与变色同语义、legacy 静默归一。 | 改 FAB 皮肤, 排查角标含义, 改辉光动画, 启用 disabled 站 |
 | [p33-injected-columns-contract.md](p33-injected-columns-contract.md) | 把「别的脚本运行时注入的列」写进结构契约 → 首装必报「结构损坏」，点重试又好了。 | 接入可选列站点, 排查 E_COLUMN_UNKNOWN, 改列契约, 写仿真用例 |
 | [p34-16px-icon-signals.md](p34-16px-icon-signals.md) | 16px 小图标设计：只有三类信号能幸存，细节一律消失。 | 设计小图标, 定稿前对照, 排查图标读不出, 改成对概念 |
 | [p35-evenodd-fill-rule.md](p35-evenodd-fill-rule.md) | 同色图形叠画 = 完全看不见（SVG 镂空必须用 `fill-rule="evenodd"`）。 | 给图标加镂空, 排查点不显示, 排查截图哈希不变, 改 fill-rule |

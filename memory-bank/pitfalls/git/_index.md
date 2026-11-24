@@ -13,3 +13,4 @@
 | [history-integration.md](history-integration.md) | 历史整合(merge/rebase/stash)曾因删除拦截层批量删 `.git/objects` 而被禁 —— 该问题 2026-09-25 已修复, **禁令解除**; 本文件保留作事故档案与恢复手册, 高风险历史整合前仍建议 `cp -a .git <备份>`。**同步一律… | 落后主线要同步, 想跑 git rebase, git merge, 合并, 变基, .git 损坏, 事故恢复 |
 | [p20-version-day-reset.md](p20-version-day-reset.md) | `YYYY.MM.DD.N` 的 N 是当日流水号，跨天必须从 .1 重计。 | 提交前定版本号, 跨天首提, 对齐 @version |
 | [refs.md](refs.md) | ref 核对已内联进 `ship.commit`(静默通过; 只看 commit 输出会被骗, 由脚本兜住; packed-refs 陈旧形态 v5 起自动修复+放行, v7 起自愈静默 —— 失败说明仅 COMMAND_FLOW_DEBUG=1 可见); 本 shell 里 `… | 提交后核对, ref, packed-refs, 分支被回退, staged 暴增, 上游未设置, 领先落后算不出, dry-run, 预检推送 |
+| [review-base-hash-tree-state.md](review-base-hash-tree-state.md) | 新文件在 untracked 态跑 review.pack 取基哈希，git add 转 staged 后哈希算法口径不同，Review trailer 的 `· 基` 过不了闸 | review.pack 基哈希, review.trace 判红, untracked staged, Review trailer 基, 先 add 后 pack |

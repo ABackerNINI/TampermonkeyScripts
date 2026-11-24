@@ -7,10 +7,10 @@
 <title>PTAutoCheckIn FAB 皮肤精简与靠边模式改造（含静息 CPU 修复）</title>
 <meta name="doc-type" content="plan">
 <meta name="doc-topic" content="ptac-fab-skin-edge">
-<meta name="doc-status" content="Open">
+<meta name="doc-status" content="Done">
 <meta name="doc-added" content="26-11-24-1409">
-<meta name="doc-updated" content="26-11-24-1409">
-<meta name="doc-refs" content="">
+<meta name="doc-updated" content="26-11-24-1739">
+<meta name="doc-refs" content="memory-bank/tasks/26-11-24-webui-ptac-fab-skin-edge.md">
 <style>
   :root {
     --bg: #10151a;
@@ -75,7 +75,7 @@
 <h1>PTAutoCheckIn FAB 皮肤精简与靠边模式改造（含静息 CPU 修复）</h1>
 <p class="lede">本篇只回答: 怎么把 <code>PTAutoCheckIn.user.js</code> 的 FAB 从四皮肤收敛为三皮肤、新增与皮肤正交的靠边模式，并把已定位的静息 CPU 高占用一并修掉 —— 改哪些点、分几批、怎么验收；不回答每个选择器具体怎么写，也不在本篇实施。</p>
 <div class="meta">
-  <b>doc-added</b> 26-11-24-1409 · <b>doc-updated</b> 26-11-24-1409 · <b>doc-status</b> Open · <b>载体</b> 单文件 HTML(dark)<br>
+  <b>doc-added</b> 26-11-24-1409 · <b>doc-updated</b> 26-11-24-1739 · <b>doc-status</b> Done · <b>载体</b> 单文件 HTML(dark)<br>
   <b>来源</b> 用户指令「趁此机会改造脚本 UI：移除数字/光环皮肤、添加隐藏动效按钮、添加靠边模式（静态竖线/颜色跟随状态色/移入响应/移出恢复靠边），将修复一并纳入计划，grilling 然后出一个计划」+ 三轮 <code>grilling</code>（Q1–Q12 全拍板，见 §06）+ 上一轮只读根因分析（真凶确认见 §02）；事实取自 <code>src/PTAutoCheckIn.user.js</code> 与 <code>cpu-idle-high-handoff.md</code>（仓库外交接件，只读）。
 </div>
 
@@ -175,6 +175,7 @@
 <h2><span class="no">§10</span>变更记录</h2>
 <ul>
   <li><span class="tag">R0 · 26-11-24-1409</span> 初版：三轮 grilling（Q1–Q12 全拍板，含两项否决推荐改选备选）+ 上一轮 CPU 根因确认（真凶 = 本脚本变色 FAB 的非合成属性 infinite 动画）落盘；四批实施 A 性能修复 / B 皮肤精简 / C 靠边模式 / D 验收回写，本轮零实施。</li>
+  <li><span class="tag">R1 · 26-11-24-1739</span> 四批实施完成（A 性能修复 / B 皮肤精简 / C 靠边模式 / D 验收回写）</li>
 </ul>
 
 </div>
