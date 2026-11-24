@@ -34,7 +34,7 @@
   同站约束 `isSameSiteHost()` 也会挡下来。S04 只能抓"两道一起被删"。已写进该文件头注释。
 
 ### 待办方向
-- **PTAutoCheckIn FAB 靠边/动效开关后续边界（2026.11.24 本专题收尾登记）**：四条件状态机已在单页仿真覆盖八场景（含触屏两段式、面板/批量保持展开、失焦仍关闭、临界点连续 20 次左右移动不翻转）；靠边跨站与动效跨站已由仿真实测（A 站设置后 B 站加载同值），关动效 + 靠边组合态也已覆盖（皮肤高亮与两开关互不重置）。计划 `plans/26-11-24-2226-plan-ptac-fab-fix2.html` 的 **B 批真靠边（`right:0` + 展开内移 `right:20`）/ C 批闪烁根治（命中区并集 + `pointermove`/`elementFromPoint`，放弃时间锁）已随本批实施**；**仍未覆盖**：跨 unit / 跨标签的靠边态真浏览器联动、窄面板折行下开关可达性，以及 D 批 CDP 5s 静息 CPU=0 验收。详见 `scripts/PTAutoCheckIn/fab-ui.md` 与 `calibration-detail.md` 校准项 23 的 C4 段。
+- **PTAutoCheckIn FAB 靠边/动效开关后续边界（2026.11.24 本专题收尾登记）**：四条件状态机已在单页仿真覆盖八场景（含触屏两段式、面板/批量保持展开、失焦仍关闭、临界点连续 20 次左右移动不翻转）；靠边跨站与动效跨站已由仿真实测（A 站设置后 B 站加载同值），关动效 + 靠边组合态也已覆盖（皮肤高亮与两开关互不重置）。计划 `plans/26-11-24-2226-plan-ptac-fab-fix2.html` 的 **B 批真靠边（`right:0` + 展开内移 `right:20`）/ C 批闪烁根治（命中区并集 + `pointermove`/`elementFromPoint`，放弃时间锁）已随本批实施**；**D 批 CDP 5s 静息 CPU=0 验收亦已完成**（两态均无 FAB 归因的重算样式/重绘，见 kb.baseline）；**仍未覆盖**：跨 unit / 跨标签的靠边态真浏览器联动、窄面板折行下开关可达性。详见 `scripts/PTAutoCheckIn/fab-ui.md` 与 `calibration-detail.md` 校准项 23 的 C4 段。
 - **近期**：**PTAutoCheckIn 慢站修复实测校准（TASK015 / 校准项 21，8 项）**——改动已提交（`ebb06bb`），须先在真实站点验证，有问题再迭代；**补测试用例（TASK016）**——`tests/` 约定与运行器已就位，待补场景矩阵/解析器回归/元数据一致性；PTAutoCheckIn 既有逐站实测校准（校准项 1–20）；签到站点覆盖扩展；BTSchoolHelper 快捷键增强（N/B 键 + 行高亮）；BilibiliEnterFullscreen MutationObserver 加固。
 - **中期**：设置面板化；解析工具函数收敛；表格解析回归测试；发布自动化（版本号校验）。
 - **远期**：多站点种子聚合/搜索辅助；签到结果推送（GM_notification/Server 酱）；规则热更新（远端 JSON + 缓存）；代码现代化评审。

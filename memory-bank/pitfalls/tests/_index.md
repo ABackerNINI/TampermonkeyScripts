@@ -10,6 +10,7 @@
 
 | 主题 | 一句话 | 触发词 |
 |---|---|---|
+| [cdp-trace-stream-json-wrapper.md](cdp-trace-stream-json-wrapper.md) | `Tracing.start(transferMode=ReturnAsStream)` 的 `IO.read` 结果是 `{"traceEvents":[...]}` 对象包装，须取 `.traceEvents` 后才能 filter | 写 CDP Performance/Tracing 验收用例，统计 Paint / Recalculate Style 事件 |
 | [chrome-https-first-blocks-offline-verify.md](chrome-https-first-blocks-offline-verify.md) | Chrome 新版 HTTPS-First 升级把离线真站验收拦成空文档(ERR_BLOCKED_BY_CLIENT) | HTTPS-First, HttpsUpgrades, ERR_BLOCKED_BY_CLIENT, 离线验收, host-resolver-rules, 空文档, 卸妆 |
 | [p14-test-discipline.md](p14-test-discipline.md) | 禁止给测试留生产通道、禁止为过测试弱化断言或改生产代码。 | 写测试, 测试失败排障, 改生产代码, 加测试钩子 |
 | [p41-ispointinfill-ascii-map.md](p41-ispointinfill-ascii-map.md) | 图片读取不可用时，用 `isPointInFill()` + 栅格扫描 + ASCII 地图程序化校验图标轮廓，比肉眼更可靠。 | 图标校验, 看不了图片, isPointInFill, ASCII 地图, 栅格扫描 |

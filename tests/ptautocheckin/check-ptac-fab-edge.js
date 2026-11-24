@@ -25,7 +25,7 @@
  *   B1/B2/C1 真靠边锚点 right:0 / 展开内移 right:20 / 命中区并集 / transition 纳入 right;
  *   C2/C3 pointermove + elementFromPoint + host.contains, 无 edgeHover 标志与 setTimeout 时间锁;
  *   边界 .panel bottom:84px 与 .chip right:84px bottom:30px 均未改;
- *   版本 @version 2026.11.24.6(真靠边与闪烁根治批次递增).
+ *   版本 @version 2026.11.24.7(CPU=0 验收批次递增).
  *
  * 用法:
  *   node tests/ptautocheckin/check-ptac-fab-edge.js
@@ -225,6 +225,18 @@ if (!hoverRule) {
     }
 }
 
+// D1: 真靠边 right:0 与展开内移 right:20px 必须成对存在(内移差值恒 20px)。
+// 单独验其中一条抓不到"靠边锚点改了但展开没跟上"的半截实现。
+if (edgeRule && hoverRule) {
+    const anchoredEdge = /\bright:\s*0\s*;/.test(edgeRule);
+    const insetHover = /\bright:\s*20px\s*;/.test(hoverRule);
+    if (anchoredEdge && insetHover) {
+        ok('D1', '真靠边 right:0 与展开内移 right:20px 成对存在(内移差值 20px)');
+    } else {
+        fail('D1', `真靠边/展开内移未成对存在(edge right:0=${anchoredEdge}, hover right:20px=${insetHover})`);
+    }
+}
+
 has(/\.fab\.edge:hover \.fab-badge[\s\S]{0,160}?opacity:\s*1[\s\S]{0,60}?visibility:\s*visible/,
     src, 'C3', '展开态恢复完整 FAB 内容与角标显示');
 
@@ -364,9 +376,9 @@ if (!/recheckEdge:\s*maybeCollapseEdge/.test(src)) {
 // ---------- 版本 ----------
 if (!quiet) console.log('版本. 脚本头 @version');
 
-has(/\/\/\s*@version\s+2026\.11\.24\.6/, src, 'VER', '@version 为 2026.11.24.6');
-if (/2026\.11\.24\.5/.test(src)) fail('VER', '源码仍残留旧版本号 2026.11.24.5');
-else ok('VER', '无旧版本号 2026.11.24.5 残留');
+has(/\/\/\s*@version\s+2026\.11\.24\.7/, src, 'VER', '@version 为 2026.11.24.7');
+if (/2026\.11\.24\.6/.test(src)) fail('VER', '源码仍残留旧版本号 2026.11.24.6');
+else ok('VER', '无旧版本号 2026.11.24.6 残留');
 
 // ---------- 汇总 ----------
 if (!quiet) console.log('-'.repeat(72));

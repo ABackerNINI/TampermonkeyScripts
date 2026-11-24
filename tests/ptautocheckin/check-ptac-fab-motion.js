@@ -18,7 +18,7 @@
  *   A3 CSS 三选择器均 animation:none!important(用 :host 形式穿透 closed shadow);
  *      ptacHlPulse 规则与 @keyframes 仍在, 且不在关停选择器内;
  *   A4 init 读 legacy static 时把动效内存标志置关, 不写回 K.motion;
- *   版本 @version 2026.11.24.6(真靠边与闪烁根治批次递增)。
+ *   版本 @version 2026.11.24.7(CPU=0 验收批次递增)。
  *
  * 用法:
  *   node tests/ptautocheckin/check-ptac-fab-motion.js
@@ -187,11 +187,69 @@ if (!motionCss) {
 has(/@keyframes\s+ptacHlPulse\s*\{/, src, 'A3', '@keyframes ptacHlPulse 仍在(签到逻辑零改动)');
 has(/animation:\s*ptacHlPulse\s+1\.8s/, src, 'A3', '签到按钮高亮动画规则仍在');
 
+// ---------- D1. 两态 animation:none 与无毫秒定时器 ----------
+if (!quiet) console.log('D1. 关动效 / 靠边两态 animation-name=none 与无毫秒定时器');
+
+// 静态脚本只读 CSS 规则文本; 两态 computed animation-name=none 由 D2 CDP 用例(sim-ptac-fab-cpu-idle.js)在真浏览器上实测。
+function cssBlock(selector) {
+    const at = src.indexOf(selector + ' {');
+    if (at < 0) return '';
+    const brace = src.indexOf('{', at);
+    let depth = 0;
+    for (let i = brace; i < src.length; i++) {
+        if (src[i] === '{') depth++;
+        else if (src[i] === '}') {
+            depth--;
+            if (depth === 0) return src.slice(brace + 1, i);
+        }
+    }
+    return '';
+}
+
+// 关动效态: 三选择器统一 animation:none!important(:host 穿透 closed shadow), ptacHlPulse 不在其中。
+has(/:host\(\.motion-off\)\s*\.fab\s*,[\s\S]{0,160}?:host\(\.motion-off\)\s*\.fab::after\s*,[\s\S]{0,160}?:host\(\.motion-off\)\s*\.fab\.chameleon\s*\{[\s\S]{0,80}?animation:\s*none\s*!important/,
+    src, 'D1', '关动效态 FAB 本体 / ::after 伪元素 / .chameleon 三选择器统一 animation:none!important');
+
+// 靠边态: 竖线本体 animation:none!important(::after 辉光呼吸保留属状态色语义, ::before 命中区无动画)。
+const edgeAnim = cssBlock('.fab.edge');
+if (!edgeAnim) fail('D1', '.fab.edge 规则块缺失(无法断言靠边态动画关停)');
+else has(/\banimation:\s*none\s*!important\s*;/, edgeAnim, 'D1',
+    '靠边态 .fab.edge 本体 animation:none!important(computed animation-name=none)');
+
+// 无毫秒定时器: 200ms 签到 tick 与 CSS 动画 ptacHlPulse 属签到逻辑, 不计入 UI 负载;
+// 提取所有 setInterval/setTimeout 的字面量毫秒参数, 断言不存在 <200ms 的毫秒级循环。
+function timerDelays() {
+    const out = [];
+    const re = /\b(setInterval|setTimeout)\s*\(/g;
+    let m;
+    while ((m = re.exec(src))) {
+        let i = m.index + m[0].length, depth = 1, lastComma = -1;
+        for (; i < src.length && depth > 0; i++) {
+            const c = src[i];
+            if (c === '(' || c === '{' || c === '[') depth++;
+            else if (c === ')' || c === '}' || c === ']') depth--;
+            else if (c === ',' && depth === 1) lastComma = i;
+        }
+        if (lastComma < 0) continue;
+        const tail = src.slice(lastComma + 1, i - 1).trim();
+        const num = /^(\d+)\s*$/.exec(tail);
+        if (num) out.push({ kind: m[1], ms: Number(num[1]) });
+    }
+    return out;
+}
+const timers = timerDelays();
+const sub200 = timers.filter((t) => t.ms > 0 && t.ms < 200);
+if (sub200.length) fail('D1', `存在 <200ms 毫秒级定时器: ${JSON.stringify(sub200)}`);
+else {
+    const minMs = timers.length ? Math.min.apply(null, timers.map((t) => t.ms)) : 'n/a';
+    ok('D1', `无 <200ms 毫秒级定时器(字面量定时器 ${timers.length} 个, 最小 ${minMs}ms 为 200ms 签到 tick)`);
+}
+
 // ---------- 版本 ----------
 if (!quiet) console.log('版本. 脚本头 @version');
 
-has(/\/\/\s*@version\s+2026\.11\.24\.6/, src, 'VER', '@version 为 2026.11.24.6');
-hasNone(/2026\.11\.24\.5/, src, 'VER', '源码无旧版本号 2026.11.24.5 残留');
+has(/\/\/\s*@version\s+2026\.11\.24\.7/, src, 'VER', '@version 为 2026.11.24.7');
+hasNone(/2026\.11\.24\.6/, src, 'VER', '源码无旧版本号 2026.11.24.6 残留');
 
 // ---------- 汇总 ----------
 if (!quiet) console.log('-'.repeat(72));

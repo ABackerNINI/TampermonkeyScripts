@@ -2,7 +2,7 @@
 
 **Status:** Done
 **Added:** 2026-11-24
-**Updated:** 2026-11-24
+**Updated:** 2026-11-25
 **Summary:** FAB 四皮肤收敛为三皮肤、新增与皮肤正交的靠边模式并修复静息 CPU 高占用；四批实施与 D 批验收回写完成
 **Topics:** webui-ptac-fab-skin-edge
 **Refs:** memory-bank/plans/26-11-24-1409-plan-ptac-fab-skin-edge.html, memory-bank/pitfalls/git/review-base-hash-tree-state.md, memory-bank/plans/26-11-24-2226-plan-ptac-fab-fix2.html
@@ -51,3 +51,6 @@
 - 本批（D 纯文档轮）只做文档与知识库回写，不改 src/ 与 tests/，@version 保持 2026.11.24.4 不递增。
 
 - 2026-11-24 17:39 D 批纯文档轮：test.full 全绿并新建基线切片，回写 fab-ui/overview/P17/known-issues/README，任务档案立档并与计划件双向认领，新坑入池重跑索引，四批实施收口
+
+- 2026-11-25 00:34 D 批 CPU=0 验收：静态断言 + CDP 5s 静息两态实测，回写文档与基线切片
+- 2026-11-25 00:50 复发登记：踩到已记坑 `pitfalls/git/review-base-hash-tree-state.md`（复发 +1）——开工只读了 AGENTS.md 与细路由、未读 `pitfalls/_index.md`（路由没到），按常规「先评审后 add」取基哈希致 trailer 判红；按坑档改为先暂存后 pack 并补一轮增量复评，文件内容未变。
