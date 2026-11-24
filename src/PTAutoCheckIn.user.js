@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.24.4
+// @version      2026.11.24.5
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -99,8 +99,9 @@ const K = {
     status: (uid) => `ptac_status_${uid}`,     // {date:'YYYY-MM-DD', status:'success|failed|pending|skipped|suspect|unconfirmed', msg, ts}
     cooldown: (uid) => `ptac_cooldown_${uid}`, // 上次触发时间戳(ms)
     favicon: (uid) => `ptac_favicon_${uid}`,   // 路过收集的站点真实 icon URL(面板列表图标用)
-    skin: 'ptac_skin',                          // FAB 外观皮肤: chameleon|signal|static(legacy number|ring 内存归一为变色)
+    skin: 'ptac_skin',                          // FAB 外观皮肤: chameleon|signal(legacy static|number|ring 内存归一为变色, 不回写)
     edge: 'ptac_edge',                          // FAB 靠边模式(与皮肤正交的布尔开关): true=右下角静态竖线, false=完整圆钮; 跨站生效
+    motion: 'ptac_motion',                      // FAB 动效开关(与皮肤/靠边正交的布尔开关): true=动画开, false=关; 跨站生效
     task: 'ptac_task',                          // 批量任务 {taskId, list:[unitId...], index, startedAt, hb(调度心跳)}
     alert: (uid) => `ptac_alert_${uid}`,       // 签到按钮重现提醒 {date, btnText, ts, state:'on'|'off'}(见 P25)
     retryLock: (uid) => `ptac_retry_${uid}`,   // 单站前台重试一次性锁(时间戳 ms): 防同站重试页/落地页并发强点(30s 窗口)
@@ -2212,7 +2213,7 @@ const K = {
             font-family: var(--font); padding: 0;
         }
         /* 预渲染光晕伪元素: 呼吸从改 box-shadow(非合成属性, 逐帧触发 Recalculate Style + Pre-Paint + Paint)
-           改为只动 opacity(合成属性); 紫色辉光常驻 ::after, 3.2s 明暗呼吸; 静态皮肤用 .static 整体关停 */
+           改为只动 opacity(合成属性); 紫色辉光常驻 ::after, 3.2s 明暗呼吸; 关动效时由 .motion-off 整体关停 */
         .fab::after {
             content: ''; position: absolute; inset: 0; border-radius: inherit;
             box-shadow: 0 0 14px rgba(139, 92, 246, 0.45);
@@ -2263,9 +2264,12 @@ const K = {
             62.5% { transform: translateY(1.8px) scale(1.02, 0.985); }
             87.5% { transform: translateY(-1px) scale(0.99, 1.015); }
         }
-        /* FAB 皮肤: 静态(static) — 变色语义的静态版, 保留紫/绿状态色与角标, 关停本体与辉光伪元素的全部动画 */
-        .fab.static { animation: none !important; }
-        .fab.static::after { animation: none !important; }
+        /* 关动效(正交布尔开关): host 带 .motion-off 时停掉本体/辉光/变色三类动画, 皮肤状态色与角标不受影响。
+           shadow 内须用 :host(.motion-off) 选中宿主(宿主不在 shadow 树内, 普通后代选择器选不中)。
+           ptacHlPulse 是签到按钮高亮, 属签到逻辑, 不在本开关停用范围(见计划 §06 D1)。 */
+        :host(.motion-off) .fab,
+        :host(.motion-off) .fab::after,
+        :host(.motion-off) .fab.chameleon { animation: none !important; }
         /* 靠边模式(C1/C2/C3, 正交于皮肤): 右下角静态竖线; 右/底双锚点恒为 20px,
            只收窄宽高向左上生长, 展开回 52px 时锚点计算值不变(不跳位).
            颜色直接沿用状态 class 的渐变底与 --glow 辉光语义, 不另立色规则;
@@ -2361,8 +2365,15 @@ const K = {
         }
         .skin-btn:hover { border-color: var(--accent-1); }
         .skin-btn.active { border-color: var(--accent-1); background: rgba(91, 108, 255, 0.12); color: var(--accent-1); font-weight: 600; }
-        /* 靠边开关: 与 3 个 data-skin 单选钮视觉分隔, 用独立类而非 .skin-btn(避免被单选数组收编) */
+        /* 两个布尔开关(动效/靠边): 与 2 个 data-skin 单选钮视觉分隔, 用独立类而非 .skin-btn(避免被单选数组收编) */
         .skin-bar .edge-sep { width: 1px; height: 18px; background: var(--border); margin-left: 6px; }
+        .motion-btn {
+            border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
+            cursor: pointer; border-radius: 999px; padding: 3px 10px;
+            font-size: 11px; font-family: var(--font);
+        }
+        .motion-btn:hover { border-color: var(--accent-1); color: var(--text); }
+        .motion-btn[aria-pressed="true"] { border-color: var(--accent-1); background: rgba(91, 108, 255, 0.12); color: var(--accent-1); font-weight: 600; }
         .edge-btn {
             border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
             cursor: pointer; border-radius: 999px; padding: 3px 10px;
@@ -2540,14 +2551,15 @@ const K = {
     `;
 
     const UI = (function () {
-        let host = null, fab, fabCore, fabBadge, chip, chipText, panel, summaryEl, bannerEl, barEl, barTextEl, listEl, btnBatch, forceToggle, forcePop, btnForce, btnSkin, skinBtns, edgeBtn;
+        let host = null, fab, fabCore, fabBadge, chip, chipText, panel, summaryEl, bannerEl, barEl, barTextEl, listEl, btnBatch, forceToggle, forcePop, btnForce, btnSkin, skinBtns, motionBtn, edgeBtn;
         let cancelObj = null;
         let batchBase = '';
         let doneOpen = false; // 「已签到」折叠区展开态: 默认折叠; 仅本次页面内存, 不落盘
         let toastEl = null, toastTimer = null;
         let lastRetryAt = 0; // 单站重试发起时间戳: 8s 内同页防连点(焦点已切新标签, 防切回误触)
-        let skin = 'chameleon'; // FAB 皮肤: 变色龙(chameleon)|信号灯(signal)|静态(static); legacy number/ring 渲染时归一为变色
+        let skin = 'chameleon'; // FAB 皮肤: 变色龙(chameleon)|信号灯(signal); legacy static/number/ring 渲染时归一为变色
         let edge = false; // FAB 靠边模式(与皮肤正交): true=静态竖线; 不参与皮肤单选, 切皮肤不重置
+        let motionOn = true; // FAB 动效开关(与皮肤/靠边正交): true=动画开, false=关; 切皮肤/靠边不重置
         // C4 靠边状态机辅助量: 只服务"展开/缩回"判定, 不参与任何签到/批量/冷却业务.
         let shadowRoot = null;    // closed shadow 引用, 供焦点判定读 activeElement
         let edgeHover = false;    // 指针是否仍在 fab 本体或 ::before 外向命中区内
@@ -2633,6 +2645,11 @@ const K = {
             // 靠边态跨站持久: 与皮肤正交, 启动时按 GM 值给 FAB 加 .edge(渲染会保留此类)
             edge = gmGet(K.edge, false);
             if (edge) fab.classList.add('edge');
+            // 动效开关跨站持久: 默认开; legacy static 用户归一为关(皮肤渲染归一变色, 见 applyFabSkin)。
+            // 静默迁移(D8): GM 原值不回写, 只设内存标志并同步 host 的 .motion-off 类。
+            motionOn = gmGet(K.motion, true);
+            if (skin === 'static') motionOn = false;
+            host.classList.toggle('motion-off', !motionOn);
 
             // 批量状态条(芯片)
             chip = document.createElement('div');
@@ -2655,7 +2672,8 @@ const K = {
                     <span class="lbl">FAB:</span>
                     <button class="skin-btn" type="button" data-skin="chameleon" title="变色(默认): 全部完成→绿底✓无角标; 有站点未签→紫底✓ + 红底剩余数角标"><span class="skin-dot d1"></span>变色</button>
                     <button class="skin-btn" type="button" data-skin="signal" title="信号灯: 全部完成→绿底✓; 今日有失败→红底! + 失败数角标; 仅未完成→琥珀底✓ + 剩余数角标"><span class="skin-dot d3"></span>信号灯</button>
-                    <button class="skin-btn" type="button" data-skin="static" title="静态: 变色静态版, 保留紫/绿状态色与剩余角标, 但关闭全部动画"><span class="skin-dot d5"></span>静态</button>
+                    <span class="edge-sep"></span>
+                    <button class="motion-btn" type="button" data-motion aria-pressed="true" title="动效开关(与皮肤/靠边正交): 开=FAB 本体/辉光/形变动画运行; 关=全部停掉, 只留状态色与角标"><span class="motion-label">动效</span></button>
                     <span class="edge-sep"></span>
                     <button class="edge-btn" type="button" data-edge aria-pressed="false" title="靠边模式(与皮肤正交): 开=FAB 收成右下角静态竖线, 颜色跟随当前状态色, 移入或聚焦就地展开; 关=完整圆钮"><span class="edge-label">展开</span></button>
                 </div>
@@ -2685,16 +2703,19 @@ const K = {
             btnForce = panel.querySelector('.btn-force');
             btnSkin = panel.querySelector('.btn-skin');
             skinBtns = Array.prototype.slice.call(panel.querySelectorAll('.skin-btn'));
-            // 靠边开关独立取用: 该按钮绝不带 .skin-btn 类, 不会被上面的 skinBtns 收编;
+            // 动效/靠边两个布尔开关独立取用: 绝不带 .skin-btn 类, 不会被上面的 skinBtns 收编;
             // 若误带, 点击会走 setSkin(b.dataset.skin) 并传入 undefined, 皮肤被清空.
+            motionBtn = panel.querySelector('.motion-btn');
             edgeBtn = panel.querySelector('.edge-btn');
-            // 初始化/刷新/跨站恢复: 按 GM 读回的 edge 同步按钮 UI; 只读恢复, 不写回存储
+            // 初始化/刷新/跨站恢复: 按 GM 读回的值同步两个开关按钮 UI; 只读恢复, 不写回存储
+            syncMotionButton();
             syncEdgeButton();
             panel.querySelector('.panel-close').addEventListener('click', () => closePanel());
             barEl.querySelector('.stop').addEventListener('click', requestCancel);
             btnSkin.addEventListener('click', () => panel.classList.toggle('skin-open'));
             skinBtns.forEach((b) => b.addEventListener('click', () => setSkin(b.dataset.skin)));
-            // 独立监听: 只切正交的 edge 状态并持久化, 不调用 setSkin / render, 皮肤不受影响
+            // 独立监听: 只切正交的动效/靠边状态并持久化, 不调用 setSkin / render, 皮肤不受影响
+            motionBtn.addEventListener('click', () => setMotion(!motionOn));
             edgeBtn.addEventListener('click', () => setEdge(!edge));
             btnBatch.addEventListener('click', () => startBatch(false));
             forceToggle.addEventListener('click', () => {
@@ -2817,6 +2838,20 @@ const K = {
             render();
         }
 
+        // 把当前动效状态同步到开关按钮 UI(aria-pressed 与文案); 初始化恢复与点击切换共用同一份语义
+        function syncMotionButton() {
+            motionBtn.setAttribute('aria-pressed', motionOn ? 'true' : 'false');
+            motionBtn.querySelector('.motion-label').textContent = motionOn ? '动效' : '静态';
+        }
+
+        // 切换 FAB 动效(正交开关: 与皮肤单选/靠边都无关, 不触发 render, 皮肤高亮与靠边态都不动)
+        function setMotion(on) {
+            motionOn = !!on;
+            host.classList.toggle('motion-off', !motionOn);
+            gmSet(K.motion, motionOn);
+            syncMotionButton();
+        }
+
         // 把当前 edge 状态同步到开关按钮 UI(aria-pressed 与文案); 初始化恢复与点击切换共用同一份语义
         function syncEdgeButton() {
             edgeBtn.setAttribute('aria-pressed', edge ? 'true' : 'false');
@@ -2834,11 +2869,11 @@ const K = {
         }
 
         // 按当前皮肤与今日汇总刷新 FAB(c: countToday 结果; alertN: 按钮重现提醒站数)
-        // 语义统一: 全部完成 vs 有站点未签到 必须有明显差异, 三种皮肤各按自身语言表达
-        // legacy number/ring 仅在此处内存归一为 chameleon(渲染与皮肤条高亮一致); GM 存储值原样保留不回写
+        // 语义统一: 全部完成 vs 有站点未签到 必须有明显差异, 两种皮肤各按自身语言表达
+        // legacy static/number/ring 仅在此处内存归一为 chameleon(渲染与皮肤条高亮一致); GM 存储值原样保留不回写
         function applyFabSkin(c, alertN = 0) {
-            const viewSkin = (skin === 'number' || skin === 'ring') ? 'chameleon' : skin; // B3 内存归一
-            fab.classList.remove('ok', 'warn', 'err', 'ring', 'chameleon', 'static'); // .edge 是正交开关, 不在此清除
+            const viewSkin = (skin === 'static' || skin === 'number' || skin === 'ring') ? 'chameleon' : skin; // 内存归一
+            fab.classList.remove('ok', 'warn', 'err', 'ring', 'chameleon'); // .edge/.motion-off 是正交开关, 不在此清除
             const left = c.total - c.success;       // 未成功站数(含失败/pending/skipped/未处理)
             const allDone = c.total > 0 && left <= 0;
             switch (viewSkin) {
@@ -2848,10 +2883,7 @@ const K = {
                     else { fab.classList.add('warn'); fabCore.innerHTML = SVG_ICON; setFabBadge(left, 'warn'); }
                     break;
                 }
-                case 'static': // 静态皮肤: 与变色逐态一致, 额外加 .static 关掉本体与辉光伪元素的全部动画
-                    fab.classList.add('static');
-                    // 继续执行 default 的变色渲染
-                default: { // chameleon 变色龙(default 兜底 legacy 归一后的 number/ring): 全完成→绿底✓(无角标); 有未签→紫底✓+红底剩余角标
+                default: { // chameleon 变色龙(default 兜底 legacy 归一后的 static/number/ring): 全完成→绿底✓(无角标); 有未签→紫底✓+红底剩余角标
                     fab.classList.add('chameleon');
                     fabCore.innerHTML = SVG_ICON;
                     if (allDone) { fab.classList.add('ok'); setFabBadge(0); }

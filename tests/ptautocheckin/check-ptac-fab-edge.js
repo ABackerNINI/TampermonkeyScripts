@@ -3,7 +3,7 @@
  * check-ptac-fab-edge.js: FAB 靠边模式(C1 / C2 / C3 / C4)的静态护栏(零依赖)
  *
  * 背景(2026.11.24, 计划 26-11-24-1409 §04 C1/C2/C3, §06 D3/D6/D7/D10/D11):
- *   C1 皮肤条内加独立布尔开关(data-edge), 与 3 个 data-skin 单选钮视觉分隔;
+ *   C1 皮肤条内加独立布尔开关(data-edge), 与 data-skin 单选钮视觉分隔(现为 2 钮, 见计划 fix2 A1);
  *      该按钮绝不能带 .skin-btn 类, 否则会被 panel.querySelectorAll('.skin-btn')
  *      收编进单选数组, 点击误调 setSkin(undefined), 皮肤被清空;
  *   C2 新增 GM 键 ptac_edge, init 用 gmGet(K.edge, false) 初始化并给 fab 加 .edge,
@@ -22,7 +22,7 @@
  *   C2 K 表有 edge: 'ptac_edge', gmGet(K.edge, false) 初始化, gmSet(K.edge, edge) 持久化;
  *   C3 竖线四值 / 禁形变 / 命中区 / 隐藏角标 / hover 与 focus-within 展开 / 锚点不改写;
  *   边界 .panel bottom:84px 与 .chip right:84px bottom:30px 均未改;
- *   版本 @version 2026.11.24.4.
+ *   版本 @version 2026.11.24.5(动效开关化批次递增).
  *
  * 用法:
  *   node tests/ptautocheckin/check-ptac-fab-edge.js
@@ -122,14 +122,14 @@ if (!edgeBtnMatch) {
 }
 
 const skinBtnCount = (src.match(/class="skin-btn"/g) || []).length;
-if (skinBtnCount === 3) ok('C1', `皮肤条 skin-btn 数仍为 3 (实际 ${skinBtnCount})`);
-else fail('C1', `皮肤条 skin-btn 数应为 3, 实际 ${skinBtnCount}`);
+if (skinBtnCount === 2) ok('C1', `皮肤条 skin-btn 数为 2 (实际 ${skinBtnCount})`);
+else fail('C1', `皮肤条 skin-btn 数应为 2, 实际 ${skinBtnCount}`);
 
 has(/skinBtns\s*=\s*Array\.prototype\.slice\.call\(panel\.querySelectorAll\('\.skin-btn'\)\)/,
     src, 'C1', '单选数组仍用精确选择器 .skin-btn');
 has(/edgeBtn\s*=\s*panel\.querySelector\('\.edge-btn'\)/, src, 'C1', 'edge 按钮独立 querySelector');
 has(/edgeBtn\.addEventListener\('click'/, src, 'C1', 'edge 按钮独立 addEventListener');
-has(/class="edge-sep"/, src, 'C1', 'edge 开关与 3 个单选钮之间有视觉分隔线');
+has(/class="edge-sep"/, src, 'C1', 'edge 开关与皮肤单选钮之间有视觉分隔线');
 
 const setEdge = setEdgeBody();
 if (!setEdge) {
@@ -335,8 +335,8 @@ if (!/recheckEdge:\s*maybeCollapseEdge/.test(src)) {
 // ---------- 版本 ----------
 if (!quiet) console.log('版本. 脚本头 @version');
 
-has(/\/\/\s*@version\s+2026\.11\.24\.4/, src, 'VER', '@version 为 2026.11.24.4');
-if (/2026\.11\.24\.2/.test(src)) fail('VER', '源码仍残留旧版本号 2026.11.24.2');
+has(/\/\/\s*@version\s+2026\.11\.24\.5/, src, 'VER', '@version 为 2026.11.24.5');
+if (/2026\.11\.24\.4/.test(src)) fail('VER', '源码仍残留旧版本号 2026.11.24.4');
 else ok('VER', '无旧版本号 2026.11.24.2 残留');
 
 // ---------- 汇总 ----------
