@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * check-ptac-fab-edge.js: FAB 靠边模式(C1 / C2 / C3)的静态护栏(零依赖)
+ * check-ptac-fab-edge.js: FAB 靠边模式(C1 / C2 / C3 / C4)的静态护栏(零依赖)
  *
  * 背景(2026.11.24, 计划 26-11-24-1409 §04 C1/C2/C3, §06 D3/D6/D7/D10/D11):
  *   C1 皮肤条内加独立布尔开关(data-edge), 与 3 个 data-skin 单选钮视觉分隔;
@@ -11,8 +11,10 @@
  *   C3 .fab.edge 竖线 right:20/bottom:20/width:4/height:120, 颜色继承状态 class
  *      的渐变底与 --glow; ::before 做约 24px 透明命中区(::after 已被辉光占用);
  *      hover / focus-within 时就地把宽高恢复 52px 圆钮, right/bottom 不变(不跳位).
- *   C4(状态机: 面板保持展开 / 批量不缩回 / 触屏两段式 / 键盘焦点 / 失焦关闭)属 W4,
- *      本断言刻意不覆盖, 也不要求源码出现 C4 逻辑.
+ *   C4 状态机(面板保持展开 / 批量不缩回 / 触屏两段式 / 键盘焦点 / 失焦关闭后缩回):
+ *      .edge-open 逻辑保持展开类与 :hover 同款形变; 四条件(面板/批量/触屏首段/焦点)
+ *      任一成立不缩回, 指针离开命中区才移除标记; 面板 bottom:84px 仍不漂移,
+ *      失焦自动关闭链本身沿用既有实现(check-ptac-panel.js 单独钉住).
  *
  * 校验内容(全部只读源文件, 不执行):
  *   C1 edge 按钮独立类且非 skin-btn, 独立 querySelector / addEventListener,
@@ -20,7 +22,7 @@
  *   C2 K 表有 edge: 'ptac_edge', gmGet(K.edge, false) 初始化, gmSet(K.edge, edge) 持久化;
  *   C3 竖线四值 / 禁形变 / 命中区 / 隐藏角标 / hover 与 focus-within 展开 / 锚点不改写;
  *   边界 .panel bottom:84px 与 .chip right:84px bottom:30px 均未改;
- *   版本 @version 2026.11.24.3.
+ *   版本 @version 2026.11.24.4.
  *
  * 用法:
  *   node tests/ptautocheckin/check-ptac-fab-edge.js
@@ -235,10 +237,105 @@ else {
     has(/\bbottom:\s*30px\s*;/, chipRule, 'C4-BOUND', '.chip bottom:30px 未改');
 }
 
+// ---------- C4. 靠边状态机 ----------
+if (!quiet) console.log('C4. 逻辑保持展开 / 条件缩回 / 触屏两段式 / 失焦联动');
+
+// 取具名函数的函数体(大括号配平, 不解析语法)
+function bodyOf(name) {
+    const head = src.indexOf(`function ${name}(`);
+    if (head < 0) return '';
+    const brace = src.indexOf('{', head);
+    if (brace < 0) return '';
+    let depth = 0;
+    for (let i = brace; i < src.length; i++) {
+        if (src[i] === '{') depth++;
+        else if (src[i] === '}') {
+            depth--;
+            if (depth === 0) return src.slice(brace, i + 1);
+        }
+    }
+    return '';
+}
+
+// C4 展开形变: 与 :hover 同款但不改锚点, 面板/竖线不漂移
+const openRule = ruleBlock('.fab.edge.edge-open');
+if (!openRule) {
+    fail('C4', '.fab.edge.edge-open 逻辑保持展开规则缺失');
+} else {
+    has(/\bwidth:\s*52px\s*;/, openRule, 'C4', '逻辑保持展开恢复 52px 宽');
+    has(/\bheight:\s*52px\s*;/, openRule, 'C4', '逻辑保持展开恢复 52px 高');
+    has(/\btransform:\s*none\s*;/, openRule, 'C4', '展开态抵消 :hover 形变(不跳位)');
+    if (/\b(?:right|bottom)\s*:/.test(openRule)) {
+        fail('C4', '.edge-open 改写 right/bottom, 竖线展开会跳位');
+    } else {
+        ok('C4', '.edge-open 未改写双锚点');
+    }
+}
+
+// 缩回判定: 四条件任一成立即保持, 指针离开才移除标记
+const collapseBody = bodyOf('maybeCollapseEdge');
+if (!collapseBody) {
+    fail('C4', 'maybeCollapseEdge 函数体缺失(锚点字符串变了?)');
+} else {
+    has(/panel\.classList\.contains\('show'\)/, collapseBody, 'C4', '面板打开期间保持展开');
+    has(/batchActive\(\)/, collapseBody, 'C4', '批量进行中不缩回(强制展开)');
+    has(/touchStage/, collapseBody, 'C4', '触屏首段保持展开');
+    has(/focusInFab\(\)/, collapseBody, 'C4', '键盘焦点在 fab 内不强制缩回');
+    has(/edgeHover/, collapseBody, 'C4', '指针仍在命中区不缩回(防 hover 抖动)');
+    has(/setEdgeOpen\(false\)/, collapseBody, 'C4', '四条件都不成立才移除保持标记');
+}
+
+// 触屏两段式: 首段只展开, 再点才走原有 togglePanel
+const clickBody = bodyOf('onFabClick');
+if (!clickBody) {
+    fail('C4', 'onFabClick 函数体缺失(锚点字符串变了?)');
+} else {
+    has(/e\.pointerType === 'touch'/, clickBody, 'C4', '触屏两段式只看本次 click 的 pointerType');
+    has(/setEdgeOpen\(true\)/, clickBody, 'C4', '触屏首段只展开不开面板');
+    has(/togglePanel\(\)/, clickBody, 'C4', '第二段/鼠标/键盘仍走原 togglePanel');
+    if (/lastPointerType/.test(clickBody)) {
+        fail('C4-FIX2', 'onFabClick 仍拿跨交互的 lastPointerType 兜底, 键盘会被误判成触屏首段');
+    } else {
+        ok('C4-FIX2', '两段式不读历史 pointerType(键盘 Enter/Space 直接开面板)');
+    }
+}
+if (/lastPointerType/.test(src)) {
+    fail('C4-FIX2', '源码仍残留 lastPointerType 跨交互指针类型记账');
+}
+
+const openBody = bodyOf('openPanel');
+if (!openBody) fail('C4', 'openPanel 缺失(锚点字符串变了?)');
+else has(/setEdgeOpen\(true\)/, openBody, 'C4', 'openPanel 加保持标记(showBatchDone 走同一路径)');
+const closeBody = bodyOf('closePanel');
+if (!closeBody) fail('C4', 'closePanel 缺失(锚点字符串变了?)');
+else has(/maybeCollapseEdge\(\)/, closeBody, 'C4', 'closePanel 触发条件缩回判定');
+
+// C4 输入源接线: 指针跟踪 / 触屏记账 / 失焦清理(失焦自动关闭链本身不动)
+const clickAt = src.indexOf("fab.addEventListener('click', onFabClick);");
+if (clickAt < 0) {
+    fail('C4', 'fab click 未改走 onFabClick(触屏两段式不生效)');
+} else {
+    const inputTail = src.slice(clickAt - 400, clickAt + 1400);
+    has(/fab\.addEventListener\('mouseenter'/, inputTail, 'C4', '指针进入命中区记账');
+    has(/fab\.addEventListener\('mouseleave'/, inputTail, 'C4', '指针离开触发缩回判定');
+    has(/document\.addEventListener\('pointerdown'/, inputTail, 'C4', '触屏首段点到 UI 之外时清理标记');
+    has(/window\.addEventListener\('blur'/, inputTail, 'C4', '窗口失焦清理指针/触屏跟踪, 使关面板后能缩回');
+}
+
+// 修复 1: 批量取消出口补调 edge 重判; showBatchDone 仍走 openPanel 保持逻辑
+if (!/UI\.recheckEdge\(\)/.test(src)) {
+    fail('C4-FIX1', '批量取消路径 endBatch 后未补调 UI.recheckEdge(), .edge-open 会残留');
+} else {
+    ok('C4-FIX1', '批量取消后按四条件重判 edge 缩回');
+}
+if (!/recheckEdge:\s*maybeCollapseEdge/.test(src)) {
+    fail('C4-FIX1', 'UI 未导出 recheckEdge(maybeCollapseEdge)');
+}
+
 // ---------- 版本 ----------
 if (!quiet) console.log('版本. 脚本头 @version');
 
-has(/\/\/\s*@version\s+2026\.11\.24\.3/, src, 'VER', '@version 为 2026.11.24.3');
+has(/\/\/\s*@version\s+2026\.11\.24\.4/, src, 'VER', '@version 为 2026.11.24.4');
 if (/2026\.11\.24\.2/.test(src)) fail('VER', '源码仍残留旧版本号 2026.11.24.2');
 else ok('VER', '无旧版本号 2026.11.24.2 残留');
 
@@ -251,4 +348,4 @@ if (problems.length) {
     console.error('\n修复方向: 核对 edge 按钮独立类与监听、ptac_edge 读写、竖线四值与双锚点展开、面板 bottom:84px。');
     process.exit(1);
 }
-console.log('\n[PASS] FAB 靠边模式静态护栏通过(C1 / C2 / C3 + 边界)。');
+console.log('\n[PASS] FAB 靠边模式静态护栏通过(C1 / C2 / C3 / C4 + 边界)。');

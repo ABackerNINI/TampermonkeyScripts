@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.24.3
+// @version      2026.11.24.4
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -2296,6 +2296,14 @@ const K = {
         .fab.edge:hover .fab-badge, .fab.edge:focus-within .fab-badge {
             opacity: 1; visibility: visible;
         }
+        /* C4 逻辑保持展开: 面板打开 / 批量进行 / 触屏首段 / 键盘聚焦期间由 JS 加 .edge-open,
+           形变与 :hover 同款; 命中区仍由 .fab.edge::before 外向扩展, 临界点连续移动不反复翻转. */
+        .fab.edge.edge-open {
+            width: 52px; height: 52px; border-radius: 50%; transform: none;
+        }
+        .fab.edge.edge-open .fab-core, .fab.edge.edge-open .fab-badge {
+            opacity: 1; visibility: visible;
+        }
         /* FAB 皮肤: 感叹号主显示(信号灯失败态) — 白字辉光 */
         .fab-core { display: flex; align-items: center; justify-content: center; }
         .fab-core .mark { font-size: 21px; font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
@@ -2540,6 +2548,10 @@ const K = {
         let lastRetryAt = 0; // 单站重试发起时间戳: 8s 内同页防连点(焦点已切新标签, 防切回误触)
         let skin = 'chameleon'; // FAB 皮肤: 变色龙(chameleon)|信号灯(signal)|静态(static); legacy number/ring 渲染时归一为变色
         let edge = false; // FAB 靠边模式(与皮肤正交): true=静态竖线; 不参与皮肤单选, 切皮肤不重置
+        // C4 靠边状态机辅助量: 只服务"展开/缩回"判定, 不参与任何签到/批量/冷却业务.
+        let shadowRoot = null;    // closed shadow 引用, 供焦点判定读 activeElement
+        let edgeHover = false;    // 指针是否仍在 fab 本体或 ::before 外向命中区内
+        let touchStage = false;   // 触屏首段: 首次点竖线只展开, 不开面板
 
         const SVG_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.26"/></svg>';
 
@@ -2605,6 +2617,7 @@ const K = {
             // (站点清单 + 各站今日签到状态), 等于把用户在所有 PT 站的画像送给当前访问的这一个站。
             // 脚本自身全程持有 shadow 引用, 不需要 shadowRoot 访问, 故收紧为 closed(见 P29/S05)。
             const shadow = host.attachShadow({ mode: 'closed' });
+            shadowRoot = shadow; // C4: 焦点判定要用(闭合 shadow 只有脚本自身持有引用)
             const style = document.createElement('style');
             style.textContent = UI_CSS;
             shadow.appendChild(style);
@@ -2721,7 +2734,27 @@ const K = {
                 }
             }, true);
 
-            fab.addEventListener('click', togglePanel);
+            // C4 靠边状态机的输入源: 指针进出命中区 / 焦点离开 fab / 触屏首段收尾.
+            // 这些监听器只做状态记账并触发缩回判定, 不改既有失焦自动关闭链(mousedown/blur).
+            fab.addEventListener('mouseenter', () => { edgeHover = true; });
+            fab.addEventListener('mouseleave', () => { edgeHover = false; maybeCollapseEdge(); });
+            fab.addEventListener('focusout', maybeCollapseEdge);
+            fab.addEventListener('click', onFabClick);
+            document.addEventListener('pointerdown', (e) => {
+                if (!edge || !touchStage) return;
+                if (host && host.contains(e.target)) return;
+                // 触屏首段后点到 UI 之外: 撤掉首段标记, 让该次点击的失焦链照常收尾
+                touchStage = false;
+                maybeCollapseEdge();
+            }, true);
+            window.addEventListener('blur', () => {
+                if (!edge) return;
+                // 切标签/切窗口时不会有 mouseleave, 主动清掉指针与触屏首段跟踪,
+                // 使 onWindowBlur 关面板后靠边态能正确缩回(不改 onWindowBlur 本身).
+                edgeHover = false;
+                touchStage = false;
+                maybeCollapseEdge();
+            });
 
             // toast
             toastEl = document.createElement('div');
@@ -2794,6 +2827,8 @@ const K = {
         function setEdge(on) {
             edge = !!on;
             fab.classList.toggle('edge', edge);
+            // C4: 退出靠边态时清掉逻辑保持展开标记与触屏首段, 回完整圆钮不留残留态
+            if (!edge) { fab.classList.remove('edge-open'); touchStage = false; }
             gmSet(K.edge, edge);
             syncEdgeButton();
         }
@@ -2905,6 +2940,43 @@ const K = {
         }
         function batchActive() { return !!(cancelObj); }
 
+        // ---------- C4 靠边状态机 ----------
+        // 在 CSS :hover/:focus-within 之上叠加逻辑保持展开类 .edge-open.
+        // 保持展开的四个条件(任一成立即保持): 面板打开 / 批量进行 / 触屏首段 / 焦点在 fab 内.
+        // 只有四者都不成立且指针确实离开命中区, 才移除标记缩回竖线, 避免临界点反复翻转.
+        function edgeIsOpen() { return fab.classList.contains('edge-open'); }
+        function setEdgeOpen(on) {
+            if (!edge) { fab.classList.remove('edge-open'); return; }
+            fab.classList.toggle('edge-open', !!on);
+        }
+        function focusInFab() {
+            const a = shadowRoot && shadowRoot.activeElement;
+            return !!(a && (a === fab || fab.contains(a)));
+        }
+        function maybeCollapseEdge() {
+            if (!edge) return;
+            if (panel.classList.contains('show')) return;        // 面板打开期间保持展开
+            if (batchActive()) { setEdgeOpen(true); return; }     // 批量中不缩回(强制展开)
+            if (touchStage) return;                               // 触屏首段: 竖线已展开但尚未开面板
+            if (focusInFab()) return;                             // 键盘焦点落在竖线/展开态, 交给 CSS :focus-within
+            if (edgeHover) return;                                // 指针仍在命中区/展开区(连续命中, 不抖动)
+            setEdgeOpen(false);
+        }
+        function onFabClick(e) {
+            if (!edge) { togglePanel(); return; }                 // 非靠边态保持原有点击行为
+            // 只看本次 click 的 pointerType: 触屏才两段式; 鼠标/键盘(Enter/Space 激活 click 无 pointerType)
+            // 一律直接 togglePanel, 不拿跨交互的历史 pointerType 兜底, 否则键盘会被误判成触屏首段.
+            const touchLike = !!(e && e.pointerType === 'touch');
+            // 触屏两段式: 首次点竖线(尚未展开且面板未开)只展开, 不直接开面板; 再点才走 togglePanel.
+            if (touchLike && !edgeIsOpen() && !panel.classList.contains('show')) {
+                touchStage = true;
+                setEdgeOpen(true);
+                return;
+            }
+            touchStage = false;
+            togglePanel();
+        }
+
         // ---------- 批量进行中 UI ----------
         // 整个批量过程(含单站执行与倒计时)都可取消: 挂一个全局取消令牌
         function armCancel() {
@@ -2992,6 +3064,7 @@ const K = {
             panel.classList.add('show');
             render();
             armAutoClose();
+            setEdgeOpen(true); // C4: 面板打开期间逻辑保持展开(showBatchDone 走同一路径)
         }
         function showBanner(msg, variant) {
             bannerEl.className = 'banner' + (variant ? ' ' + variant : '');
@@ -3011,6 +3084,7 @@ const K = {
             panel.classList.remove('skin-open');
             hideBanner();
             disarmAutoClose();
+            maybeCollapseEdge(); // C4: 面板关后按"非批量+指针已离开+非触屏首段"判定是否缩回
         }
         function showBatchDone() {
             endBatch();
@@ -3035,6 +3109,7 @@ const K = {
             init, render, toast, togglePanel, openPanel, closePanel,
             showBatch, updateBatchResult, updateBatchText, countdown,
             endBatch, isCancelled, requestCancel, armCancel, showBatchDone,
+            recheckEdge: maybeCollapseEdge,
             showBanner, hideBanner
         };
     })();
@@ -3368,6 +3443,7 @@ const K = {
         if (UI.isCancelled()) {
             clearTask();
             UI.endBatch();
+            UI.recheckEdge(); // C4: 批量取消后 batchActive 转 false, 按四条件重判是否缩回
             UI.toast('批量已取消, 停留在当前页面');
             UI.render();
             return;
