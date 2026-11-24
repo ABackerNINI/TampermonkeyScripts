@@ -1,26 +1,30 @@
 'use strict';
 /**
- * FAB 靠边模式仿真回归(2026.11.24, 计划 §04 C1/C2/C3 + W4 C4 六场景)
+ * FAB 靠边模式仿真回归(2026.11.24, 计划 26-11-24-2226 §04 B1/B2/C1/C2/C3 + C4 八场景)
  * ------------------------------------------------------------------
  * 静态断言(check-ptac-fab-edge.js)钉住源码接线, 本用例在仿真站跑真实 Edge,
  * 验证用户可见行为:
  *
- *   C1/C2/C3(W3 基线):
- *   ① 靠边态几何: right/bottom 20, 4x120 竖线, 本体动画关停但辉光保留,
+ *   B1/B2/C1(W3 基线):
+ *   ① 靠边态几何: right:0 真贴右边缘/bottom:20, 4x120 竖线, 本体动画关停但辉光保留,
  *      角标数字存在但隐藏, 颜色仍随状态 class;
- *   ② 24px 透明命中区: 竖线左侧的 ::before 外扩区域可被 elementFromPoint 命中;
- *   ③ hover 就地向左侧展开为 52px 圆钮, right/bottom 计算值不变(不跳位),
+ *   ② 并集透明命中区(right:-20/width:72, 右锚点抵消展开内移): 竖线左侧的 ::before 外扩区域可被 elementFromPoint 命中;
+ *   ③ hover/展开内移 20px 回 right:20px 恢复 52px 圆钮, 与完整 FAB 同位置,
  *      图标与角标恢复可见;
  *   ④ 点独立 edge 开关: .edge 与 GM ptac_edge 同步切换, 皮肤高亮不变(正交);
  *   ⑤ 跨站: B 站加载即读 ptac_edge=true 显示为竖线态.
  *
- *   C4(W4 状态机, §04 C4 验收六场景):
+ *   C4(W4 状态机, §04 C4 验收八场景):
  *   ① 竖线态 -> hover 展开 -> 指针移出 -> 缩回竖线;
  *   ② hover 展开 -> 点开面板 -> 指针移出仍保持展开;
  *   ③ 关闭面板 + 指针移出 -> 缩回; 窗口失焦关面板后同样缩回;
  *   ④ 批量进行中(batchActive() 为真)指针移出不缩回, chip 定位独立;
  *   ⑤ 触屏点竖线先展开(不开面板)-> 再点才开面板;
  *   ⑥ 键盘焦点落入竖线 -> 展开, 且面板/chip 定位不随 fab 变形漂移.
+ *
+ *   fix2 C2/C3 闪烁根治: 指针判定改 document 捕获阶段 pointermove + elementFromPoint
+ *   (host.contains 沿用面板自动关闭同款判定), 临界点连续 20 次左右移动不翻转;
+ *   真离开并集才缩回; 并集区外页面坐标不命中宿主(不遮挡站点按钮); 无 setTimeout 时间锁.
  *
  * shadow 观测: FAB/面板挂在 closed shadow 下, 页面脚本拿不到元素;
  *   用 CDP DOM.pierce 穿透读取状态/几何, 并用 document.elementFromPoint 的
@@ -176,7 +180,12 @@ async function waitFabW(sim, page, expected, label) {
     let m;
     while (Date.now() < deadline) {
         m = await fabMetrics(sim, page);
-        if (m && Math.abs(m.w - expected) <= 1.2) return m;
+        if (m && Math.abs(m.w - expected) <= 1.2) {
+            // 宽/高/right 走同一条 0.18s transition: 宽先达标时高可能仍在收尾,
+            // 多等一帧再读, 避免取到中途态(展开高 53px)造成假失败.
+            await new Promise((r) => setTimeout(r, 80));
+            return await fabMetrics(sim, page);
+        }
         await new Promise((r) => setTimeout(r, 100));
     }
     throw new Error(`${label}: 等待 fab 宽度 ${expected} 超时, 最后 cls=${m && m.cls}, w=${m && m.w}, cssW=${m && m.cssW}`);
@@ -223,7 +232,7 @@ async function openBatchPage(sim) {
     return page;
 }
 
-runCase('FAB 靠边: W3 基线 + C4 六场景状态机', async () => {
+runCase('FAB 靠边: W3 基线 + C4 八场景状态机', async () => {
     await withSim(async (sim) => {
         // ==================== W3 基线(C1/C2/C3) ====================
         sim.reset();
@@ -240,7 +249,7 @@ runCase('FAB 靠边: W3 基线 + C4 六场景状态机', async () => {
         assert(/\bedge\b/.test(edge.cls), `靠边态 fab 应带 .edge 类, 实际 ${edge.cls}`);
         near(edge.w, 4, 0.6, '竖线宽');
         near(edge.h, 120, 0.6, '竖线高');
-        near(edge.right, 20, 1, '竖线 right');
+        near(edge.right, 0, 1, '竖线 right(真贴右边缘)');
         near(edge.bottom, 20, 1, '竖线 bottom');
         assertEq(edge.anim, 'none', '竖线态应禁掉 chameleonWave 本体形变');
         assert(edge.glowAnim && edge.glowAnim !== 'none', '竖线态辉光呼吸应保留(颜色跟随状态色)');
@@ -249,16 +258,16 @@ runCase('FAB 靠边: W3 基线 + C4 六场景状态机', async () => {
         assertEq(edge.badgeVis, 'hidden', '竖线态隐藏角标数字');
         assert(Number(edge.badgeText) > 0, '竖线态底层角标数字应仍存在(仅视觉隐藏)');
 
-        const px = Math.round(edge.left - 10);
+        const px = Math.round(edge.left - 16);
         const py = Math.round(edge.top + 100);
         assertEq(await page.eval(`var el = document.elementFromPoint(${px}, ${py});
             return !!(el && el.id === 'ptac-root-v2');`), true,
-            `命中区探测点(${px},${py})应命中 UI 宿主(24px 透明命中区)`);
+            `命中区探测点(${px},${py})应命中 UI 宿主(竖线+展开并集透明命中区)`);
 
         await hoverAt(sim, page, px, py);
         const expanded = await waitFabW(sim, page, 52, 'W3 hover 展开');
         near(expanded.h, 52, 1, '展开高');
-        near(expanded.right, 20, 1, '展开 right(不跳位)');
+        near(expanded.right, 20, 1, '展开 right(内移回完整 FAB 原视觉位置)');
         near(expanded.bottom, 20, 1, '展开 bottom(不跳位)');
         assert(/\bedge\b/.test(expanded.cls), '展开只是 hover 形变, .edge 类仍在');
         assertEq(expanded.coreVis, 'visible', '展开态恢复图标');
@@ -295,7 +304,7 @@ runCase('FAB 靠边: W3 基线 + C4 六场景状态机', async () => {
         // ==================== C4 ① hover 展开 -> 移出缩回 ====================
         let p = await openEdgePage(sim);
         let m = await waitFabW(sim, p, 4, 'C4① 初始竖线');
-        const hx = Math.round(m.left - 10);
+        const hx = Math.round(m.left - 16);
         const hy = Math.round(m.top + 100);
         await hoverAt(sim, p, hx, hy);
         m = await waitFabW(sim, p, 52, 'C4① hover 展开');
@@ -309,7 +318,7 @@ runCase('FAB 靠边: W3 基线 + C4 六场景状态机', async () => {
         // ==================== C4 ② 点开面板 -> 移出仍保持展开 ====================
         p = await openEdgePage(sim);
         m = await waitFabW(sim, p, 4, 'C4② 初始竖线');
-        const cx = Math.round(m.left - 10);
+        const cx = Math.round(m.left - 16);
         const cy = Math.round(m.top + 100);
         await hoverAt(sim, p, cx, cy);
         await waitFabW(sim, p, 52, 'C4② hover 展开');
@@ -329,7 +338,7 @@ runCase('FAB 靠边: W3 基线 + C4 六场景状态机', async () => {
         m = await waitFabW(sim, p, 4, 'C4③ 关面板+移出缩回');
         assertEq(m.open, false, 'C4③ 缩回后无 .edge-open 残留');
         // 失焦通道: 重新开面板, 合成 window blur, 面板与 edge 都应收起
-        await clickAt(sim, p, Math.round(m.left - 10), Math.round(m.top + 100));
+        await clickAt(sim, p, Math.round(m.left - 16), Math.round(m.top + 100));
         await p.waitFor(PANEL_HIT, 6000, 'C4③ 重新展开面板');
         await p.eval('window.dispatchEvent(new Event("blur")); return 1;');
         // headless 下合成 blur 不会真的移走焦点; 补一次 fab.blur() 模拟真实切窗时焦点离页
@@ -424,20 +433,25 @@ runCase('FAB 靠边: W3 基线 + C4 六场景状态机', async () => {
         console.log('  C4⑥ 键盘焦点展开 + 面板/chip 定位不漂移: PASS');
         await p.close();
 
-        // ==================== C4 ⑦ 命中区临界点连续跨边界移动不抖动 ====================
-        // 计划 §07: 展开态命中区必须连续(::before 外向扩展, 不缩小本体),
-        // 临界点连续往返时 fab 宽度稳定在单一态, .edge-open 不反复增删.
+        // ==================== C4 ⑦ 临界点连续 20 次左右移动不翻转(C2 验收) ====================
+        // 计划 fix2 §04 C2: 指针判定改 pointermove + elementFromPoint(host.contains),
+        // 命中区并集覆盖竖线与展开圆钮; 连续往返时 fab 宽度稳定在单一态, .edge-open 不反复增删.
         p = await openEdgePage(sim);
         m = await waitFabW(sim, p, 4, 'C4⑦ 初始竖线');
         const yHit = Math.round(m.top + 100);
-        // xInner: 收起态 24px 命中区内, 展开后也落在 52px 圆钮内;
-        // xOuter: 收起态命中区之外, 但展开态 ::before 外向命中区之内(构成迟滞带, 不应翻转).
+        // C1 边界: 并集区外的页面坐标不应命中 UI 宿主(不遮挡站点按钮点击)
+        assertEq(await p.eval(`var el = document.elementFromPoint(
+            Math.round(innerWidth - 200), Math.round(innerHeight - 100));
+            return !!(el && el.id === 'ptac-root-v2');`), false,
+            'C1 并集区外页面坐标不命中 UI 宿主(不遮挡站点按钮)');
+        // xInner: 竖线态并集命中区内, 展开后也落在 52px 圆钮内;
+        // xOuter: 竖线态并集命中区之外, 但展开态圆钮本体之内(构成迟滞带, 不应翻转).
         const xInner = Math.round(m.left - 16);
         const xOuter = Math.round(m.left - 56);
         await hoverAt(sim, p, xInner, yHit);
         m = await waitFabW(sim, p, 52, 'C4⑦ 进入命中区展开');
         assertEq(m.open, false, 'C4⑦ 纯 hover 不应加 .edge-open');
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < 20; i++) {
             await hoverAt(sim, p, xOuter, yHit);
             // 持续轮询 300ms(超过 0.18s 过渡), 防止"翻转还没开始就检查"的竞态假绿
             await assertFabWStable(sim, p, 52, 300, `C4⑦ 第 ${i + 1} 次外移仍展开`);
@@ -451,7 +465,7 @@ runCase('FAB 靠边: W3 基线 + C4 六场景状态机', async () => {
         await moveAway(sim, p);
         m = await waitFabW(sim, p, 4, 'C4⑦ 真正移出命中区后缩回');
         assertEq(m.open, false, 'C4⑦ 移出后无 .edge-open 残留');
-        console.log('  C4⑦ 临界点连续跨边界移动不抖动: PASS');
+        console.log('  C4⑦ 临界点连续 20 次左右移动不翻转: PASS');
         await p.close();
 
         // ==================== C4 ⑧ 键盘激活不被历史触屏指针误判 ====================

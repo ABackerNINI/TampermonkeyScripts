@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.24.5
+// @version      2026.11.24.6
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -2270,40 +2270,43 @@ const K = {
         :host(.motion-off) .fab,
         :host(.motion-off) .fab::after,
         :host(.motion-off) .fab.chameleon { animation: none !important; }
-        /* 靠边模式(C1/C2/C3, 正交于皮肤): 右下角静态竖线; 右/底双锚点恒为 20px,
-           只收窄宽高向左上生长, 展开回 52px 时锚点计算值不变(不跳位).
+        /* 靠边模式(B1/B2/C1, 正交于皮肤): 右下角静态竖线真贴右边缘(right:0), bottom:20 与完整 FAB 同一水平带;
            颜色直接沿用状态 class 的渐变底与 --glow 辉光语义, 不另立色规则;
-           竖线态禁掉本体形变(chameleonWave 仅改 transform), 避免 4px 细线被逐帧晃动. */
+           竖线态禁掉本体形变(chameleonWave 仅改 transform), 避免 4px 细线被逐帧晃动;
+           right 纳入 transition, 与宽高/圆角同时长同曲线, 展开内移 20px 与形变同步(不"先跳再变"). */
         .fab.edge {
-            right: 20px; bottom: 20px; width: 4px; height: 120px; border-radius: 2px;
+            right: 0; bottom: 20px; width: 4px; height: 120px; border-radius: 2px;
             animation: none !important;
-            transition: width 0.18s ease, height 0.18s ease, border-radius 0.18s ease,
+            transition: right 0.18s ease, width 0.18s ease, height 0.18s ease, border-radius 0.18s ease,
                         transform 0.15s ease, box-shadow 0.15s ease;
         }
-        /* 透明命中区: ::after 已用于辉光, ::before 空闲(ring 的旧 ::before 已在 W2 删除);
-           向左外扩 20px 加本体 4px 约 24px, 上下各留 10px, 覆盖整条竖线. */
+        /* 透明命中区(C1 实测校准): ::after 已用于辉光, ::before 空闲;
+           以 fab 右边缘为锚点 right:-20px + width:72px —— 抵消展开内移的 20px,
+           竖线态覆盖距右0-52px、展开态覆盖距右0-72px(含整枚 52px 圆钮), 两态并集连续无真空;
+           关键: 命中区随 fab 右边缘移动而非左边缘, 过渡中不会从指针下"跳走"(left 锚点方案会 :hover 振荡);
+           top:-10px/height:140px 纵向包住 120px 竖线; pointer-events 只在透明伪元素上, 不拦截并集区外站点点击. */
         .fab.edge::before {
-            content: ''; position: absolute; left: -20px; top: -10px;
-            width: 24px; height: 140px;
+            content: ''; position: absolute; right: -20px; top: -10px;
+            width: 72px; height: 140px;
         }
         /* 竖线态只留色条: 图标与角标数字隐藏, 展开态恢复 */
         .fab.edge .fab-core, .fab.edge .fab-badge {
             opacity: 0; visibility: hidden; transition: opacity 0.15s ease;
         }
-        /* hover / 键盘聚焦: 就地把宽高恢复到原 52px 圆钮, right/bottom 不改.
-           同时抵消 .fab:hover 的 translateY/scale, 保证展开前后实测几何严格一致(不跳位);
-           悬停反馈由 .fab.chameleon:hover 的 filter 亮度承担. */
+        /* hover / 键盘聚焦(B2): 内移 20px 回 right:20px, 与完整 FAB 同一视觉位置;
+           宽高就地恢复原 52px 圆钮, bottom 仍 20; right 与宽高同条 transition 同步过渡, 位移形变一体;
+           同时抵消 .fab:hover 的 translateY/scale; 悬停反馈由 .fab.chameleon:hover 的 filter 亮度承担. */
         .fab.edge:hover, .fab.edge:focus-within {
-            width: 52px; height: 52px; border-radius: 50%; transform: none;
+            right: 20px; width: 52px; height: 52px; border-radius: 50%; transform: none;
         }
         .fab.edge:hover .fab-core, .fab.edge:focus-within .fab-core,
         .fab.edge:hover .fab-badge, .fab.edge:focus-within .fab-badge {
             opacity: 1; visibility: visible;
         }
-        /* C4 逻辑保持展开: 面板打开 / 批量进行 / 触屏首段 / 键盘聚焦期间由 JS 加 .edge-open,
-           形变与 :hover 同款; 命中区仍由 .fab.edge::before 外向扩展, 临界点连续移动不反复翻转. */
+        /* C4 逻辑保持展开(B2): 面板打开 / 批量进行 / 触屏首段 / 键盘聚焦期间由 JS 加 .edge-open,
+           形变与 :hover 同款(含 right:20px 内移); 命中区仍由 .fab.edge::before 外向扩展. */
         .fab.edge.edge-open {
-            width: 52px; height: 52px; border-radius: 50%; transform: none;
+            right: 20px; width: 52px; height: 52px; border-radius: 50%; transform: none;
         }
         .fab.edge.edge-open .fab-core, .fab.edge.edge-open .fab-badge {
             opacity: 1; visibility: visible;
@@ -2562,7 +2565,7 @@ const K = {
         let motionOn = true; // FAB 动效开关(与皮肤/靠边正交): true=动画开, false=关; 切皮肤/靠边不重置
         // C4 靠边状态机辅助量: 只服务"展开/缩回"判定, 不参与任何签到/批量/冷却业务.
         let shadowRoot = null;    // closed shadow 引用, 供焦点判定读 activeElement
-        let edgeHover = false;    // 指针是否仍在 fab 本体或 ::before 外向命中区内
+        let edgePointerPt = null; // 最近一次 document pointermove 的视口坐标(C2 用 elementFromPoint 实时判定命中)
         let touchStage = false;   // 触屏首段: 首次点竖线只展开, 不开面板
 
         const SVG_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.26"/></svg>';
@@ -2755,10 +2758,15 @@ const K = {
                 }
             }, true);
 
-            // C4 靠边状态机的输入源: 指针进出命中区 / 焦点离开 fab / 触屏首段收尾.
+            // C2/C4 靠边状态机输入源: document 捕获阶段 pointermove 实时判定指针命中 / 焦点离开 / 触屏首段收尾.
+            // pointermove 用 elementFromPoint 命中 host(#ptac-root-v2, closed shadow 重定向)算区内,
+            // 否则算区外触发缩回判定; 不再用 mouseenter/leave 标志(临界点连续移动不翻转);
             // 这些监听器只做状态记账并触发缩回判定, 不改既有失焦自动关闭链(mousedown/blur).
-            fab.addEventListener('mouseenter', () => { edgeHover = true; });
-            fab.addEventListener('mouseleave', () => { edgeHover = false; maybeCollapseEdge(); });
+            document.addEventListener('pointermove', (e) => {
+                if (!edge) return;
+                edgePointerPt = { x: e.clientX, y: e.clientY };
+                maybeCollapseEdge();
+            }, true);
             fab.addEventListener('focusout', maybeCollapseEdge);
             fab.addEventListener('click', onFabClick);
             document.addEventListener('pointerdown', (e) => {
@@ -2770,9 +2778,9 @@ const K = {
             }, true);
             window.addEventListener('blur', () => {
                 if (!edge) return;
-                // 切标签/切窗口时不会有 mouseleave, 主动清掉指针与触屏首段跟踪,
+                // 切标签/切窗口时不会有 pointermove, 主动清掉指针坐标与触屏首段跟踪,
                 // 使 onWindowBlur 关面板后靠边态能正确缩回(不改 onWindowBlur 本身).
-                edgeHover = false;
+                edgePointerPt = null;
                 touchStage = false;
                 maybeCollapseEdge();
             });
@@ -2975,7 +2983,8 @@ const K = {
         // ---------- C4 靠边状态机 ----------
         // 在 CSS :hover/:focus-within 之上叠加逻辑保持展开类 .edge-open.
         // 保持展开的四个条件(任一成立即保持): 面板打开 / 批量进行 / 触屏首段 / 焦点在 fab 内.
-        // 只有四者都不成立且指针确实离开命中区, 才移除标记缩回竖线, 避免临界点反复翻转.
+        // C2: 指针判定改 document 捕获阶段 pointermove + elementFromPoint —— 命中 host 算区内,
+        // 否则区外才缩回; 指针坐标来自最近一次 pointermove, 不依赖 mouseenter/leave 标志.
         function edgeIsOpen() { return fab.classList.contains('edge-open'); }
         function setEdgeOpen(on) {
             if (!edge) { fab.classList.remove('edge-open'); return; }
@@ -2985,13 +2994,20 @@ const K = {
             const a = shadowRoot && shadowRoot.activeElement;
             return !!(a && (a === fab || fab.contains(a)));
         }
+        // 指针是否命中 UI host(fab/命中区/面板): closed shadow 下 elementFromPoint 命中结果
+        // 重定向成 #ptac-root-v2, 沿用面板自动关闭的同款 host.contains 判定(见 fab-ui.md 校准项 23).
+        function pointerInEdgeHit() {
+            if (!edgePointerPt || !host) return false;
+            const t = document.elementFromPoint(edgePointerPt.x, edgePointerPt.y);
+            return !!(t && host.contains(t));
+        }
         function maybeCollapseEdge() {
             if (!edge) return;
             if (panel.classList.contains('show')) return;        // 面板打开期间保持展开
             if (batchActive()) { setEdgeOpen(true); return; }     // 批量中不缩回(强制展开)
             if (touchStage) return;                               // 触屏首段: 竖线已展开但尚未开面板
             if (focusInFab()) return;                             // 键盘焦点落在竖线/展开态, 交给 CSS :focus-within
-            if (edgeHover) return;                                // 指针仍在命中区/展开区(连续命中, 不抖动)
+            if (pointerInEdgeHit()) return;                       // 指针命中 host(命中区并集)才保持, 否则缩回
             setEdgeOpen(false);
         }
         function onFabClick(e) {

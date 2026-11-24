@@ -28,6 +28,7 @@
     headless 下切标签页**不一定**派发 window blur(无窗口焦点), 用例会自动退化为同源的 `window` blur 事件。
 
     **FAB 靠边模式 C4 状态机六场景实测(26-11-24, 随本专题入库)**: ① 竖线态 hover 就地展开、指针移出缩回; ② 面板打开期间指针移出仍保持展开, 关闭面板且指针移出后缩回; ③ 窗口失焦关闭面板后, 指针在外且焦点离页时正确缩回(既有失焦自动关闭链未改); ④ `batchActive()` 期间强制展开不缩回, chip 的 right:84px/bottom:30px 不随 fab 变形; ⑤ 触屏两段式: 首次点竖线只展开不开面板, 再点才开面板; ⑥ 键盘焦点落入竖线即展开, 面板 bottom:84px 与 chip 定位在竖线态/展开态一致不漂移。六场景在 `sim-ptac-fab-edge.js` 真浏览器逐条通过, `check-ptac-fab-edge.js`(含 C4 断言)与 `check-ptac-panel.js`(失焦链)全绿; 同批版本 2026.11.24.4。
+    **fix2 B/C 批更新(2026.11.24.6)**: 真靠边锚点 `right:0` + 展开内移 `right:20px`(right 纳入同一条 transition), 命中区 `::before` 覆盖竖线+展开圆钮最大并集(right:-20/top:-10/width:72/height:140, 右锚点抵消展开内移, 避免 left 锚点过渡中命中区从指针下跳走致 :hover 振荡), 指针判定改 document 捕获阶段 `pointermove` + `elementFromPoint`(host.contains 重定向, 沿用本校准项判定), 移除 edgeHover 标志、放弃时间锁(D7); 仿真扩为八场景(新增临界点连续 20 次不翻转、并集区外不遮挡页面按钮), 静态断言同步更新; 状态色与四条件语义不变。
 
 24. **青蛙 / 拾刻(2026.11.11 接入, 待实测)**: ① 登录态打开 https://www.qingwapt.com/index.php /
     https://www.ptskit.org/index.php 未签时 → 应自动点击签到链接(`[签到得蝌蚪]` / `[签到得魔力]`)并转绿

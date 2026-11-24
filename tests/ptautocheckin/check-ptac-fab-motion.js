@@ -18,7 +18,7 @@
  *   A3 CSS 三选择器均 animation:none!important(用 :host 形式穿透 closed shadow);
  *      ptacHlPulse 规则与 @keyframes 仍在, 且不在关停选择器内;
  *   A4 init 读 legacy static 时把动效内存标志置关, 不写回 K.motion;
- *   版本 @version 2026.11.24.5。
+ *   版本 @version 2026.11.24.6(真靠边与闪烁根治批次递增)。
  *
  * 用法:
  *   node tests/ptautocheckin/check-ptac-fab-motion.js
@@ -190,8 +190,8 @@ has(/animation:\s*ptacHlPulse\s+1\.8s/, src, 'A3', '签到按钮高亮动画规�
 // ---------- 版本 ----------
 if (!quiet) console.log('版本. 脚本头 @version');
 
-has(/\/\/\s*@version\s+2026\.11\.24\.5/, src, 'VER', '@version 为 2026.11.24.5');
-hasNone(/2026\.11\.24\.4/, src, 'VER', '源码无旧版本号 2026.11.24.4 残留');
+has(/\/\/\s*@version\s+2026\.11\.24\.6/, src, 'VER', '@version 为 2026.11.24.6');
+hasNone(/2026\.11\.24\.5/, src, 'VER', '源码无旧版本号 2026.11.24.5 残留');
 
 // ---------- 汇总 ----------
 if (!quiet) console.log('-'.repeat(72));
