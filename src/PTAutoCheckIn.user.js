@@ -2,7 +2,7 @@
 // @name         PTAutoCheckIn
 // @name:zh-CN   PT多站点自动签到
 // @namespace    https://github.com/ABackerNINI/TampermonkeyScripts
-// @version      2026.11.24.7
+// @version      2026.11.25.1
 // @description  访问PT网站与百度贴吧(多吧)时自动签到, 支持悬浮按钮一键批量签到与结果查看
 // @author       ABacker
 // @match        *://*.tangpt.top/*
@@ -2280,13 +2280,17 @@ const K = {
             transition: right 0.18s ease, width 0.18s ease, height 0.18s ease, border-radius 0.18s ease,
                         transform 0.15s ease, box-shadow 0.15s ease;
         }
-        /* 透明命中区(C1 实测校准): ::after 已用于辉光, ::before 空闲;
-           以 fab 右边缘为锚点 right:-20px + width:72px —— 抵消展开内移的 20px,
+        /* 透明命中区(C1 右锚 + 垂直锚定实校准): ::after 已用于辉光, ::before 空闲;
+           水平以 fab 右边缘为锚点 right:-20px + width:72px —— 抵消展开内移的 20px,
            竖线态覆盖距右0-52px、展开态覆盖距右0-72px(含整枚 52px 圆钮), 两态并集连续无真空;
-           关键: 命中区随 fab 右边缘移动而非左边缘, 过渡中不会从指针下"跳走"(left 锚点方案会 :hover 振荡);
-           top:-10px/height:140px 纵向包住 120px 竖线; pointer-events 只在透明伪元素上, 不拦截并集区外站点点击. */
+           垂直改 bottom:-10px 锚定(不是 top): 竖线态 fab 高 120px、展开态高 52px,
+           若用 top 锚定则展开后顶部下移 68px, 命中区顶随之掉到圆钮上方 10px,
+           停在竖线顶端附近的指针展开后脱离命中区 -> 缩回 -> 再命中 -> 再展开, 即"触发点上方闪烁";
+           bottom 锚定利用两态 fab 的 bottom 恒为 20px, 命中区垂直范围恒为距视口底 10-150px,
+           覆盖竖线全长(20-140px)并在顶端上方留 10px, 两态不随形变跳走;
+           pointer-events 只在透明伪元素上, 不拦截并集区外站点点击. */
         .fab.edge::before {
-            content: ''; position: absolute; right: -20px; top: -10px;
+            content: ''; position: absolute; right: -20px; bottom: -10px;
             width: 72px; height: 140px;
         }
         /* 竖线态只留色条: 图标与角标数字隐藏, 展开态恢复 */

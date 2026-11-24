@@ -18,7 +18,7 @@
  *   A3 CSS 三选择器均 animation:none!important(用 :host 形式穿透 closed shadow);
  *      ptacHlPulse 规则与 @keyframes 仍在, 且不在关停选择器内;
  *   A4 init 读 legacy static 时把动效内存标志置关, 不写回 K.motion;
- *   版本 @version 2026.11.24.7(CPU=0 验收批次递增)。
+ *   版本 @version 2026.11.25.1(跨天: 垂直命中区锚定修复触发点上方闪烁)。
  *
  * 用法:
  *   node tests/ptautocheckin/check-ptac-fab-motion.js
@@ -248,8 +248,8 @@ else {
 // ---------- 版本 ----------
 if (!quiet) console.log('版本. 脚本头 @version');
 
-has(/\/\/\s*@version\s+2026\.11\.24\.7/, src, 'VER', '@version 为 2026.11.24.7');
-hasNone(/2026\.11\.24\.6/, src, 'VER', '源码无旧版本号 2026.11.24.6 残留');
+has(/\/\/\s*@version\s+2026\.11\.25\.1/, src, 'VER', '@version 为 2026.11.25.1');
+hasNone(/2026\.11\.24\.7/, src, 'VER', '源码无旧版本号 2026.11.24.7 残留');
 
 // ---------- 汇总 ----------
 if (!quiet) console.log('-'.repeat(72));

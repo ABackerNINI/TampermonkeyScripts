@@ -47,10 +47,13 @@ const ALL_UNIT_IDS = Array.from(new Set(
     (SRC_TEXT.match(/\bid:\s*'([a-zA-Z0-9_]+)'/g) || []).map((s) => s.match(/'([^']+)'/)[1])));
 
 const HAS_UI = `return !!document.getElementById('ptac-root-v2');`;
-// 面板开合: elementFromPoint 进入 shadow 后把命中结果重定向成宿主 #ptac-root-v2
-const PANEL_HIT = `var el = document.elementFromPoint(Math.round(innerWidth - 60), Math.round(innerHeight - 104));
+// 面板开合: elementFromPoint 进入 shadow 后把命中结果重定向成宿主 #ptac-root-v2.
+// 探测点取 (innerWidth-200, innerHeight-104): 面板 right:20/bottom:84/width:330 → 点在面板内;
+// 且 x=W-200 远离靠边命中区并集(x∈[W-72,W+20]), 面板关闭时该点必然落回页面, 不受命中区几何影响.
+// (旧探测点 W-60 在垂直锚定修复后落入命中区 y∈[H-150,H-10], 会误判"面板仍开", 故挪到 W-200.)
+const PANEL_HIT = `var el = document.elementFromPoint(Math.round(innerWidth - 200), Math.round(innerHeight - 104));
     return !!(el && el.id === 'ptac-root-v2');`;
-const PANEL_MISS = `var el = document.elementFromPoint(Math.round(innerWidth - 60), Math.round(innerHeight - 104));
+const PANEL_MISS = `var el = document.elementFromPoint(Math.round(innerWidth - 200), Math.round(innerHeight - 104));
     return !(el && el.id === 'ptac-root-v2');`;
 
 // 通过 CDP 穿透 closed shadow 解析任意元素的远程对象引用
@@ -483,6 +486,33 @@ runCase('FAB 靠边: W3 基线 + C4 八场景状态机', async () => {
         assertEq(await panelShown(sim, p), true,
             'C4⑧ 键盘激活必须直接开面板, 不得被历史触屏指针误判成首段');
         console.log('  C4⑧ 键盘激活直接开面板(不被历史触屏指针误判): PASS');
+        await p.close();
+
+        // ==================== C4 ⑨ 触发点上方 y 临界点不闪烁(垂直命中区回归) ====================
+        // 用户报 residual bug: 鼠标放在「靠近触发点上方」会闪烁。上一轮 fix2 只把命中区的
+        // 水平锚点从 left 改 right(修左右振荡), 垂直仍是 top:-10px/height:140px —— 而竖线态
+        // fab 高 120px、展开态高 52px, 展开后 fab 顶部下移 68px, ::before 命中区顶随之下移。
+        // 结果: 停在竖线顶端附近(y=top+3)的指针, 展开后落到 ::before 上边界之外 -> JS
+        // pointerInEdgeHit() 判离 -> setEdgeOpen(false) + CSS :hover 也丢 -> 缩回; 缩回后命中区
+        // 顶又回到该点 -> 再展开, 形成可见闪烁。此用例把指针钉在顶端上方临界带连续采样,
+        // 要求宽度稳定在 52(一旦振荡会采到 4), 复现后修法为把命中区垂直锚点改 bottom。
+        p = await openEdgePage(sim);
+        m = await waitFabW(sim, p, 4, 'C4⑨ 初始竖线');
+        // 竖线本体顶 y = m.top; 命中区(bottom 锚)顶 = m.top-10px。取顶端上下多点:
+        // top-7/top(顶端上沿)/top+3(顶端下方) 都应在两态命中区内, hover 后不得脱离。
+        const xOnBar = Math.round(m.left + 2); // 竖线本体水平范围内(x ∈ [left, left+4])
+        const yProbes = [Math.round(m.top - 7), Math.round(m.top), Math.round(m.top + 3)];
+        for (const yProbe of yProbes) {
+            await moveAway(sim, p); // 先彻底退出上一点, 让 fab 缩回竖线
+            await waitFabW(sim, p, 4, `C4⑨ y=${yProbe} 复位竖线`);
+            await hoverAt(sim, p, xOnBar, yProbe);
+            // 先等展开过渡到位(0.18s), 再持续采样确认不会缩回(若命中区有洞会展开后立刻缩回)
+            await waitFabW(sim, p, 52, `C4⑨ y=${yProbe} hover 展开`);
+            await assertFabWStable(sim, p, 52, 1000, `C4⑨ 触发点上方 y=${yProbe} 悬停应稳定展开(不闪烁)`);
+            m = await fabMetrics(sim, p);
+            assertEq(m.open, false, `C4⑨ y=${yProbe} 纯 hover 不应加 .edge-open`);
+        }
+        console.log('  C4⑨ 触发点上方 y 临界多点稳定不闪烁: PASS');
         await p.close();
     });
 });

@@ -9,7 +9,7 @@
  *   C2 新增 GM 键 ptac_edge, init 用 gmGet(K.edge, false) 初始化并给 fab 加 .edge,
  *      开关点击用 gmSet(K.edge, bool) 持久化(跨站, 不引入新 GM API);
  *   fix2 B1/B2: .fab.edge 竖线 right:0(真贴右边缘)/bottom:20/width:4/height:120, 颜色继承状态 class
- *      的渐变底与 --glow; ::before 命中区覆盖"竖线+展开圆钮"最大并集(right:-20/width:72/top:-10/height:140, 右锚点抵消展开内移);
+ *      的渐变底与 --glow; ::before 命中区覆盖"竖线+展开圆钮"最大并集(right:-20/width:72/bottom:-10/height:140, 水平右锚抵消内移、垂直 bottom 锚定不随形变跳走);
  *      hover / focus-within / .edge-open 内移 20px 回 right:20px 恢复 52px 圆钮, right 纳入同一条 transition;
  *   fix2 C2/C3: maybeCollapseEdge 指针判定改 document 捕获阶段 pointermove + elementFromPoint
  *      (命中 host 算区内, host.contains 沿用面板自动关闭判定), 移除 edgeHover 标志; 放弃时间锁(§06 D7).
@@ -25,7 +25,7 @@
  *   B1/B2/C1 真靠边锚点 right:0 / 展开内移 right:20 / 命中区并集 / transition 纳入 right;
  *   C2/C3 pointermove + elementFromPoint + host.contains, 无 edgeHover 标志与 setTimeout 时间锁;
  *   边界 .panel bottom:84px 与 .chip right:84px bottom:30px 均未改;
- *   版本 @version 2026.11.24.7(CPU=0 验收批次递增).
+ *   版本 @version 2026.11.25.1(跨天: 垂直命中区锚定修复触发点上方闪烁).
  *
  * 用法:
  *   node tests/ptautocheckin/check-ptac-fab-edge.js
@@ -191,15 +191,19 @@ if (!hitRule) {
 } else {
     has(/\bright:\s*-20px\s*;/, hitRule, 'C1', '命中区以右边缘为锚点外扩 20px(抵消展开内移)');
     has(/\bwidth:\s*72px\s*;/, hitRule, 'C1', '命中区总宽 72px(竖线+展开圆钮最大并集)');
-    has(/\btop:\s*-10px\s*;/, hitRule, 'C1', '命中区上留 10px');
+    has(/\bbottom:\s*-10px\s*;/, hitRule, 'C1', '命中区垂直锚定 bottom(两态 fab bottom 恒 20px, 不随展开形变跳走)');
+    if (/\btop:\s*-10px\s*;/.test(hitRule)) fail('C1', '命中区仍用 top 锚点: 展开后顶部下移 68px 会致触发点上方闪烁');
     has(/\bheight:\s*140px\s*;/, hitRule, 'C1', '命中区纵向覆盖 120px 竖线并留余量');
     if (/pointer-events:\s*none/.test(hitRule)) fail('C3', '命中区 ::before 设了 pointer-events: none, 透明命中区失效');
     else ok('C3', '命中区用 ::before(避开已用于辉光的 ::after)且未禁用指针事件');
 }
 
-// C1 实测校准: 命中区若用 left 锚点, 展开内移 20px 后过渡中命中区会从指针下跳走 ->
+// C1 实测校准(水平): 命中区若用 left 锚点, 展开内移 20px 后过渡中命中区会从指针下跳走 ->
 // :hover 振荡闪烁; 改用 right 锚点(right:-20px)抵消内移, 命中区在屏幕上稳定覆盖并集.
-// 静态护栏只认 right 锚点且宽度覆盖 52px 圆钮(见上一条 width:72px 断言).
+// C1 实测校准(垂直): 若用 top 锚点, 展开时 fab 高 120->52 顶部下移 68px, 命中区顶随之下移,
+// 停在竖线顶端附近的指针展开后脱离命中区 -> 缩回 -> 再展开 = "触发点上方闪烁";
+// 改用 bottom 锚点(bottom:-10px, 两态 fab bottom 恒 20px), 命中区垂直范围两态恒定.
+// 静态护栏只认 right+bottom 双锚且宽高覆盖并集(见上一条 width:72px / bottom:-10px 断言).
 
 const hideRule = ruleBlock('.fab.edge .fab-core, .fab.edge .fab-badge');
 if (!hideRule) {
@@ -376,7 +380,7 @@ if (!/recheckEdge:\s*maybeCollapseEdge/.test(src)) {
 // ---------- 版本 ----------
 if (!quiet) console.log('版本. 脚本头 @version');
 
-has(/\/\/\s*@version\s+2026\.11\.24\.7/, src, 'VER', '@version 为 2026.11.24.7');
+has(/\/\/\s*@version\s+2026\.11\.25\.1/, src, 'VER', '@version 为 2026.11.25.1');
 if (/2026\.11\.24\.6/.test(src)) fail('VER', '源码仍残留旧版本号 2026.11.24.6');
 else ok('VER', '无旧版本号 2026.11.24.6 残留');
 

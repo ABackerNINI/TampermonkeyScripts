@@ -29,6 +29,7 @@
 
     **FAB 靠边模式 C4 状态机六场景实测(26-11-24, 随本专题入库)**: ① 竖线态 hover 就地展开、指针移出缩回; ② 面板打开期间指针移出仍保持展开, 关闭面板且指针移出后缩回; ③ 窗口失焦关闭面板后, 指针在外且焦点离页时正确缩回(既有失焦自动关闭链未改); ④ `batchActive()` 期间强制展开不缩回, chip 的 right:84px/bottom:30px 不随 fab 变形; ⑤ 触屏两段式: 首次点竖线只展开不开面板, 再点才开面板; ⑥ 键盘焦点落入竖线即展开, 面板 bottom:84px 与 chip 定位在竖线态/展开态一致不漂移。六场景在 `sim-ptac-fab-edge.js` 真浏览器逐条通过, `check-ptac-fab-edge.js`(含 C4 断言)与 `check-ptac-panel.js`(失焦链)全绿; 同批版本 2026.11.24.4。
     **fix2 B/C 批更新(2026.11.24.6)**: 真靠边锚点 `right:0` + 展开内移 `right:20px`(right 纳入同一条 transition), 命中区 `::before` 覆盖竖线+展开圆钮最大并集(right:-20/top:-10/width:72/height:140, 右锚点抵消展开内移, 避免 left 锚点过渡中命中区从指针下跳走致 :hover 振荡), 指针判定改 document 捕获阶段 `pointermove` + `elementFromPoint`(host.contains 重定向, 沿用本校准项判定), 移除 edgeHover 标志、放弃时间锁(D7); 仿真扩为八场景(新增临界点连续 20 次不翻转、并集区外不遮挡页面按钮), 静态断言同步更新; 状态色与四条件语义不变。
+    **触发点上方闪烁修复(2026.11.25.1)**: 命中区垂直锚点 top:-10 → bottom:-10(水平仍 right:-20)。fix2 B/C 批只修了水平振荡, 垂直仍用 top 锚点: 竖线态 fab 高 120px/展开态 52px, 展开后顶部下移 68px, 命中区顶随之掉到圆钮上方 10px, 停在竖线顶端附近(y≈top)的指针展开后脱离命中区 → CSS `:hover` 丢 + JS `pointerInEdgeHit()` 判离 → 缩回 → 再命中 → 再展开 = 用户报的"触发点上方闪烁"。改 bottom 锚后命中区垂直范围两态恒定 `[视口底-150, 视口底-10]`, 顶端上方留 10px。仿真 C4 扩为九场景(新增 C4⑨: top-7/top/top+3 三点各悬停采样 1s 不缩回), `sim-ptac-fab-edge.js` 的面板探测点因命中区几何变化从 W-60 挪到 W-200(面板内、命中区外), `check-ptac-fab-edge.js` 改认 bottom 锚点并反查无 top:-10px 残留, @version 2026.11.24.7 → 2026.11.25.1; 签到逻辑与四条件语义零改动。
 
 24. **青蛙 / 拾刻(2026.11.11 接入, 待实测)**: ① 登录态打开 https://www.qingwapt.com/index.php /
     https://www.ptskit.org/index.php 未签时 → 应自动点击签到链接(`[签到得蝌蚪]` / `[签到得魔力]`)并转绿
