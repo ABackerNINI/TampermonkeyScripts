@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>PTAutoCheckIn FAB 动效开关化、真靠边与闪烁根治修补计划</title>
+<meta name="doc-type" content="plan">
+<meta name="doc-topic" content="ptac-fab-fix2">
+<meta name="doc-status" content="Open">
+<meta name="doc-added" content="26-11-24-2226">
+<meta name="doc-updated" content="26-11-24-2226">
+<meta name="doc-refs" content="memory-bank/plans/26-11-24-1409-plan-ptac-fab-skin-edge.html,memory-bank/tasks/26-11-24-webui-ptac-fab-skin-edge.md">
+<style>
+  :root {
+    --bg: #10151a;
+    --ink: #e4eaef;
+    --dim: #a2b0bd;
+    --faint: #6f7d8a;
+    --hair: #26313a;
+    --hair-soft: #1c252d;
+    --accent: #6db3c9;
+    --accent-ink: #8fd0e0;
+    --warn: #e2a86e;
+    --ok: #8fc98f;
+    --no: #d98a8a;
+    --code-bg: #151d25;
+    --sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --display: "Bahnschrift", "Segoe UI", "Microsoft YaHei", sans-serif;
+    --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); color-scheme: dark; font-family: var(--sans); font-size: 15px; line-height: 1.65; margin: 0; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #2c3944; border-radius: 5px; }
+  .sheet { max-width: 1280px; margin: 0 auto; padding: 48px clamp(18px, 3.2vw, 44px) 80px; }
+  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+  h1 { font-family: var(--display); font-size: 33px; line-height: 1.18; letter-spacing: -0.01em; font-weight: 600; margin: 10px 0 6px; }
+  .lede { color: var(--dim); font-size: 16px; margin: 0 0 22px; }
+  .meta { font-family: var(--mono); font-size: 11.5px; color: var(--faint); line-height: 1.9; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); padding: 10px 0; margin-bottom: 40px; }
+  .meta b { color: var(--dim); font-weight: 400; }
+  h2 { font-family: var(--display); font-size: 21px; font-weight: 600; letter-spacing: -0.005em; margin: 52px 0 4px; padding-top: 18px; border-top: 1px solid var(--hair); }
+  h2 .no { font-family: var(--mono); font-size: 12px; color: var(--accent-ink); letter-spacing: 0.08em; display: block; margin-bottom: 6px; font-weight: 400; }
+  h3 { font-family: var(--display); font-size: 16.5px; font-weight: 600; margin: 28px 0 6px; }
+  p { margin: 10px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; color: var(--accent-ink); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.5px; }
+  th { text-align: left; font-weight: 600; color: var(--dim); font-size: 11.5px; letter-spacing: 0.08em; padding: 6px 10px; border-bottom: 1px solid var(--hair); }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--hair-soft); vertical-align: top; }
+  td code, th code { white-space: nowrap; }
+  @media (max-width: 1180px) { td code, th code { white-space: normal; overflow-wrap: anywhere; } }
+  .good { color: var(--ok); }
+  .bad { color: var(--no); }
+  .wr { color: var(--warn); }
+  .aside { border-left: 2px solid var(--hair); padding: 2px 0 2px 14px; color: var(--dim); margin: 14px 0; }
+  .tag { font-family: var(--mono); font-size: 11px; color: var(--accent-ink); letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<div class="kicker">PLAN · memory-bank · doc-topic: ptac-fab-fix2</div>
+<h1>PTAutoCheckIn FAB 动效开关化、真靠边与闪烁根治修补计划</h1>
+<p class="lede">本篇只回答: 怎么修补已实施版（2026.11.24.4）暴露的四个偏差 —— 静态皮肤应为动效开关、靠边未真贴边、鼠标交互闪烁、静息 CPU 应降到 0；改哪些点、怎么验；不回答签到逻辑怎么改，也不在本篇实施。</p>
+<div class="meta">
+  <b>doc-added</b> 26-11-24-2226 · <b>doc-updated</b> 26-11-24-2226 · <b>doc-status</b> Open · <b>载体</b> 单文件 HTML(dark)<br>
+  <b>来源</b> 用户指令「计划已实施，但有几处有问题：静态应该是开关不是额外皮肤、靠边需要真靠边、鼠标交互特定区域闪烁、关闭动效/贴边时 UI 静息 CPU 应降到 0；grilling 然后出一个修补计划」+ 三轮 <code>grilling</code>（Q1–Q10 全拍板，含两项否决推荐，见 §06）+ 实施后代码只读盘点。前序件：原计划 <code>memory-bank/plans/26-11-24-1409-plan-ptac-fab-skin-edge.html</code>（Done）与任务档案 <code>memory-bank/tasks/26-11-24-webui-ptac-fab-skin-edge.md</code>（Done），本件为方案级修补、不重开原件。
+</div>
+
+<h2><span class="no">§01</span>目标与设计原则</h2>
+<p><b>目标</b> — 修补已实施版暴露的四个偏差：① 「静态皮肤」改为正交于皮肤的「关闭动效」布尔开关，皮肤条回归「变色 / 信号灯」2 项；② 靠边竖线真贴右边缘（<code>right:0</code>，<code>bottom:20</code> 与按钮水平对齐）；③ 根治 hover 临界区闪烁；④ 关动效 / 靠边两态下，UI 静息 CPU 降到 0（仅计 UI 更新，不计签到逻辑）。成态判据：静态断言 + CDP 5s 静息录制零 FAB 归因重绘，四项各带验收。</p>
+<p><b>不变量（硬约束）</b>:</p>
+<ol>
+<li><b>本轮零实施</b> — 本篇是计划；不改代码、不入池 issue、不认领、不 commit/push。实施须用户逐项授权（新建文件 / 入池 / 认领 / commit 四类动作分别确认）。</li>
+<li><b>签到逻辑零改动</b> — 签到、批量、冷却、重试、favicon、状态判定一律不碰；<code>ptacHlPulse</code>（第 3137 行，签到按钮高亮脉冲）按 Q1 保留，属签到逻辑不计入 UI 动效开关范围。</li>
+<li><b>正交语义延续</b> — 动效开关、靠边开关都与皮肤单选正交；切皮肤不重置两开关，GM 值各自独立持久化；靠边竖线颜色仍复用当前皮肤状态色语义（P17）。</li>
+<li><b>静默迁移</b> — 旧 <code>ptac_skin='static'</code> 纳入 legacy 归一为变色（渲染+高亮一致），并把动效开关初始化为关；GM 值原样保留不回写（与 D4 一致，不加迁移提示）。</li>
+<li><b>版本与知识库同步</b> — 实施轮每批改脚本必须同批递增 <code>@version</code> 并回写 <code>memory-bank/</code> 受影响条目（fab-ui.md / overview.md / P17 / known-issues.md / README）；本批只写方案文档不触发。</li>
+<li><b>测试护栏</b> — <code>test.full</code> 全绿；静态断言 + 仿真用例随实现同批落地；基线数字只写 <code>testing/baselines/</code> 新切片。</li>
+</ol>
+<p><b>取舍口径</b>（源自 grilling）：闪烁走根因修法（统一命中区 + <code>pointermove</code> 实测），明确放弃时间锁权宜；靠边展开按用户选择「内移 20px 回原位」，接受一次可控跳位换取贴边 + 原视觉位置双满足；静息口径只管静止不动时，形变 transition 属交互响应不算静息负载。</p>
+
+<h2><span class="no">§02</span>现状与痛点</h2>
+<p>实施版 <code>src/PTAutoCheckIn.user.js</code> @version 2026.11.24.4 的四个偏差，均有代码对应（行号可复跑）：</p>
+<table>
+<tr><th>偏差</th><th>代码现状（证据）</th><th>为何是问题</th></tr>
+<tr><td>① 静态做成皮肤</td><td>皮肤条第 2658 行 <code>data-skin="static"</code>；<code>.fab.static</code> 第 2267-2268 行禁动画；皮肤变量第 2549 行含 static</td><td>用户要的是「关闭动效」开关（正交于皮肤），不是第三种皮肤；静态=变色静态版使皮肤条语义与动效控制耦合</td></tr>
+<tr><td>② 靠边未真贴边</td><td><code>.fab.edge</code> 第 2273-2274 行 <code>right:20px; bottom:20px</code></td><td>离右边缘 20px，不是"真靠边"；用户要紧贴右边缘</td></tr>
+<tr><td>③ 临界区闪烁</td><td>命中区 <code>::before</code> 第 2281-2284 行固定 <code>left:-20px; width:24px; height:140px</code>（竖线尺寸）；展开态第 2292-2305 行形变到 52px 但命中区不随之变；<code>edgeHover</code> 由 <code>mouseenter/leave</code>（第 2739-2740 行）驱动</td><td>命中区按竖线尺寸固定，展开后视觉边界（52px 宽）超出命中区；指针在展开态左半边缘时 <code>mouseleave</code> 缩回、缩回后命中区又覆盖指针触发 <code>mouseenter</code>，形成反复翻转 = 用户报的闪烁</td></tr>
+<tr><td>④ 静息 CPU 未归零</td><td>关动效有 static 皮肤路径，但「靠边 + 动效开」组合下 <code>.fab.edge</code> 第 2275 行虽 <code>animation:none</code>，皮肤条切 stateless 后仍可能挂 <code>baseGlow</code>（第 2219 行 <code>::after</code>）；且无 CDP 实证口径</td><td>没有独立的动效开关保证"关了就是 0"，也没有 CPU=0 的可验判据</td></tr>
+</table>
+<p class="aside">补充事实：脚本当前 infinite 动画共 4 类 —— <code>baseGlow</code>（2219）、<code>stateGlow</code>（2245）、<code>chameleonWave</code>（2255-2256）、<code>ptacHlPulse</code>（3137，签到按钮高亮，Q1 判定保留）。定时器最短 200ms（1863、3020），无毫秒级循环。</p>
+
+<h2><span class="no">§03</span>方案总览</h2>
+<p><b>主线一句话</b> — 把"静态"从皮肤枚举里拿出来做成正交的「关闭动效」布尔开关（与靠边开关并列），靠边竖线改 <code>right:0</code> 真贴边并把命中区/指针判定一并根治闪烁，最后用静态断言 + CDP 静息实测把"UI 静息 CPU=0"钉成可验判据。</p>
+<table>
+<tr><th>批次</th><th>内容</th><th>对应拍板</th><th>验收法</th></tr>
+<tr><td><b>A · 动效开关化</b></td><td>A1 删 static 皮肤（HTML/CSS/JS 三处清理）；A2 皮肤条加「动效」布尔开关 <code>data-motion</code> + GM 键 <code>ptac_motion</code>；A3 关动效 = FAB 本体+伪元素全部 animation:none（不动 ptacHlPulse）；A4 旧 static 值归一变色 + 动效开关初始化为关</td><td>D1 · D2 · D8</td><td>皮肤条恰 2 个 data-skin + 2 个布尔开关；关动效态 static 断言 animation-name=none；旧 static 值渲染变色且动效默认关；ptacHlPulse 仍在</td></tr>
+<tr><td><b>B · 真靠边</b></td><td>B1 <code>.fab.edge</code> 的 <code>right</code> 改 0、<code>bottom</code> 保 20；B2 展开态按用户选择内移：hover/edge-open 时 <code>right:20px</code>（52px 圆钮回原视觉位置），退出展开恢复 <code>right:0</code></td><td>D3 · D5</td><td>竖线态 <code>right:0/bottom:20</code> 贴边；展开态 <code>right:20/bottom:20</code> 与完整 FAB 同位置；切态无布局抖动溢出</td></tr>
+<tr><td><b>C · 闪烁根治</b></td><td>C1 命中区改为覆盖「竖线+展开圆钮」最大并集（约 left:-48px/top:-10px/width:52px/height:140px，具体按并集算）；C2 <code>maybeCollapseEdge</code> 的指针判定从 <code>mouseenter/leave</code> 标志改为 <code>document</code> 捕获阶段 <code>pointermove</code> + <code>document.elementFromPoint</code>（closed shadow 重定向到 host）；C3 放弃时间锁</td><td>D6 · D7</td><td>仿真临界点连续移动不反复翻转；指针真离开并集才缩回；代码中无 setTimeout 式时间锁</td></tr>
+<tr><td><b>D · CPU=0 验收</b></td><td>D1 静态断言：关动效 / 靠边两态 FAB 及伪元素 computed animation-name=none、无毫秒定时器；D2 CDP 5s 静息录制零 FAB 归因 Recalculate Style/Paint；D3 test.full + 基线 + 回写</td><td>D4 · D9</td><td>静止态口径（不操作鼠标）；ptacHlPulse 与 200ms 签到 tick 不计入；数字只进基线切片</td></tr>
+</table>
+<p><b>落点清单</b>（实施时逐项对照，不扩大范围）：<code>src/PTAutoCheckIn.user.js</code> 的 K 键表（98-108 行）、UI_CSS FAB/皮肤条段（2205-2372 行）、皮肤条 HTML（约 2655-2662 行）、元素引用与事件绑定（2543、2688-2701、2737-2755 行）、<code>setSkin</code>/<code>setEdge</code>/<code>applyFabSkin</code>（2820-2900 行）、靠边状态机（2943-2978 行）；测试在 <code>tests/ptautocheckin/</code> 的 <code>check-ptac-fab-edge.js</code> / <code>sim-ptac-fab-edge.js</code> 及新增动效开关用例。</p>
+
+<h2><span class="no">§04</span>实施步骤</h2>
+<table>
+<tr><th>步</th><th>内容</th><th>验收判据</th></tr>
+<tr><td>A1</td><td>删 static 皮肤：皮肤条 <code>data-skin="static"</code> 按钮、<code>.fab.static{animation:none}</code> 两规则、皮肤变量枚举与 <code>applyFabSkin</code> 的 <code>case 'static'</code> 分支一并清除</td><td>grep 无 <code>data-skin="static"|fab\.static|case 'static'</code>；皮肤条恰 2 个 data-skin</td></tr>
+<tr><td>A2</td><td>加 GM 键 <code>motion:'ptac_motion'</code>；皮肤条加 <code>data-motion</code> 布尔开关（文案「动效」/「静态」），与靠边开关并列、细分隔线隔开；初始化读 GM（默认开），点击切开关并持久化</td><td>开关独立 aria-pressed；切动效不重置皮肤/靠边；跨站读到同一值</td></tr>
+<tr><td>A3</td><td>关动效实现：给 host/fab 加 <code>.motion-off</code> 类，CSS <code>.motion-off .fab, .motion-off .fab::after, .motion-off .fab.chameleon{animation:none!important}</code>；不动 <code>ptacHlPulse</code></td><td>静态断言关动效态 FAB 及伪元素 animation-name=none；ptacHlPulse 规则仍在源码</td></tr>
+<tr><td>A4</td><td>legacy 归一：<code>static</code> 加入 <code>number|ring</code> 的归一列表 → 变色；若读到 legacy static，动效开关初始化为关（GM 原值不回写）</td><td>仿真注入 ptac_skin=static：渲染变色、active 落变色钮、动效开关为关、GM 值未变</td></tr>
+<tr><td>B1</td><td><code>.fab.edge</code> 锚点 <code>right:0</code>、<code>bottom:20</code> 不变；命中区 <code>::before</code> 随新锚点向左外扩保持约 24px 可点宽</td><td>竖线态 computed right=0px、bottom=20px；紧贴右边缘无留白</td></tr>
+<tr><td>B2</td><td>展开形变：<code>.fab.edge:hover/:focus-within/.edge-open</code> 增 <code>right:20px</code>（内移回原 FAB 位置），退出展开恢复 <code>right:0</code>；transition 纳入 right</td><td>展开态 computed right=20px 与完整 FAB 同位置；缩回后 right=0px；形变左右位移连续无闪烁溢出</td></tr>
+<tr><td>C1</td><td>命中区 <code>::before</code> 改为覆盖竖线+展开态最大并集：left 取 -(52-4)≈-48px、top:-10px、width:52px、height:140px（实测校准）</td><td>仿真指针在竖线与展开圆钮的全部可视/命中区内都不触发 mouseleave</td></tr>
+<tr><td>C2</td><td><code>maybeCollapseEdge</code> 指针判定改用 <code>document</code> 捕获阶段 <code>pointermove</code> + <code>document.elementFromPoint(e.clientX,e.clientY)</code>：命中 host（shadow 重定向）算在区内，否则区外才缩回；保留 panel/batch/touchStage/focus 四条件；移除 edgeHover 标志依赖</td><td>仿真临界点连续 20 次左右移动不翻转；指针真离开并集 → 缩回；面板打开/批量/触屏首段/焦点仍保持展开</td></tr>
+<tr><td>C3</td><td>确认无任何 setTimeout 式展开锁定（放弃时间锁）</td><td>grep 靠边状态机段无 setTimeout/时间锁常量</td></tr>
+<tr><td>D1</td><td>新增 <code>check-ptac-fab-motion.js</code>：断言关动效/靠边两态 animation-name=none、无毫秒定时器；扩展 <code>check-ptac-fab-edge.js</code> 断言真靠边锚点与展开内移</td><td>静态用例全绿；断言针指实施后的 CSS 规则真实存在</td></tr>
+<tr><td>D2</td><td>CDP Performance 录 5s 静息（不操作鼠标）：关动效态与靠边态各一次，零 FAB 归因 Recalculate Style/Paint；ptacHlPulse 与 200ms tick 不计</td><td>火焰图无 button.fab.chameleon 层根；UI 归因重绘计数为 0；录屏与结论入基线切片</td></tr>
+<tr><td>D3</td><td><code>test.full</code> 全量 + 新基线切片；分批评审（code-review skill ①）；回写 fab-ui.md/overview.md/P17/known-issues.md/README；<code>kb.wrap</code> 收尾；新坑按动作入 pitfalls 并重跑 <code>kb.index</code></td><td>全绿(见 kb.baseline)；四道文档自查绿；数字只进基线切片</td></tr>
+</table>
+
+<h2><span class="no">§05</span>待拍板清单</h2>
+<p><b>无待拍板项</b> — 三轮 grilling 已把设计树走空，Q1–Q10 全部拍板并固化在 §06；实施中若出现未覆盖歧义，按 §01 不变量回到用户，不自行假设。</p>
+
+<h2><span class="no">§06</span>拍板记录</h2>
+<table>
+<tr><th>编号</th><th>问题</th><th>结论</th><th>取舍理由</th></tr>
+<tr><td>D1 / Q1</td><td>关闭动效的停用范围</td><td class="good">只停 FAB 3 类动画，保留 ptacHlPulse</td><td>签到按钮脉冲属签到逻辑，符合用户"不计签到逻辑"口径</td></tr>
+<tr><td>D2 / Q2</td><td>皮肤条布局</td><td class="good">变色/信号灯 2 项 + 动效开关 + 靠边开关</td><td>两布尔开关与单选分隔并列，维持 D2 否决头部钮结论</td></tr>
+<tr><td>D3 / Q3</td><td>真靠边锚点</td><td class="wr">right:0 贴右边缘、bottom:20 与按钮水平对齐（否决右下贴底推荐）</td><td>紧贴右边缘但保留原水平带，不贴底</td></tr>
+<tr><td>D4 / Q4</td><td>CPU=0 验收</td><td class="good">静态断言 + CDP 5s 静息实测双判据</td><td>静态进 test.full 守护，CDP 作硬证据</td></tr>
+<tr><td>D5 / Q5</td><td>展开锚点</td><td class="wr">展开时内移 20px 回 right:20（否决锚点恒定推荐）</td><td>贴边 + 展开回原视觉位置双满足，接受一次可控跳位</td></tr>
+<tr><td>D6 / Q6</td><td>闪烁根治方案</td><td class="good">命中区并集 + pointermove/elementFromPoint（shadow 重定向）</td><td>从根消除命中区尺寸随形态变化的抖动源</td></tr>
+<tr><td>D7 / Q7</td><td>时间锁权宜</td><td class="good">放弃</td><td>长期装机脚本要根治，不接受症状缓解</td></tr>
+<tr><td>D8 / Q8</td><td>旧 static 值迁移</td><td class="good">归一变色 + 动效开关初始化为关，GM 不回写</td><td>老静态用户升级后语义连续，不会突然恢复动画</td></tr>
+<tr><td>D9 / Q9</td><td>静息口径</td><td class="good">静止态（形变 transition 不算静息负载）</td><td>与交接件"打开后不操作"的原问题口径一致</td></tr>
+<tr><td>D10 / Q10</td><td>制品形态</td><td class="good">新建独立计划件，原 Done 件不动</td><td>方案级变更（推翻原 D2/D5），完成件不重开避免状态漂移</td></tr>
+</table>
+<p class="aside">拍板日期均为 2026-11-24（三轮 grilling 同日完成）。标 <span class="wr">琥珀</span> 两项为用户否决 AI 推荐改选备选（D3 靠边锚点、D5 展开内移），实施时以用户结论为准。</p>
+
+<h2><span class="no">§07</span>风险与对策</h2>
+<table>
+<tr><th>风险</th><th>触发条件</th><th>处置</th></tr>
+<tr><td>展开内移 20px 的跳位观感</td><td>hover 时 right 从 0→20 是位移，与宽高形变叠加可能显得"先跳再变"</td><td>把 right 纳入同一条 transition（与 width/height/border-radius 同时长同曲线），让位移与形变同步发生；仿真断言形变起止几何</td></tr>
+<tr><td>elementFromPoint 在 closed shadow 的命中判定</td><td>指针在竖线/展开圆钮上时 elementFromPoint 返回 host（#ptac-root-v2）而非 fab 本身</td><td>沿用面板自动关闭的同款 shadow 重定向（fab-ui.md 校准项 23）：host.contains 判定命中；仿真覆盖竖线/展开/面板重叠区</td></tr>
+<tr><td>命中区并集过大遮挡页面点击</td><td>并集宽 52px 向左外扩覆盖页面内容，拦截站点按钮点击</td><td>命中区 <code>pointer-events</code> 仅设在透明伪元素且与 fab 可视区对齐；仿真验证并集区外页面按钮可正常点击</td></tr>
+<tr><td>动效开关与靠边态组合的状态色</td><td>关动效后靠边竖线是否仍随状态色更新</td><td>动效开关只禁 animation，不碰 applyFabSkin 的 class/角标/状态色逻辑；组合态单独仿真一例</td></tr>
+<tr><td>CDP 实测环境不可用</td><td>无浏览器/无 CDP 连接</td><td>静态断言仍进 test.full；CDP 用例按项目约定 SKIP 并在基线切片注明环境理由，不伪造数字</td></tr>
+<tr><td>旧 static 用户升级的 MV 值不一致</td><td>skin='static' 归一变色后动效开关初始化为关，但 GM 仍存 static</td><td>按 D8 接受：GM 原值保留不回写；下次用户手动切换皮肤/动效才覆盖，文档钉死</td></tr>
+</table>
+
+<h2><span class="no">§10</span>变更记录</h2>
+<ul>
+  <li><span class="tag">R0 · 26-11-24-2226</span> 初版：三轮 grilling（Q1–Q10 全拍板，含两项否决推荐改选备选）落盘；针对已实施版四个偏差（静态应为开关、真靠边、闪烁根治、UI 静息 CPU=0）出四批修补方案 A/B/C/D；新建独立计划件，原 Done 计划与任务档案不重开。</li>
+</ul>
+
+</div>
+</body>
+</html>

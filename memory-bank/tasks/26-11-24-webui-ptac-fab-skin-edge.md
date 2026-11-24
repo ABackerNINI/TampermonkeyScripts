@@ -5,7 +5,7 @@
 **Updated:** 2026-11-24
 **Summary:** FAB 四皮肤收敛为三皮肤、新增与皮肤正交的靠边模式并修复静息 CPU 高占用；四批实施与 D 批验收回写完成
 **Topics:** webui-ptac-fab-skin-edge
-**Refs:** memory-bank/plans/26-11-24-1409-plan-ptac-fab-skin-edge.html, memory-bank/pitfalls/git/review-base-hash-tree-state.md
+**Refs:** memory-bank/plans/26-11-24-1409-plan-ptac-fab-skin-edge.html, memory-bank/pitfalls/git/review-base-hash-tree-state.md, memory-bank/plans/26-11-24-2226-plan-ptac-fab-fix2.html
 
 ## 本篇只回答
 
